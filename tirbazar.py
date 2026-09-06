@@ -282,8 +282,7 @@ def load_tirbazar_vehicles(
         )
 
     total = 0
-
-    raw_rows = []
+    raw_rows: list[TirVehicle] = []
 
     for original in stdout.splitlines():
         line = original.strip()
@@ -302,21 +301,23 @@ def load_tirbazar_vehicles(
             continue
 
         value = line[line.find("__ROW__|"):]
-
         parts = value.split("|", 8)
 
         if len(parts) != 9:
             continue
 
+        # POZOR: pořadí musí přesně odpovídat build_sql().
+        # __ROW__ | OID | VIN | SPZ | výkup | výkup z komise |
+        # prodej | země původu | poznámky
         (
             _,
             oid_text,
             vin,
             spz,
-            zeme_puvodu,
             datum_vykupu,
             datum_vykupu_komise,
             datum_prodeje,
+            zeme_puvodu,
             poznamky,
         ) = parts
 
@@ -362,6 +363,9 @@ def load_tirbazar_vehicles(
     # - DatumVykupu z VykoupeniZKomise
     #
     # Pokud nemá ani jedno, je vyřazeno.
+    #
+    # Vozidlo se zemí původu mimo ČR bez registrační značky
+    # se do kontroly pojištění nezařazuje.
     # ========================================================
 
     excluded = [
@@ -423,7 +427,6 @@ def load_tirbazar_vehicles(
     duplicates: list[list[TirVehicle]] = []
 
     for vin, group in groups.items():
-
         group = sorted(
             group,
             key=lambda x: x.oid,
@@ -465,7 +468,6 @@ def load_tirbazar_vehicles(
         f"Cizina bez registrační značky - VYŘAZENO: "
         f"{len(foreign_without_spz)}"
     )
-
     print("Zařazeno do kontroly:", len(included))
     print("Zařazené bez VIN:", len(without_vin))
     print("Unikátních VIN po deduplikaci:", len(vehicles))

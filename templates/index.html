@@ -3,61 +3,261 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Kontrola pojištění vozidel</title>
+  <title>Denní POV · Kontrola pojištění</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <h1>KONTROLA POJIŠTĚNÍ</h1>
-      <p>TIRBazar → UNIQA → Allianz → Depozit</p>
-    </div>
-    <div class="live"><span id="liveDot" class="dot idle"></span><strong id="liveStatus">PŘIPRAVENO</strong></div>
-  </header>
-
-  <main class="page">
-    <section class="panel logic">
-      <div class="eyebrow">LOGIKA KONTROLY</div>
-      <p>Aktivní vozidlo je v pořádku, pokud je pojištěné v UNIQA nebo Allianz. Pokud není v žádné pojišťovně, kontroluje se poznámka TIRBazar. Obsahuje-li text DEPOZIT, zobrazí se jako NEPOJIŠTĚNO, ALE DEPOZIT.</p>
-      <small>VIN = hlavní identifikátor • SPZ = sekundární identifikátor • TIRBazar = pouze čtení • výkup nebo výkup z komise</small>
-    </section>
-
-    <section class="sources">
-      <article class="panel source"><div class="source-title"><span id="tirDot" class="dot idle"></span>TIRBAZAR DB</div><strong id="tirStatus">Zatím nenačteno</strong><small id="tirDetail">SQL Server / pouze čtení</small></article>
-      <article class="panel source"><div class="source-title"><span id="uniqaDot" class="dot idle"></span>UNIQA</div><strong id="uniqaStatus">Zatím nenačteno</strong><small id="uniqaDetail">AIV / Denní POV / Aktivní</small></article>
-      <article class="panel source"><div class="source-title"><span id="allianzDot" class="dot idle"></span>ALLIANZ</div><strong id="allianzStatus">Zatím nenačteno</strong><small id="allianzDetail">Flotilové PDF</small></article>
-    </section>
-
-    <section class="toolbar">
-      <div class="toolbar-left">
-        <button id="runBtn" class="primary">▶ SPUSTIT KONTROLU</button>
-        <a id="csvBtn" class="button secondary disabled" href="/download/csv">Stáhnout CSV</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">POV</div>
+        <div>
+          <strong>Denní POV</strong>
+          <span>Kontrola pojištění</span>
+        </div>
       </div>
-      <div class="searchbox"><label for="search">VIN / SPZ:</label><input id="search" autocomplete="off" placeholder="Hledat…"><button id="clearBtn" class="secondary">Vše</button></div>
-    </section>
 
-    <section class="cards" id="cards">
-      <button class="card active" data-filter="ACTIVE"><span>AKTIVNÍ KE KONTROLE</span><strong id="cActive">0</strong></button>
-      <button class="card ok" data-filter="OK_TOTAL"><span>OK CELKEM</span><strong id="cOkTotal">0</strong></button>
-      <button class="card ok" data-filter="OK_UNIQA"><span>OK – UNIQA</span><strong id="cOkUniqa">0</strong></button>
-      <button class="card allianz" data-filter="OK_ALLIANZ"><span>OK – ALLIANZ</span><strong id="cOkAllianz">0</strong></button>
-      <button class="card missing" data-filter="MISSING"><span>CHYBÍ POJIŠTĚNÍ</span><strong id="cMissing">0</strong></button>
-      <button class="card deposit" data-filter="DEPOSIT"><span>NEPOJIŠTĚNO, ALE DEPOZIT</span><strong id="cDeposit">0</strong></button>
-      <button class="card sold" data-filter="SOLD_UNIQA"><span>PRODANÉ, ALE V UNIQA</span><strong id="cSold">0</strong></button>
-      <button class="card extra" data-filter="EXTRA_UNIQA"><span>NAVÍC V UNIQA</span><strong id="cExtra">0</strong></button>
-    </section>
+      <nav class="nav" aria-label="Filtry vozidel">
+        <button id="navAllVehicles" class="nav-item active" type="button">
+          <span class="nav-icon">▦</span>
+          Všechna vozidla
+        </button>
+        <button class="nav-item" type="button" data-filter="ACTIVE">
+          <span class="nav-icon">●</span>
+          Aktivní ke kontrole
+        </button>
+        <button class="nav-item" type="button" data-filter="MISSING">
+          <span class="nav-icon">!</span>
+          Chybí pojištění
+        </button>
+        <button class="nav-item" type="button" data-filter="DEPOSIT">
+          <span class="nav-icon">D</span>
+          Depozit
+        </button>
+        <button class="nav-item" type="button" data-filter="SOLD_UNIQA">
+          <span class="nav-icon">↗</span>
+          Prodané v UNIQA
+        </button>
+      </nav>
 
-    <section class="panel table-wrap">
-      <table>
-        <thead><tr><th>STATUS</th><th>POJIŠŤOVNA</th><th>VIN</th><th>SPZ TIRBAZAR</th><th>SPZ UNIQA</th><th>DATUM VÝKUPU</th><th>DATUM PRODEJE</th><th>VÝSLEDEK</th></tr></thead>
-        <tbody id="rows"><tr><td colspan="8" class="empty">Zatím nejsou načtené žádné výsledky.</td></tr></tbody>
-      </table>
-    </section>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-status">
+        <span id="liveDot" class="status-dot idle"></span>
+        <div>
+          <small>STAV SYSTÉMU</small>
+          <strong id="liveStatus">Připraveno</strong>
+        </div>
+      </div>
+    </aside>
 
-    <footer><span id="footerLeft">Připraveno</span><strong id="footerRight">Zobrazeno: 0</strong></footer>
-  </main>
+    <div class="main-shell">
+      <header class="topbar">
+        <div>
+          <div class="breadcrumb">DENNÍ POV <span>/</span> KONTROLA</div>
+          <h1>Kontrola pojištění vozidel</h1>
+          <p>TIRBazar → UNIQA → Allianz → Depozit</p>
+        </div>
+        <div class="top-actions">
+          <a id="csvBtn" class="btn btn-secondary disabled" href="/download/csv">Stáhnout CSV</a>
+          <button id="runBtn" class="btn btn-primary" type="button">
+            <span class="play">▶</span> Spustit kontrolu
+          </button>
+        </div>
+      </header>
 
-  <dialog id="detailDialog"><button id="closeDialog" class="dialog-close">×</button><h2>Detail vozidla</h2><div id="detailBody"></div></dialog>
+      <main class="content">
+        <section class="overview-grid">
+          <article class="hero-card" data-filter="ACTIVE">
+            <div class="hero-copy">
+              <span class="section-kicker">Denní kontrola</span>
+              <h2>Aktuální stav pojištění vozidel</h2>
+              <p>
+                Kontrola porovnává aktivní vozidla z TIRBazar s UNIQA a Allianz.
+                Vozidla v depozitu jsou označena samostatně. Historická prodaná vozidla
+                bez problému se v tabulce nezobrazují.
+              </p>
+            </div>
+            <div class="hero-number">
+              <span>Aktivní vozidla</span>
+              <strong id="cActive">0</strong>
+              <small>ke kontrole</small>
+            </div>
+          </article>
+
+          <article class="summary-card success" data-filter="OK_TOTAL">
+            <div class="summary-icon">✓</div>
+            <div>
+              <span>POJIŠTĚNÍ V POŘÁDKU</span>
+              <strong id="cOkTotal">0</strong>
+              <small>UNIQA + Allianz</small>
+            </div>
+          </article>
+
+          <article class="summary-card danger" data-filter="MISSING">
+            <div class="summary-icon">!</div>
+            <div>
+              <span>CHYBÍ POJIŠTĚNÍ</span>
+              <strong id="cMissing">0</strong>
+              <small>vyžaduje kontrolu</small>
+            </div>
+          </article>
+        </section>
+
+        <section class="source-section">
+          <div class="section-heading">
+            <div>
+              <span class="section-kicker">Datové zdroje</span>
+              <h2>Stav načtení</h2>
+            </div>
+            <div class="section-note">TIRBazar je používán pouze pro čtení</div>
+          </div>
+
+          <div class="source-grid">
+            <article class="source-card">
+              <div class="source-head">
+                <div class="source-logo source-logo-tir">TB</div>
+                <div>
+                  <strong>TIRBazar DB</strong>
+                  <span>Interní evidence vozidel</span>
+                </div>
+                <span id="tirDot" class="status-dot idle"></span>
+              </div>
+              <div class="source-body">
+                <strong id="tirStatus">Zatím nenačteno</strong>
+                <span id="tirDetail">SQL Server / pouze čtení</span>
+              </div>
+            </article>
+
+            <article class="source-card">
+              <div class="source-head">
+                <div class="source-logo source-logo-uniqa">U</div>
+                <div>
+                  <strong>UNIQA</strong>
+                  <span>AIV · Denní POV</span>
+                </div>
+                <span id="uniqaDot" class="status-dot idle"></span>
+              </div>
+              <div class="source-body">
+                <strong id="uniqaStatus">Zatím nenačteno</strong>
+                <span id="uniqaDetail">AIV / Denní POV / Aktivní</span>
+              </div>
+            </article>
+
+            <article class="source-card">
+              <div class="source-head">
+                <div class="source-logo source-logo-allianz">A</div>
+                <div>
+                  <strong>Allianz</strong>
+                  <span>Flotilové pojištění</span>
+                </div>
+                <span id="allianzDot" class="status-dot idle"></span>
+              </div>
+              <div class="source-body">
+                <strong id="allianzStatus">Zatím nenačteno</strong>
+                <span id="allianzDetail">Flotilové PDF</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="breakdown-section">
+          <div class="section-heading compact-heading">
+            <div>
+              <span class="section-kicker">Rozdělení výsledků</span>
+              <h2>Pojišťovny a výjimky</h2>
+            </div>
+          </div>
+
+          <div class="metric-grid">
+            <button class="metric-card" type="button" data-filter="OK_UNIQA">
+              <span class="metric-label"><i class="metric-dot green"></i> OK · UNIQA</span>
+              <strong id="cOkUniqa">0</strong>
+              <small>nalezeno podle VIN</small>
+            </button>
+            <button class="metric-card" type="button" data-filter="OK_ALLIANZ">
+              <span class="metric-label"><i class="metric-dot blue"></i> OK · Allianz</span>
+              <strong id="cOkAllianz">0</strong>
+              <small>VIN nebo SPZ</small>
+            </button>
+            <button class="metric-card" type="button" data-filter="DEPOSIT">
+              <span class="metric-label"><i class="metric-dot amber"></i> Depozit</span>
+              <strong id="cDeposit">0</strong>
+              <small>bez pojištění, ale evidováno</small>
+            </button>
+            <button class="metric-card" type="button" data-filter="SOLD_UNIQA">
+              <span class="metric-label"><i class="metric-dot purple"></i> Prodané v UNIQA</span>
+              <strong id="cSold">0</strong>
+              <small>po prodeji stále aktivní</small>
+            </button>
+            <button class="metric-card" type="button" data-filter="EXTRA_UNIQA">
+              <span class="metric-label"><i class="metric-dot cyan"></i> Navíc v UNIQA</span>
+              <strong id="cExtra">0</strong>
+              <small>nenalezeno v evidenci výkupů</small>
+            </button>
+          </div>
+        </section>
+
+        <section class="data-section">
+          <div class="data-toolbar">
+            <div>
+              <span class="section-kicker">Výsledky</span>
+              <h2>Vozidla ke kontrole</h2>
+            </div>
+            <div class="data-tools">
+              <div class="search-control">
+                <span class="search-icon">⌕</span>
+                <input id="search" autocomplete="off" placeholder="Hledat VIN nebo SPZ…">
+              </div>
+              <button id="clearBtn" class="btn btn-secondary btn-small" type="button">Vše</button>
+            </div>
+          </div>
+
+          <div id="activeFilter" class="active-filter" hidden>
+            Aktivní filtr: <strong id="activeFilterLabel"></strong>
+            <button id="clearFilterInline" type="button" aria-label="Zrušit filtr">×</button>
+          </div>
+
+          <div class="table-card">
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Stav</th>
+                    <th>Pojišťovna</th>
+                    <th>VIN</th>
+                    <th>SPZ TIRBazar</th>
+                    <th>SPZ UNIQA</th>
+                    <th>Datum výkupu</th>
+                    <th>Datum prodeje</th>
+                    <th>Výsledek</th>
+                  </tr>
+                </thead>
+                <tbody id="rows">
+                  <tr class="empty-row"><td colspan="8" class="empty">Zatím nejsou načtené žádné výsledky.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-footer">
+              <span id="footerLeft">Připraveno</span>
+              <strong id="footerRight">Zobrazeno: 0</strong>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="detailDialog" class="detail-dialog">
+    <div class="dialog-head">
+      <div>
+        <span class="section-kicker">Detail</span>
+        <h2>Detail vozidla</h2>
+      </div>
+      <button id="closeDialog" class="dialog-close" type="button" aria-label="Zavřít">×</button>
+    </div>
+    <div id="detailBody"></div>
+  </dialog>
+
   <div id="toast" class="toast" hidden></div>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

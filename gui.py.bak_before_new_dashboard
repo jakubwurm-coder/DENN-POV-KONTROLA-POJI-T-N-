@@ -1,0 +1,1641 @@
+from __future__ import annotations
+
+import subprocess
+import threading
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+from allianz import load_allianz_vehicles
+from compare import compare_vehicles
+from config import load_config
+from report import (
+    prepare_output,
+    write_comparison,
+    write_duplicates,
+    write_tirbazar_snapshot,
+)
+from tirbazar import load_tirbazar_vehicles
+from uniqa import load_uniqa_vehicles
+
+
+BG = "#061827"
+HEADER_BG = "#082238"
+PANEL = "#0a2a43"
+PANEL_2 = "#0d3554"
+BORDER = "#1b5276"
+
+TEXT = "#ffffff"
+TEXT_MUTED = "#9eb7ca"
+
+ACCENT = "#54c8ff"
+
+GREEN_BG = "#0d4938"
+GREEN_FG = "#7af0b5"
+
+RED_BG = "#5a2028"
+RED_FG = "#ff919b"
+
+PURPLE_BG = "#572442"
+PURPLE_FG = "#ff9fd2"
+
+ORANGE_BG = "#594115"
+ORANGE_FG = "#ffd166"
+
+BLUE_BG = "#123e62"
+BLUE_FG = "#7bd0ff"
+
+ACTIVE_BG = "#17364a"
+ACTIVE_FG = "#8dd8ff"
+
+GRAY_BG = "#35404a"
+GRAY_FG = "#d7dde2"
+
+
+STATUS_COLORS = {
+    "OK": (
+        GREEN_BG,
+        GREEN_FG,
+    ),
+    "CHYBÍ V UNIQA": (
+        RED_BG,
+        RED_FG,
+    ),
+    "PRODANÉ, ALE V UNIQA": (
+        PURPLE_BG,
+        PURPLE_FG,
+    ),
+    "SPZ NESOUHLASÍ": (
+        ORANGE_BG,
+        ORANGE_FG,
+    ),
+    "NAVÍC V UNIQA": (
+        BLUE_BG,
+        BLUE_FG,
+    ),
+    "NELZE OVĚŘIT": (
+        GRAY_BG,
+        GRAY_FG,
+    ),
+}
+
+
+class InsuranceCheckerApp(tk.Tk):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.title(
+            "Kontrola pojištění vozidel"
+        )
+
+        self.geometry(
+            "1600x960"
+        )
+
+        self.minsize(
+            1250,
+            760,
+        )
+
+        self.configure(
+            bg=BG
+        )
+
+        self.results = []
+
+        self.active_count = 0
+        self.ok_uniqa = 0
+        self.ok_allianz = 0
+
+        self.last_csv: Path | None = None
+
+        self.search_var = tk.StringVar()
+        self.filter_var = tk.StringVar(
+            value="Vše"
+        )
+
+        self._setup_style()
+        self._build_gui()
+
+
+    def _setup_style(self):
+
+        style = ttk.Style(self)
+
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+
+        style.configure(
+            "Checker.Treeview",
+            background=PANEL,
+            fieldbackground=PANEL,
+            foreground=TEXT,
+            rowheight=37,
+            borderwidth=0,
+            font=(
+                "Helvetica",
+                10,
+            ),
+        )
+
+        style.configure(
+            "Checker.Treeview.Heading",
+            background=HEADER_BG,
+            foreground=TEXT,
+            font=(
+                "Helvetica",
+                10,
+                "bold",
+            ),
+        )
+
+        style.map(
+            "Checker.Treeview",
+            background=[
+                (
+                    "selected",
+                    BORDER,
+                )
+            ],
+            foreground=[
+                (
+                    "selected",
+                    TEXT,
+                )
+            ],
+        )
+
+
+    def _build_gui(self):
+
+        root = tk.Frame(
+            self,
+            bg=BG,
+        )
+
+        root.pack(
+            fill="both",
+            expand=True,
+        )
+
+        header = tk.Frame(
+            root,
+            bg=HEADER_BG,
+            padx=28,
+            pady=18,
+        )
+
+        header.pack(
+            fill="x"
+        )
+
+        header_left = tk.Frame(
+            header,
+            bg=HEADER_BG,
+        )
+
+        header_left.pack(
+            side="left"
+        )
+
+        tk.Label(
+            header_left,
+            text="KONTROLA POJIŠTĚNÍ",
+            bg=HEADER_BG,
+            fg=TEXT,
+            font=(
+                "Helvetica",
+                25,
+                "bold",
+            ),
+        ).pack(
+            anchor="w"
+        )
+
+        tk.Label(
+            header_left,
+            text="TIRBazar → UNIQA → Allianz",
+            bg=HEADER_BG,
+            fg=TEXT_MUTED,
+            font=(
+                "Helvetica",
+                11,
+            ),
+        ).pack(
+            anchor="w",
+            pady=(
+                3,
+                0,
+            ),
+        )
+
+        header_right = tk.Frame(
+            header,
+            bg=HEADER_BG,
+        )
+
+        header_right.pack(
+            side="right"
+        )
+
+        self.live_dot = tk.Label(
+            header_right,
+            text="●",
+            bg=HEADER_BG,
+            fg=GRAY_FG,
+            font=(
+                "Helvetica",
+                14,
+                "bold",
+            ),
+        )
+
+        self.live_dot.pack(
+            side="left",
+            padx=(
+                0,
+                6,
+            ),
+        )
+
+        self.live_status = tk.Label(
+            header_right,
+            text="PŘIPRAVENO",
+            bg=HEADER_BG,
+            fg=TEXT_MUTED,
+            font=(
+                "Helvetica",
+                10,
+                "bold",
+            ),
+        )
+
+        self.live_status.pack(
+            side="left"
+        )
+
+        info = tk.Frame(
+            root,
+            bg=PANEL,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+            padx=16,
+            pady=10,
+        )
+
+        info.pack(
+            fill="x",
+            padx=28,
+            pady=(
+                14,
+                10,
+            ),
+        )
+
+        tk.Label(
+            info,
+            text="LOGIKA KONTROLY",
+            bg=PANEL,
+            fg=ACCENT,
+            font=(
+                "Helvetica",
+                10,
+                "bold",
+            ),
+        ).pack(
+            anchor="w"
+        )
+
+        tk.Label(
+            info,
+            text=(
+                "Aktivní vozidlo je v pořádku, pokud je pojištění "
+                "nalezeno buď v UNIQA, nebo v Allianz. "
+                "UNIQA se kontroluje jako první. Pokud VIN v UNIQA "
+                "není nalezen, prověří se Allianz."
+            ),
+            bg=PANEL,
+            fg=TEXT,
+            font=(
+                "Helvetica",
+                10,
+            ),
+            anchor="w",
+            justify="left",
+        ).pack(
+            anchor="w",
+            pady=(
+                4,
+                2,
+            ),
+        )
+
+        tk.Label(
+            info,
+            text=(
+                "VIN = hlavní identifikátor  •  "
+                "SPZ = sekundární kontrola  •  "
+                "Do kontroly patří DatumVykupu nebo Vykoupení z komise"
+            ),
+            bg=PANEL,
+            fg=TEXT_MUTED,
+            font=(
+                "Helvetica",
+                9,
+            ),
+        ).pack(
+            anchor="w"
+        )
+
+        sources = tk.Frame(
+            root,
+            bg=BG,
+        )
+
+        sources.pack(
+            fill="x",
+            padx=24,
+            pady=(
+                0,
+                10,
+            ),
+        )
+
+        (
+            self.tir_dot,
+            self.tir_status,
+            self.tir_detail,
+        ) = self._source_box(
+            sources,
+            "TIRBAZAR DB",
+            "SQL Server / pouze čtení",
+        )
+
+        (
+            self.uniqa_dot,
+            self.uniqa_status,
+            self.uniqa_detail,
+        ) = self._source_box(
+            sources,
+            "UNIQA PORTÁL",
+            "AIV / Denní POV / Aktivní",
+        )
+
+        (
+            self.allianz_dot,
+            self.allianz_status,
+            self.allianz_detail,
+        ) = self._source_box(
+            sources,
+            "ALLIANZ",
+            "Flotilové PDF",
+        )
+
+        toolbar = tk.Frame(
+            root,
+            bg=BG,
+        )
+
+        toolbar.pack(
+            fill="x",
+            padx=28,
+            pady=(
+                0,
+                10,
+            ),
+        )
+
+        self.run_button = tk.Button(
+            toolbar,
+            text="▶  SPUSTIT KONTROLU",
+            command=self.run_check,
+            bg=ACCENT,
+            fg="#04131f",
+            relief="flat",
+            bd=0,
+            font=(
+                "Helvetica",
+                10,
+                "bold",
+            ),
+            padx=16,
+            pady=9,
+            cursor="pointinghand",
+        )
+
+        self.run_button.pack(
+            side="left"
+        )
+
+        tk.Button(
+            toolbar,
+            text="Otevřít CSV",
+            command=self.open_csv,
+            bg=PANEL,
+            fg=TEXT,
+            relief="flat",
+            bd=0,
+            padx=13,
+            pady=9,
+        ).pack(
+            side="left",
+            padx=(
+                8,
+                4,
+            ),
+        )
+
+        tk.Button(
+            toolbar,
+            text="Výstupy",
+            command=self.open_output_folder,
+            bg=PANEL,
+            fg=TEXT,
+            relief="flat",
+            bd=0,
+            padx=13,
+            pady=9,
+        ).pack(
+            side="left",
+            padx=4,
+        )
+
+        search_frame = tk.Frame(
+            toolbar,
+            bg=BG,
+        )
+
+        search_frame.pack(
+            side="right"
+        )
+
+        tk.Label(
+            search_frame,
+            text="VIN / SPZ:",
+            bg=BG,
+            fg=TEXT_MUTED,
+        ).pack(
+            side="left",
+            padx=(
+                0,
+                6,
+            ),
+        )
+
+        search = tk.Entry(
+            search_frame,
+            textvariable=self.search_var,
+            bg=PANEL,
+            fg=TEXT,
+            insertbackground=TEXT,
+            relief="flat",
+            width=25,
+            font=(
+                "Helvetica",
+                11,
+            ),
+        )
+
+        search.pack(
+            side="left",
+            ipady=7,
+        )
+
+        self.search_var.trace_add(
+            "write",
+            lambda *_: self.fill_table(),
+        )
+
+        tk.Button(
+            search_frame,
+            text="Vše",
+            command=self.clear_filter,
+            bg=PANEL,
+            fg=TEXT,
+            relief="flat",
+            bd=0,
+            padx=12,
+            pady=7,
+        ).pack(
+            side="left",
+            padx=(
+                8,
+                0,
+            ),
+        )
+
+        cards_frame = tk.Frame(
+            root,
+            bg=BG,
+        )
+
+        cards_frame.pack(
+            fill="x",
+            padx=23,
+            pady=(
+                0,
+                9,
+            ),
+        )
+
+        self.cards = {}
+
+        card_definitions = [
+            (
+                "ACTIVE",
+                "AKTIVNÍ KE KONTROLE",
+                ACTIVE_BG,
+                ACTIVE_FG,
+            ),
+            (
+                "OK",
+                "OK",
+                GREEN_BG,
+                GREEN_FG,
+            ),
+            (
+                "CHYBÍ V UNIQA",
+                "CHYBÍ V UNIQA",
+                RED_BG,
+                RED_FG,
+            ),
+            (
+                "PRODANÉ, ALE V UNIQA",
+                "PRODANÉ, ALE V UNIQA",
+                PURPLE_BG,
+                PURPLE_FG,
+            ),
+            (
+                "SPZ NESOUHLASÍ",
+                "SPZ NESOUHLASÍ",
+                ORANGE_BG,
+                ORANGE_FG,
+            ),
+            (
+                "NAVÍC V UNIQA",
+                "NAVÍC V UNIQA",
+                BLUE_BG,
+                BLUE_FG,
+            ),
+        ]
+
+        for key, title, bg, fg in card_definitions:
+
+            card = tk.Frame(
+                cards_frame,
+                bg=bg,
+                highlightbackground=BORDER,
+                highlightthickness=1,
+                padx=12,
+                pady=10,
+                cursor="pointinghand",
+            )
+
+            card.pack(
+                side="left",
+                fill="x",
+                expand=True,
+                padx=4,
+            )
+
+            title_label = tk.Label(
+                card,
+                text=title,
+                bg=bg,
+                fg=fg,
+                font=(
+                    "Helvetica",
+                    8,
+                    "bold",
+                ),
+                cursor="pointinghand",
+            )
+
+            title_label.pack(
+                anchor="w"
+            )
+
+            value_label = tk.Label(
+                card,
+                text="0",
+                bg=bg,
+                fg=fg,
+                font=(
+                    "Helvetica",
+                    23,
+                    "bold",
+                ),
+                cursor="pointinghand",
+            )
+
+            value_label.pack(
+                anchor="w",
+                pady=(
+                    4,
+                    0,
+                ),
+            )
+
+            self.cards[key] = value_label
+
+            for widget in (
+                card,
+                title_label,
+                value_label,
+            ):
+
+                widget.bind(
+                    "<Button-1>",
+                    lambda event, k=key: self.card_filter(k),
+                )
+
+        self.ok_breakdown = tk.Label(
+            root,
+            text="OK rozdělení: UNIQA 0  •  ALLIANZ 0",
+            bg=BG,
+            fg=GREEN_FG,
+            font=(
+                "Helvetica",
+                10,
+                "bold",
+            ),
+        )
+
+        self.ok_breakdown.pack(
+            anchor="w",
+            padx=28,
+            pady=(
+                0,
+                8,
+            ),
+        )
+
+        table_frame = tk.Frame(
+            root,
+            bg=PANEL,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+        )
+
+        table_frame.pack(
+            fill="both",
+            expand=True,
+            padx=28,
+            pady=(
+                0,
+                10,
+            ),
+        )
+
+        columns = (
+            "status",
+            "vin",
+            "spz_tir",
+            "spz_uniqa",
+            "vykup",
+            "prodej",
+            "detail",
+        )
+
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=columns,
+            show="headings",
+            style="Checker.Treeview",
+        )
+
+        headers = {
+            "status": "STATUS",
+            "vin": "VIN",
+            "spz_tir": "SPZ TIRBAZAR",
+            "spz_uniqa": "SPZ UNIQA",
+            "vykup": "DATUM VÝKUPU",
+            "prodej": "DATUM PRODEJE",
+            "detail": "VÝSLEDEK",
+        }
+
+        for column, title in headers.items():
+
+            self.tree.heading(
+                column,
+                text=title,
+                anchor="w",
+            )
+
+        self.tree.column(
+            "status",
+            width=190,
+        )
+
+        self.tree.column(
+            "vin",
+            width=205,
+        )
+
+        self.tree.column(
+            "spz_tir",
+            width=120,
+        )
+
+        self.tree.column(
+            "spz_uniqa",
+            width=120,
+        )
+
+        self.tree.column(
+            "vykup",
+            width=135,
+        )
+
+        self.tree.column(
+            "prodej",
+            width=135,
+        )
+
+        self.tree.column(
+            "detail",
+            width=680,
+        )
+
+        sy = ttk.Scrollbar(
+            table_frame,
+            orient="vertical",
+            command=self.tree.yview,
+        )
+
+        sx = ttk.Scrollbar(
+            table_frame,
+            orient="horizontal",
+            command=self.tree.xview,
+        )
+
+        self.tree.configure(
+            yscrollcommand=sy.set,
+            xscrollcommand=sx.set,
+        )
+
+        self.tree.grid(
+            row=0,
+            column=0,
+            sticky="nsew",
+        )
+
+        sy.grid(
+            row=0,
+            column=1,
+            sticky="ns",
+        )
+
+        sx.grid(
+            row=1,
+            column=0,
+            sticky="ew",
+        )
+
+        table_frame.grid_rowconfigure(
+            0,
+            weight=1,
+        )
+
+        table_frame.grid_columnconfigure(
+            0,
+            weight=1,
+        )
+
+        for status, colors in STATUS_COLORS.items():
+
+            bg, fg = colors
+
+            self.tree.tag_configure(
+                status,
+                background=bg,
+                foreground=fg,
+            )
+
+        self.tree.bind(
+            "<Double-1>",
+            self.open_detail,
+        )
+
+        footer = tk.Frame(
+            root,
+            bg=BG,
+        )
+
+        footer.pack(
+            fill="x",
+            padx=28,
+            pady=(
+                0,
+                12,
+            ),
+        )
+
+        self.footer_left = tk.Label(
+            footer,
+            text="Připraveno",
+            bg=BG,
+            fg=TEXT_MUTED,
+            font=(
+                "Helvetica",
+                9,
+            ),
+        )
+
+        self.footer_left.pack(
+            side="left"
+        )
+
+        self.footer_right = tk.Label(
+            footer,
+            text="",
+            bg=BG,
+            fg=ACCENT,
+            font=(
+                "Helvetica",
+                9,
+                "bold",
+            ),
+        )
+
+        self.footer_right.pack(
+            side="right"
+        )
+
+
+    def _source_box(
+        self,
+        parent,
+        title,
+        detail,
+    ):
+
+        box = tk.Frame(
+            parent,
+            bg=PANEL,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+            padx=14,
+            pady=9,
+        )
+
+        box.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=4,
+        )
+
+        top = tk.Frame(
+            box,
+            bg=PANEL,
+        )
+
+        top.pack(
+            fill="x"
+        )
+
+        dot = tk.Label(
+            top,
+            text="●",
+            bg=PANEL,
+            fg=GRAY_FG,
+            font=(
+                "Helvetica",
+                11,
+                "bold",
+            ),
+        )
+
+        dot.pack(
+            side="left",
+            padx=(
+                0,
+                5,
+            ),
+        )
+
+        tk.Label(
+            top,
+            text=title,
+            bg=PANEL,
+            fg=ACCENT,
+            font=(
+                "Helvetica",
+                9,
+                "bold",
+            ),
+        ).pack(
+            side="left"
+        )
+
+        status = tk.Label(
+            box,
+            text="Zatím nenačteno",
+            bg=PANEL,
+            fg=TEXT_MUTED,
+            font=(
+                "Helvetica",
+                10,
+            ),
+        )
+
+        status.pack(
+            anchor="w",
+            pady=(
+                4,
+                0,
+            ),
+        )
+
+        detail_label = tk.Label(
+            box,
+            text=detail,
+            bg=PANEL,
+            fg=TEXT_MUTED,
+            font=(
+                "Helvetica",
+                8,
+            ),
+        )
+
+        detail_label.pack(
+            anchor="w",
+            pady=(
+                2,
+                0,
+            ),
+        )
+
+        return (
+            dot,
+            status,
+            detail_label,
+        )
+
+
+    def run_check(self):
+
+        self.run_button.config(
+            state="disabled",
+            text="Probíhá kontrola...",
+        )
+
+        self.live_dot.config(
+            fg=ORANGE_FG,
+        )
+
+        self.live_status.config(
+            text="KONTROLA PROBÍHÁ",
+            fg=ORANGE_FG,
+        )
+
+        self.tir_dot.config(
+            fg=ORANGE_FG,
+        )
+
+        self.tir_status.config(
+            text="Načítám...",
+            fg=ORANGE_FG,
+        )
+
+        self.uniqa_dot.config(
+            fg=GRAY_FG,
+        )
+
+        self.uniqa_status.config(
+            text="Čekám...",
+            fg=TEXT_MUTED,
+        )
+
+        self.allianz_dot.config(
+            fg=GRAY_FG,
+        )
+
+        self.allianz_status.config(
+            text="Čekám...",
+            fg=TEXT_MUTED,
+        )
+
+        threading.Thread(
+            target=self._run_thread,
+            daemon=True,
+        ).start()
+
+
+    def _run_thread(self):
+
+        try:
+
+            config = load_config()
+
+            vehicles, duplicates = load_tirbazar_vehicles(
+                config
+            )
+
+            self.active_count = sum(
+                1
+                for vehicle in vehicles
+                if not vehicle.datum_prodeje
+            )
+
+            tir_time = datetime.now().strftime(
+                "%d.%m.%Y %H:%M:%S"
+            )
+
+            self.after(
+                0,
+                self._tir_loaded,
+                tir_time,
+            )
+
+            self.after(
+                0,
+                self._uniqa_loading,
+            )
+
+            uniqa = load_uniqa_vehicles()
+
+            uniqa_time = datetime.now().strftime(
+                "%d.%m.%Y %H:%M:%S"
+            )
+
+            self.after(
+                0,
+                self._uniqa_loaded,
+                uniqa,
+                uniqa_time,
+            )
+
+            self.after(
+                0,
+                self._allianz_loading,
+            )
+
+            allianz = load_allianz_vehicles()
+
+            allianz_time = datetime.now().strftime(
+                "%d.%m.%Y %H:%M:%S"
+            )
+
+            self.after(
+                0,
+                self._allianz_loaded,
+                allianz,
+                allianz_time,
+            )
+
+            results = compare_vehicles(
+                tir=vehicles,
+                uniqa=uniqa.vehicles,
+                uniqa_available=uniqa.available,
+                uniqa_error=uniqa.error,
+                allianz=allianz.vehicles,
+                allianz_available=allianz.available,
+                allianz_error=allianz.error,
+            )
+
+            base = prepare_output()
+
+            try:
+
+                write_tirbazar_snapshot(
+                    vehicles,
+                    base,
+                )
+
+            except TypeError:
+
+                active = [
+                    vehicle
+                    for vehicle in vehicles
+                    if not vehicle.datum_prodeje
+                ]
+
+                sold = [
+                    vehicle
+                    for vehicle in vehicles
+                    if vehicle.datum_prodeje
+                ]
+
+                write_tirbazar_snapshot(
+                    active,
+                    sold,
+                    base,
+                )
+
+            write_duplicates(
+                duplicates,
+                base,
+            )
+
+            csv_path = write_comparison(
+                results,
+                base,
+            )
+
+            self.results = results
+            self.last_csv = csv_path
+
+            self.after(
+                0,
+                self._finish,
+                uniqa,
+                allianz,
+            )
+
+        except Exception as exc:
+
+            self.after(
+                0,
+                self._show_error,
+                str(exc),
+            )
+
+
+    def _tir_loaded(
+        self,
+        when,
+    ):
+
+        self.tir_dot.config(
+            fg=GREEN_FG,
+        )
+
+        self.tir_status.config(
+            text=f"Načteno: {when}",
+            fg=GREEN_FG,
+        )
+
+        self.tir_detail.config(
+            text=(
+                f"SQL Server • Aktivních: {self.active_count}"
+            )
+        )
+
+
+    def _uniqa_loading(self):
+
+        self.uniqa_dot.config(
+            fg=ORANGE_FG,
+        )
+
+        self.uniqa_status.config(
+            text="Načítám UNIQA...",
+            fg=ORANGE_FG,
+        )
+
+
+    def _uniqa_loaded(
+        self,
+        uniqa,
+        when,
+    ):
+
+        if uniqa.available:
+
+            duplicates = len(
+                getattr(
+                    uniqa,
+                    "duplicates",
+                    [],
+                )
+            )
+
+            self.uniqa_dot.config(
+                fg=GREEN_FG,
+            )
+
+            self.uniqa_status.config(
+                text=f"Načteno: {when}",
+                fg=GREEN_FG,
+            )
+
+            self.uniqa_detail.config(
+                text=(
+                    f"Aktivních VIN: {len(uniqa.vehicles)}"
+                    f" • Duplicitních VIN: {duplicates}"
+                )
+            )
+
+        else:
+
+            self.uniqa_dot.config(
+                fg=RED_FG,
+            )
+
+            self.uniqa_status.config(
+                text="Načtení selhalo",
+                fg=RED_FG,
+            )
+
+
+    def _allianz_loading(self):
+
+        self.allianz_dot.config(
+            fg=ORANGE_FG,
+        )
+
+        self.allianz_status.config(
+            text="Načítám Allianz...",
+            fg=ORANGE_FG,
+        )
+
+
+    def _allianz_loaded(
+        self,
+        allianz,
+        when,
+    ):
+
+        if allianz.available:
+
+            self.allianz_dot.config(
+                fg=GREEN_FG,
+            )
+
+            self.allianz_status.config(
+                text=f"Načteno: {when}",
+                fg=GREEN_FG,
+            )
+
+            self.allianz_detail.config(
+                text=(
+                    f"Vozidel: {len(allianz.vehicles)}"
+                    f" • {allianz.period_od} - {allianz.period_do}"
+                )
+            )
+
+        else:
+
+            self.allianz_dot.config(
+                fg=RED_FG,
+            )
+
+            self.allianz_status.config(
+                text="Načtení selhalo",
+                fg=RED_FG,
+            )
+
+            self.allianz_detail.config(
+                text=allianz.error,
+            )
+
+
+    def _finish(
+        self,
+        uniqa,
+        allianz,
+    ):
+
+        counts = Counter(
+            result.status
+            for result in self.results
+        )
+
+        self.ok_uniqa = sum(
+            1
+            for result in self.results
+            if (
+                result.status == "OK"
+                and "UNIQA" in (
+                    result.detail or ""
+                ).upper()
+            )
+        )
+
+        self.ok_allianz = sum(
+            1
+            for result in self.results
+            if (
+                result.status == "OK"
+                and "ALLIANZ" in (
+                    result.detail or ""
+                ).upper()
+            )
+        )
+
+        self.cards[
+            "ACTIVE"
+        ].config(
+            text=str(
+                self.active_count
+            )
+        )
+
+        for status in (
+            "OK",
+            "CHYBÍ V UNIQA",
+            "PRODANÉ, ALE V UNIQA",
+            "SPZ NESOUHLASÍ",
+            "NAVÍC V UNIQA",
+        ):
+
+            self.cards[
+                status
+            ].config(
+                text=str(
+                    counts.get(
+                        status,
+                        0,
+                    )
+                )
+            )
+
+        self.ok_breakdown.config(
+            text=(
+                f"OK rozdělení: "
+                f"UNIQA {self.ok_uniqa}"
+                f"  •  "
+                f"ALLIANZ {self.ok_allianz}"
+            )
+        )
+
+        self.fill_table()
+
+        if (
+            uniqa.available
+            and allianz.available
+        ):
+
+            self.live_dot.config(
+                fg=GREEN_FG,
+            )
+
+            self.live_status.config(
+                text="KONTROLA KOMPLETNÍ ✓",
+                fg=GREEN_FG,
+            )
+
+        else:
+
+            self.live_dot.config(
+                fg=ORANGE_FG,
+            )
+
+            self.live_status.config(
+                text="KONTROLA NEÚPLNÁ",
+                fg=ORANGE_FG,
+            )
+
+        self.footer_left.config(
+            text=(
+                "Dokončeno: "
+                + datetime.now().strftime(
+                    "%d.%m.%Y %H:%M:%S"
+                )
+            )
+        )
+
+        self.run_button.config(
+            state="normal",
+            text="▶  SPUSTIT KONTROLU",
+        )
+
+
+    def card_filter(
+        self,
+        key,
+    ):
+
+        self.filter_var.set(
+            key
+        )
+
+        self.fill_table()
+
+
+    def clear_filter(self):
+
+        self.filter_var.set(
+            "Vše"
+        )
+
+        self.search_var.set(
+            ""
+        )
+
+        self.fill_table()
+
+
+    def fill_table(self):
+
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        search = (
+            self.search_var
+            .get()
+            .strip()
+            .upper()
+        )
+
+        selected_filter = self.filter_var.get()
+
+        shown = 0
+
+        for result in self.results:
+
+            if selected_filter == "ACTIVE":
+
+                if result.status not in (
+                    "OK",
+                    "CHYBÍ V UNIQA",
+                    "SPZ NESOUHLASÍ",
+                    "NELZE OVĚŘIT",
+                ):
+                    continue
+
+            elif selected_filter != "Vše":
+
+                if result.status != selected_filter:
+                    continue
+
+            searchable = " ".join(
+                [
+                    result.status or "",
+                    result.vin or "",
+                    result.tir_spz or "",
+                    result.uniqa_spz or "",
+                    result.detail or "",
+                ]
+            ).upper()
+
+            if search and search not in searchable:
+                continue
+
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    result.status,
+                    result.vin,
+                    result.tir_spz or "",
+                    result.uniqa_spz or "",
+                    self._format_date(
+                        result.datum_vykupu
+                    ),
+                    self._format_date(
+                        result.datum_prodeje
+                    ),
+                    result.detail,
+                ),
+                tags=(
+                    result.status,
+                ),
+            )
+
+            shown += 1
+
+        self.footer_right.config(
+            text=f"Zobrazeno: {shown}"
+        )
+
+
+    def _format_date(
+        self,
+        value,
+    ):
+
+        if not value:
+            return ""
+
+        text = str(value).strip()
+
+        if len(text) >= 10:
+
+            try:
+
+                return (
+                    f"{text[8:10]}."
+                    f"{text[5:7]}."
+                    f"{text[0:4]}"
+                )
+
+            except Exception:
+                pass
+
+        return text
+
+
+    def open_detail(
+        self,
+        _event=None,
+    ):
+
+        selected = self.tree.selection()
+
+        if not selected:
+            return
+
+        values = self.tree.item(
+            selected[0]
+        ).get(
+            "values",
+            [],
+        )
+
+        if not values:
+            return
+
+        (
+            status,
+            vin,
+            tir_spz,
+            uniqa_spz,
+            vykup,
+            prodej,
+            detail,
+        ) = values
+
+        messagebox.showinfo(
+            "Detail vozidla",
+            (
+                f"STATUS\n{status}\n\n"
+                f"VIN\n{vin}\n\n"
+                f"SPZ TIRBazar\n{tir_spz or '-'}\n\n"
+                f"SPZ UNIQA\n{uniqa_spz or '-'}\n\n"
+                f"Datum výkupu\n{vykup or '-'}\n\n"
+                f"Datum prodeje\n{prodej or '-'}\n\n"
+                f"Výsledek\n{detail}"
+            ),
+        )
+
+
+    def _show_error(
+        self,
+        text,
+    ):
+
+        self.live_dot.config(
+            fg=RED_FG,
+        )
+
+        self.live_status.config(
+            text="CHYBA",
+            fg=RED_FG,
+        )
+
+        self.run_button.config(
+            state="normal",
+            text="▶  SPUSTIT KONTROLU",
+        )
+
+        messagebox.showerror(
+            "Kontrola pojištění",
+            text,
+        )
+
+
+    def open_csv(self):
+
+        if not self.last_csv:
+
+            messagebox.showinfo(
+                "Kontrola pojištění",
+                "Nejdřív spusť kontrolu.",
+            )
+
+            return
+
+        subprocess.run(
+            [
+                "open",
+                str(self.last_csv),
+            ]
+        )
+
+
+    def open_output_folder(self):
+
+        folder = (
+            Path(__file__)
+            .resolve()
+            .parent
+            / "output"
+        )
+
+        folder.mkdir(
+            exist_ok=True
+        )
+
+        subprocess.run(
+            [
+                "open",
+                str(folder),
+            ]
+        )
+
+
+if __name__ == "__main__":
+
+    app = InsuranceCheckerApp()
+
+    app.mainloop()

@@ -1,0 +1,211 @@
+from __future__ import annotations
+
+from models import ComparisonResult, TirVehicle, UniqaVehicle
+from normalize import normalize_spz, normalize_vin
+
+
+STATUS_OK = "OK"
+STATUS_MISSING = "CHYBÍ V UNIQA"
+STATUS_EXTRA = "NAVÍC V UNIQA"
+STATUS_SPZ = "SPZ NESOUHLASÍ"
+STATUS_SOLD = "PRODANÉ, ALE V UNIQA"
+STATUS_UNABLE = "NELZE OVĚŘIT"
+
+
+def compare_vehicles(
+    tir: list[TirVehicle],
+    uniqa: list[UniqaVehicle],
+    uniqa_available: bool,
+    uniqa_error: str = "",
+) -> list[ComparisonResult]:
+
+    if not uniqa_available:
+        return [
+            ComparisonResult(
+                oid=v.oid,
+                vin=v.vin,
+                tir_spz=v.spz,
+                uniqa_spz="",
+                status=STATUS_UNABLE,
+                detail=(
+                    uniqa_error
+                    or "UNIQA není technicky dostupná."
+                ),
+                datum_vykupu=v.datum_vykupu,
+                datum_prodeje=v.datum_prodeje,
+            )
+            for v in tir
+            if not v.datum_prodeje
+        ]
+
+    tir_by_vin = {
+        normalize_vin(v.vin): v
+        for v in tir
+        if normalize_vin(v.vin)
+    }
+
+    uniqa_by_vin = {
+        normalize_vin(v.vin): v
+        for v in uniqa
+        if normalize_vin(v.vin)
+    }
+
+    results: list[ComparisonResult] = []
+
+    # --------------------------------------------------------
+    # TIRBAZAR
+    # --------------------------------------------------------
+
+    for vin, vehicle in tir_by_vin.items():
+
+        uni = uniqa_by_vin.get(vin)
+
+        # ----------------------------------------------------
+        # PRODANÉ VOZIDLO
+        #
+        # Pokud už není v UNIQA = v pořádku, nic nehlásíme.
+        # Pokud stále je v UNIQA = upozornění.
+        # ----------------------------------------------------
+
+        if vehicle.datum_prodeje:
+
+            if uni is not None:
+                results.append(
+                    ComparisonResult(
+                        oid=vehicle.oid,
+                        vin=vin,
+                        tir_spz=vehicle.spz,
+                        uniqa_spz=uni.spz,
+                        status=STATUS_SOLD,
+                        detail=(
+                            "Vozidlo má datum prodeje, "
+                            "ale VIN je stále veden mezi "
+                            "aktivními vozidly UNIQA."
+                        ),
+                        datum_vykupu=vehicle.datum_vykupu,
+                        datum_prodeje=vehicle.datum_prodeje,
+                    )
+                )
+
+            continue
+
+        # ----------------------------------------------------
+        # AKTIVNÍ VOZIDLO
+        # ----------------------------------------------------
+
+        if uni is None:
+
+            results.append(
+                ComparisonResult(
+                    oid=vehicle.oid,
+                    vin=vin,
+                    tir_spz=vehicle.spz,
+                    uniqa_spz="",
+                    status=STATUS_MISSING,
+                    detail=(
+                        "Vozidlo má skutečný DatumVykupu "
+                        "a nemá DatumProdeje, ale jeho VIN "
+                        "nebyl nalezen mezi aktivními "
+                        "vozidly UNIQA."
+                    ),
+                    datum_vykupu=vehicle.datum_vykupu,
+                    datum_prodeje="",
+                )
+            )
+
+            continue
+
+        tir_spz = normalize_spz(
+            vehicle.spz
+        )
+
+        uni_spz = normalize_spz(
+            uni.spz
+        )
+
+        # SPZ je jen sekundární kontrola.
+        if (
+            tir_spz
+            and uni_spz
+            and tir_spz != uni_spz
+        ):
+
+            results.append(
+                ComparisonResult(
+                    oid=vehicle.oid,
+                    vin=vin,
+                    tir_spz=tir_spz,
+                    uniqa_spz=uni_spz,
+                    status=STATUS_SPZ,
+                    detail=(
+                        "VIN souhlasí. SPZ se liší "
+                        "pouze při sekundární kontrole."
+                    ),
+                    datum_vykupu=vehicle.datum_vykupu,
+                    datum_prodeje="",
+                )
+            )
+
+            continue
+
+        results.append(
+            ComparisonResult(
+                oid=vehicle.oid,
+                vin=vin,
+                tir_spz=tir_spz,
+                uniqa_spz=uni_spz,
+                status=STATUS_OK,
+                detail=(
+                    "VIN vozidla s DatumVykupu "
+                    "a bez DatumProdeje je nalezen "
+                    "mezi aktivními vozidly UNIQA."
+                ),
+                datum_vykupu=vehicle.datum_vykupu,
+                datum_prodeje="",
+            )
+        )
+
+    # --------------------------------------------------------
+    # NAVÍC V UNIQA
+    #
+    # VIN v UNIQA není mezi žádnými vozidly,
+    # která prošla filtrem DatumVykupu.
+    # --------------------------------------------------------
+
+    for vin, uni in uniqa_by_vin.items():
+
+        if vin in tir_by_vin:
+            continue
+
+        results.append(
+            ComparisonResult(
+                oid=None,
+                vin=vin,
+                tir_spz="",
+                uniqa_spz=uni.spz,
+                status=STATUS_EXTRA,
+                detail=(
+                    "VIN je mezi aktivními vozidly UNIQA, "
+                    "ale v TIRBazar nebyl nalezen mezi "
+                    "vozidly se skutečným DatumVykupu."
+                ),
+            )
+        )
+
+    priority = {
+        STATUS_SOLD: 1,
+        STATUS_MISSING: 2,
+        STATUS_SPZ: 3,
+        STATUS_EXTRA: 4,
+        STATUS_OK: 5,
+        STATUS_UNABLE: 6,
+    }
+
+    results.sort(
+        key=lambda r: (
+            priority.get(r.status, 99),
+            r.vin,
+        )
+    )
+
+    return results

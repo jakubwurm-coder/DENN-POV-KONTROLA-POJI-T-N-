@@ -1,0 +1,318 @@
+from __future__ import annotations
+
+import os
+import subprocess
+from collections import defaultdict
+from pathlib import Path
+
+from config import Config
+from models import TirVehicle
+from normalize import normalize_spz, normalize_vin
+
+
+FORBIDDEN_SQL = [
+    "INSERT ",
+    "UPDATE ",
+    "DELETE ",
+    "ALTER ",
+    "DROP ",
+    "TRUNCATE ",
+    "MERGE ",
+    "EXEC ",
+    "CREATE ",
+]
+
+
+KEYCHAIN_SERVICE = "UNIQA_CHECKER_TIRBAZAR"
+KEYCHAIN_ACCOUNT = "TB"
+
+
+def get_password(config: Config) -> str:
+    try:
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "find-generic-password",
+                "-a",
+                KEYCHAIN_ACCOUNT,
+                "-s",
+                KEYCHAIN_SERVICE,
+                "-w",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Nepodařilo se přečíst heslo z macOS Klíčenky: {exc}"
+        )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "SQL heslo nebylo nalezeno v macOS Klíčence.\n"
+            "Spusť znovu příkaz pro uložení hesla."
+        )
+
+    password = result.stdout.strip()
+
+    if not password:
+        raise RuntimeError(
+            "Heslo v macOS Klíčence je prázdné."
+        )
+
+    return password
+
+
+def validate_read_only_sql(sql: str) -> None:
+    sql_upper = sql.upper()
+
+    for word in FORBIDDEN_SQL:
+        if word in sql_upper:
+            raise RuntimeError(
+                f"Bezpečnostní blokace: SQL obsahuje zakázaný příkaz "
+                f"{word.strip()}."
+            )
+
+
+def build_sql() -> str:
+    return """
+USE TIRBazar;
+GO
+
+SET NOCOUNT ON;
+GO
+
+SELECT
+    '__COUNT__|' + CAST(COUNT(*) AS VARCHAR(20))
+FROM dbo.Vozidlo
+WHERE
+    Stav = N'Vykoupené'
+    AND VIN IS NOT NULL
+    AND LTRIM(RTRIM(VIN)) <> '';
+GO
+
+SELECT
+    '__ROW__|' +
+    CAST(OID AS VARCHAR(20)) + '|' +
+    ISNULL(
+        REPLACE(
+            REPLACE(
+                LTRIM(RTRIM(VIN)),
+                CHAR(13),
+                ''
+            ),
+            CHAR(10),
+            ''
+        ),
+        ''
+    ) + '|' +
+    ISNULL(
+        REPLACE(
+            REPLACE(
+                LTRIM(
+                    RTRIM(
+                        CASE
+                            WHEN NovaRegistracniZnacka IS NOT NULL
+                                 AND LTRIM(RTRIM(NovaRegistracniZnacka)) <> ''
+                            THEN NovaRegistracniZnacka
+                            ELSE RegistracniZnacka
+                        END
+                    )
+                ),
+                CHAR(13),
+                ''
+            ),
+            CHAR(10),
+            ''
+        ),
+        ''
+    )
+FROM dbo.Vozidlo
+WHERE
+    Stav = N'Vykoupené'
+    AND VIN IS NOT NULL
+    AND LTRIM(RTRIM(VIN)) <> ''
+ORDER BY OID;
+GO
+
+SELECT '__FINISHED__';
+GO
+
+exit
+"""
+
+
+def load_tirbazar_vehicles(
+    config: Config,
+) -> tuple[list[TirVehicle], list[list[TirVehicle]]]:
+
+    sql = build_sql()
+    validate_read_only_sql(sql)
+
+    password = get_password(config)
+
+    project_dir = Path(__file__).resolve().parent
+    freetds_conf = project_dir / "freetds.conf"
+    tsql_path = Path("/opt/homebrew/bin/tsql")
+
+    if not freetds_conf.exists():
+        raise RuntimeError(
+            f"Chybí konfigurace FreeTDS: {freetds_conf}"
+        )
+
+    if not tsql_path.exists():
+        raise RuntimeError(
+            f"tsql nebyl nalezen: {tsql_path}"
+        )
+
+    print()
+    print("Připojuji se READ-ONLY k TIRBazar...")
+    print(f"Server: {config.server}:{config.port}")
+    print(f"Databáze: {config.database}")
+    print("Připojení: FreeTDS / TDS 7.2 / encryption off")
+    print("Heslo: macOS Klíčenka")
+    print()
+
+    env = os.environ.copy()
+    env["FREETDSCONF"] = str(freetds_conf)
+    env["TDSVER"] = "7.2"
+
+    command = [
+        str(tsql_path),
+        "-S",
+        "tirbazar",
+        "-U",
+        config.username,
+        "-P",
+        password,
+    ]
+
+    try:
+        result = subprocess.run(
+            command,
+            input=sql,
+            text=True,
+            capture_output=True,
+            env=env,
+            timeout=60,
+        )
+    finally:
+        password = ""
+
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
+
+    debug_path = project_dir / "tsql_last_output.txt"
+
+    debug_path.write_text(
+        stdout + "\n\n--- STDERR ---\n" + stderr,
+        encoding="utf-8",
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "tsql skončil chybou.\n"
+            f"{stderr.strip() or stdout.strip()}\n\n"
+            f"Diagnostika: {debug_path}"
+        )
+
+    sql_count: int | None = None
+    raw: list[TirVehicle] = []
+
+    for original_line in stdout.splitlines():
+        line = original_line.strip()
+
+        if "__COUNT__|" in line:
+            text = line[line.find("__COUNT__|"):]
+            parts = text.split("|", 1)
+
+            if len(parts) == 2:
+                try:
+                    sql_count = int(parts[1].strip())
+                except ValueError:
+                    pass
+
+        if "__ROW__|" not in line:
+            continue
+
+        text = line[line.find("__ROW__|"):]
+        parts = text.split("|", 3)
+
+        if len(parts) != 4:
+            continue
+
+        marker = parts[0].strip()
+        oid_text = parts[1].strip()
+        vin_text = parts[2].strip()
+        spz_text = parts[3].strip()
+
+        if marker != "__ROW__":
+            continue
+
+        try:
+            oid = int(oid_text)
+        except ValueError:
+            continue
+
+        vin = normalize_vin(vin_text)
+        spz = normalize_spz(spz_text)
+
+        if not vin:
+            continue
+
+        raw.append(
+            TirVehicle(
+                oid=oid,
+                vin=vin,
+                spz=spz,
+            )
+        )
+
+    print(
+        "Počet vykoupených vozidel podle SQL:",
+        sql_count if sql_count is not None else "nezjištěno",
+    )
+
+    print(
+        "Počet přečtených řádků:",
+        len(raw),
+    )
+
+    if not raw:
+        raise RuntimeError(
+            "SQL spojení funguje, ale parser nenačetl žádné vozidlo.\n"
+            f"Výstup je uložen zde: {debug_path}"
+        )
+
+    groups: dict[str, list[TirVehicle]] = defaultdict(list)
+
+    for vehicle in raw:
+        groups[vehicle.vin].append(vehicle)
+
+    unique: list[TirVehicle] = []
+    duplicates: list[list[TirVehicle]] = []
+
+    for vin, vehicles in groups.items():
+        vehicles_sorted = sorted(
+            vehicles,
+            key=lambda vehicle: vehicle.oid,
+            reverse=True,
+        )
+
+        unique.append(vehicles_sorted[0])
+
+        if len(vehicles_sorted) > 1:
+            duplicates.append(vehicles_sorted)
+
+    unique.sort(
+        key=lambda vehicle: vehicle.oid
+    )
+
+    print()
+    print(f"Načteno řádků z SQL: {len(raw)}")
+    print(f"Unikátních VIN: {len(unique)}")
+    print(f"Duplicitních VIN skupin: {len(duplicates)}")
+    print()
+
+    return unique, duplicates

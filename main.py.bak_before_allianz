@@ -1,0 +1,99 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+from compare import compare_vehicles
+from config import load_config
+from report import (
+    prepare_output,
+    print_summary,
+    write_comparison,
+    write_duplicates,
+    write_tirbazar_snapshot,
+)
+from tirbazar import load_tirbazar_vehicles
+from uniqa import load_uniqa_vehicles
+
+
+def main() -> int:
+    print()
+    print("=" * 70)
+    print("UNIQA CHECKER")
+    print("TIRBAZAR → UNIQA")
+    print("=" * 70)
+    print()
+    print("Databáze TIRBazar je používána pouze pro čtení.")
+    print("Technická chyba UNIQA nikdy neznamená 'nepojištěno'.")
+    print()
+
+    config = load_config()
+
+    try:
+        vehicles, duplicates = load_tirbazar_vehicles(
+            config
+        )
+
+    except Exception as exc:
+        print()
+        print("CHYBA PŘI ČTENÍ TIRBAZAR:")
+        print(exc)
+        return 1
+
+    print(
+        f"Načteno unikátních vykoupených vozidel: {len(vehicles)}"
+    )
+
+    uniqa = load_uniqa_vehicles()
+
+    if not uniqa.available:
+        print()
+        print("UNIQA:")
+        print(uniqa.error)
+        print()
+        print(
+            "Vozidla budou označena jako NELZE OVĚŘIT, "
+            "nikoliv CHYBÍ V UNIQA."
+        )
+
+    results = compare_vehicles(
+        tir=vehicles,
+        uniqa=uniqa.vehicles,
+        uniqa_available=uniqa.available,
+        uniqa_error=uniqa.error,
+    )
+
+    base = prepare_output()
+
+    tir_path = write_tirbazar_snapshot(
+        vehicles,
+        base,
+    )
+
+    duplicate_path = write_duplicates(
+        duplicates,
+        base,
+    )
+
+    result_path = write_comparison(
+        results,
+        base,
+    )
+
+    print_summary(
+        vehicles,
+        results,
+        duplicates,
+    )
+
+    print("Výstupy:")
+    print(tir_path.resolve())
+    print(duplicate_path.resolve())
+    print(result_path.resolve())
+    print()
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

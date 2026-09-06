@@ -1,0 +1,360 @@
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+from pypdf import PdfReader
+
+from normalize import normalize_spz, normalize_vin
+
+
+BASE_DIR = Path(__file__).resolve().parent
+
+ALLIANZ_PDF = (
+    BASE_DIR
+    / "Pojisteni_898405561_210928898.pdf"
+)
+
+
+@dataclass
+class AllianzVehicle:
+    identifier: str
+    vin: str
+    spz: str
+    pojistka: str
+    poj_od: str
+    poj_do: str
+
+
+@dataclass
+class AllianzLoadResult:
+    vehicles: list[AllianzVehicle]
+    available: bool
+    error: str = ""
+    period_od: str = ""
+    period_do: str = ""
+
+
+def clean_text(value: str) -> str:
+    return " ".join(
+        str(value or "")
+        .replace("\xa0", " ")
+        .split()
+    )
+
+
+def parse_period(text: str) -> tuple[str, str]:
+
+    match = re.search(
+        r"Období\s+"
+        r"(\d{1,2}\.\s*\d{1,2}\.\s*\d{4})"
+        r"\s*-\s*"
+        r"(\d{1,2}\.\s*\d{1,2}\.\s*\d{4})",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    if not match:
+        return "", ""
+
+    return (
+        clean_text(match.group(1)),
+        clean_text(match.group(2)),
+    )
+
+
+def parse_vehicle_line(
+    line: str,
+) -> AllianzVehicle | None:
+
+    line = clean_text(line)
+
+    if not line:
+        return None
+
+    # Řádek začíná číslem pojistky.
+    match_policy = re.match(
+        r"^(\d{9})\b",
+        line,
+    )
+
+    if not match_policy:
+        return None
+
+    pojistka = match_policy.group(1)
+
+    # Poslední datum na řádku = "Do".
+    date_matches = list(
+        re.finditer(
+            r"\d{1,2}\.\s*\d{1,2}\.\s*\d{4}",
+            line,
+        )
+    )
+
+    if len(date_matches) < 2:
+        return None
+
+    poj_od = clean_text(
+        date_matches[0].group(0)
+    )
+
+    poj_do = clean_text(
+        date_matches[-1].group(0)
+    )
+
+    # Část před posledním datem.
+    before_end = line[
+        :date_matches[-1].start()
+    ].strip()
+
+    # Allianz tabulka má SPZ/VIN těsně před datumem "Do".
+    tokens = before_end.split()
+
+    if not tokens:
+        return None
+
+    identifier = tokens[-1].strip().upper()
+
+    # Musí to vypadat jako SPZ nebo VIN.
+    if not re.fullmatch(
+        r"[A-Z0-9]{5,17}",
+        identifier,
+    ):
+        return None
+
+    # 17 znaků bereme jako VIN.
+    # Kratší identifikátor jako SPZ.
+    if len(identifier) == 17:
+
+        vin = normalize_vin(
+            identifier
+        )
+
+        spz = ""
+
+    else:
+
+        vin = ""
+
+        spz = normalize_spz(
+            identifier
+        )
+
+    return AllianzVehicle(
+        identifier=identifier,
+        vin=vin,
+        spz=spz,
+        pojistka=pojistka,
+        poj_od=poj_od,
+        poj_do=poj_do,
+    )
+
+
+def load_allianz_vehicles() -> AllianzLoadResult:
+
+    try:
+
+        if not ALLIANZ_PDF.exists():
+
+            raise RuntimeError(
+                "Allianz PDF nebylo nalezeno:\n"
+                f"{ALLIANZ_PDF}"
+            )
+
+        reader = PdfReader(
+            str(ALLIANZ_PDF)
+        )
+
+        all_text_parts: list[str] = []
+
+        vehicles: list[AllianzVehicle] = []
+
+        seen_rows: set[
+            tuple[str, str]
+        ] = set()
+
+        for page_number, page in enumerate(
+            reader.pages,
+            start=1,
+        ):
+
+            text = page.extract_text() or ""
+
+            all_text_parts.append(
+                text
+            )
+
+            for raw_line in text.splitlines():
+
+                vehicle = parse_vehicle_line(
+                    raw_line
+                )
+
+                if vehicle is None:
+                    continue
+
+                key = (
+                    vehicle.pojistka,
+                    vehicle.identifier,
+                )
+
+                if key in seen_rows:
+                    continue
+
+                seen_rows.add(
+                    key
+                )
+
+                vehicles.append(
+                    vehicle
+                )
+
+        full_text = "\n".join(
+            all_text_parts
+        )
+
+        period_od, period_do = parse_period(
+            full_text
+        )
+
+        vehicles.sort(
+            key=lambda v: (
+                v.vin or v.spz
+            )
+        )
+
+        if not vehicles:
+
+            raise RuntimeError(
+                "PDF bylo otevřeno, ale nebyla "
+                "rozpoznána žádná vozidla."
+            )
+
+        return AllianzLoadResult(
+            vehicles=vehicles,
+            available=True,
+            error="",
+            period_od=period_od,
+            period_do=period_do,
+        )
+
+    except Exception as exc:
+
+        return AllianzLoadResult(
+            vehicles=[],
+            available=False,
+            error=str(exc),
+            period_od="",
+            period_do="",
+        )
+
+
+def print_report(
+    result: AllianzLoadResult,
+) -> None:
+
+    print()
+    print("=" * 70)
+    print("ALLIANZ - NAČTENÍ PDF")
+    print("=" * 70)
+    print()
+
+    if not result.available:
+
+        print(
+            "ALLIANZ NELZE NAČÍST:"
+        )
+
+        print(
+            result.error
+        )
+
+        return
+
+    print(
+        "Soubor:",
+        ALLIANZ_PDF.name,
+    )
+
+    print(
+        "Období:",
+        (
+            f"{result.period_od} - {result.period_do}"
+            if result.period_od
+            else "nezjištěno"
+        ),
+    )
+
+    print(
+        "Načtených vozidel:",
+        len(result.vehicles),
+    )
+
+    count_vin = sum(
+        1
+        for v in result.vehicles
+        if v.vin
+    )
+
+    count_spz = sum(
+        1
+        for v in result.vehicles
+        if v.spz
+    )
+
+    print(
+        "Záznamů vedených VIN:",
+        count_vin,
+    )
+
+    print(
+        "Záznamů vedených SPZ:",
+        count_spz,
+    )
+
+    print()
+    print("-" * 70)
+    print(
+        f"{'POJISTKA':<12} "
+        f"{'VIN / SPZ':<20} "
+        f"{'OD':<14} "
+        f"{'DO':<14}"
+    )
+    print("-" * 70)
+
+    for vehicle in result.vehicles:
+
+        print(
+            f"{vehicle.pojistka:<12} "
+            f"{vehicle.identifier:<20} "
+            f"{vehicle.poj_od:<14} "
+            f"{vehicle.poj_do:<14}"
+        )
+
+    print("-" * 70)
+    print()
+
+
+if __name__ == "__main__":
+
+    result = load_allianz_vehicles()
+
+    print_report(
+        result
+    )
+
+    if result.available:
+
+        if len(result.vehicles) == 71:
+
+            print(
+                "OK - Allianz PDF obsahuje očekávaných 71 vozidel."
+            )
+
+        else:
+
+            print(
+                "POZOR - očekáváno 71 vozidel, "
+                f"parser našel {len(result.vehicles)}."
+            )

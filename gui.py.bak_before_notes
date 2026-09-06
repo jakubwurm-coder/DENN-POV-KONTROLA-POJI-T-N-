@@ -1,0 +1,1759 @@
+from __future__ import annotations
+
+import sqlite3
+import subprocess
+import threading
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+from compare import compare_vehicles
+from config import load_config
+from report import (
+    prepare_output,
+    write_comparison,
+    write_duplicates,
+    write_tirbazar_snapshot,
+)
+from tirbazar import load_tirbazar_vehicles
+from uniqa import load_uniqa_vehicles
+
+
+# ============================================================
+# CESTY
+# ============================================================
+
+BASE_DIR = Path(__file__).resolve().parent
+CASE_DB = BASE_DIR / "case_notes.sqlite3"
+
+
+# ============================================================
+# BARVY
+# ============================================================
+
+BG = "#061827"
+HEADER_BG = "#082238"
+
+PANEL = "#0a2a43"
+PANEL_2 = "#0d3554"
+BORDER = "#1b5276"
+
+TEXT = "#ffffff"
+TEXT_MUTED = "#9eb7ca"
+
+ACCENT = "#54c8ff"
+
+GREEN_BG = "#0d4938"
+GREEN_FG = "#7af0b5"
+
+RED_BG = "#5a2028"
+RED_FG = "#ff919b"
+
+PURPLE_BG = "#572442"
+PURPLE_FG = "#ff9fd2"
+
+ORANGE_BG = "#594115"
+ORANGE_FG = "#ffd166"
+
+BLUE_BG = "#123e62"
+BLUE_FG = "#7bd0ff"
+
+ACTIVE_BG = "#17364a"
+ACTIVE_FG = "#8dd8ff"
+
+DUP_BG = "#4d294f"
+DUP_FG = "#f7a8ff"
+
+GRAY_BG = "#35404a"
+GRAY_FG = "#d7dde2"
+
+RESOLVED_BG = "#17483e"
+RESOLVED_FG = "#9cf7d2"
+
+
+WORKFLOW_STATUSES = (
+    "K ŘEŠENÍ",
+    "ŘEŠÍ SE",
+    "ČEKÁ SE",
+    "VYŘEŠENO",
+)
+
+
+STATUS_COLORS = {
+    "OK": (GREEN_BG, GREEN_FG),
+    "CHYBÍ V UNIQA": (RED_BG, RED_FG),
+    "PRODANÉ, ALE V UNIQA": (PURPLE_BG, PURPLE_FG),
+    "SPZ NESOUHLASÍ": (ORANGE_BG, ORANGE_FG),
+    "NAVÍC V UNIQA": (BLUE_BG, BLUE_FG),
+    "DUPLICITNÍ V UNIQA": (DUP_BG, DUP_FG),
+    "NELZE OVĚŘIT": (GRAY_BG, GRAY_FG),
+}
+
+
+# ============================================================
+# LOKÁLNÍ EVIDENCE POZNÁMEK / ŘEŠENÍ
+# ============================================================
+
+class CaseStore:
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._init_db()
+
+    def connect(self):
+        connection = sqlite3.connect(self.path)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    def _init_db(self):
+        with self.connect() as db:
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cases (
+                    vin TEXT NOT NULL,
+                    issue_status TEXT NOT NULL,
+
+                    workflow_status TEXT NOT NULL DEFAULT 'K ŘEŠENÍ',
+                    note TEXT NOT NULL DEFAULT '',
+
+                    tir_spz TEXT NOT NULL DEFAULT '',
+                    uniqa_spz TEXT NOT NULL DEFAULT '',
+                    detail TEXT NOT NULL DEFAULT '',
+
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+
+                    PRIMARY KEY (vin, issue_status)
+                )
+                """
+            )
+            db.commit()
+
+    def get(self, vin: str, issue_status: str):
+        with self.connect() as db:
+            return db.execute(
+                """
+                SELECT *
+                FROM cases
+                WHERE vin = ?
+                  AND issue_status = ?
+                """,
+                (
+                    vin,
+                    issue_status,
+                ),
+            ).fetchone()
+
+    def save(
+        self,
+        vin: str,
+        issue_status: str,
+        workflow_status: str,
+        note: str,
+        tir_spz: str = "",
+        uniqa_spz: str = "",
+        detail: str = "",
+    ):
+        now = datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        with self.connect() as db:
+
+            existing = db.execute(
+                """
+                SELECT created_at
+                FROM cases
+                WHERE vin = ?
+                  AND issue_status = ?
+                """,
+                (
+                    vin,
+                    issue_status,
+                ),
+            ).fetchone()
+
+            created_at = (
+                existing["created_at"]
+                if existing
+                else now
+            )
+
+            db.execute(
+                """
+                INSERT OR REPLACE INTO cases (
+                    vin,
+                    issue_status,
+                    workflow_status,
+                    note,
+                    tir_spz,
+                    uniqa_spz,
+                    detail,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    vin,
+                    issue_status,
+                    workflow_status,
+                    note,
+                    tir_spz,
+                    uniqa_spz,
+                    detail,
+                    created_at,
+                    now,
+                ),
+            )
+
+            db.commit()
+
+    def resolved(self):
+        with self.connect() as db:
+            return db.execute(
+                """
+                SELECT *
+                FROM cases
+                WHERE workflow_status = 'VYŘEŠENO'
+                ORDER BY updated_at DESC
+                """
+            ).fetchall()
+
+    def count_resolved(self) -> int:
+        with self.connect() as db:
+            row = db.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM cases
+                WHERE workflow_status = 'VYŘEŠENO'
+                """
+            ).fetchone()
+
+            return int(
+                row["cnt"]
+            )
+
+
+# ============================================================
+# GUI
+# ============================================================
+
+class UniqaCheckerApp(tk.Tk):
+
+    def __init__(self):
+        super().__init__()
+
+        self.title("UNIQA CHECKER")
+        self.geometry("1680x1000")
+        self.minsize(1300, 800)
+        self.configure(bg=BG)
+
+        self.case_store = CaseStore(
+            CASE_DB
+        )
+
+        self.results = []
+        self.tir_vehicles = []
+
+        self.uniqa_duplicates = []
+        self.uniqa_raw_count = 0
+        self.uniqa_unique_count = 0
+
+        self.last_csv: Path | None = None
+
+        self.active_count = 0
+
+        self.tirbazar_loaded_at = ""
+        self.uniqa_loaded_at = ""
+
+        self.search_var = tk.StringVar()
+        self.filter_var = tk.StringVar(
+            value="Vše"
+        )
+
+        self.workflow_var = tk.StringVar(
+            value="K ŘEŠENÍ"
+        )
+
+        self.selected_case = None
+
+        self._configure_style()
+        self._build_ui()
+
+        self._update_resolved_card()
+
+
+    # ========================================================
+    # STYLE
+    # ========================================================
+
+    def _configure_style(self):
+
+        style = ttk.Style(self)
+
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+
+        style.configure(
+            "App.Treeview",
+            background=PANEL,
+            fieldbackground=PANEL,
+            foreground=TEXT,
+            rowheight=38,
+            borderwidth=0,
+            relief="flat",
+            font=("Helvetica", 10),
+        )
+
+        style.configure(
+            "App.Treeview.Heading",
+            background=HEADER_BG,
+            foreground=TEXT,
+            font=("Helvetica", 10, "bold"),
+            relief="flat",
+        )
+
+        style.map(
+            "App.Treeview",
+            background=[
+                ("selected", BORDER)
+            ],
+            foreground=[
+                ("selected", TEXT)
+            ],
+        )
+
+
+    # ========================================================
+    # UI
+    # ========================================================
+
+    def _build_ui(self):
+
+        root = tk.Frame(
+            self,
+            bg=BG,
+        )
+
+        root.pack(
+            fill="both",
+            expand=True,
+        )
+
+
+        # ====================================================
+        # HEADER
+        # ====================================================
+
+        header = tk.Frame(
+            root,
+            bg=HEADER_BG,
+            padx=28,
+            pady=18,
+        )
+
+        header.pack(
+            fill="x",
+        )
+
+        header_left = tk.Frame(
+            header,
+            bg=HEADER_BG,
+        )
+
+        header_left.pack(
+            side="left",
+        )
+
+        tk.Label(
+            header_left,
+            text="UNIQA CHECKER",
+            bg=HEADER_BG,
+            fg=TEXT,
+            font=("Helvetica", 25, "bold"),
+        ).pack(
+            anchor="w",
+        )
+
+        tk.Label(
+            header_left,
+            text="Kontrola pojištění vozidel TIRBazar ↔ UNIQA",
+            bg=HEADER_BG,
+            fg=TEXT_MUTED,
+            font=("Helvetica", 11),
+        ).pack(
+            anchor="w",
+        )
+
+        live = tk.Frame(
+            header,
+            bg=HEADER_BG,
+        )
+
+        live.pack(
+            side="right",
+        )
+
+        self.live_dot = tk.Label(
+            live,
+            text="●",
+            bg=HEADER_BG,
+            fg=GRAY_FG,
+            font=("Helvetica", 14, "bold"),
+        )
+
+        self.live_dot.pack(
+            side="left",
+            padx=(0, 6),
+        )
+
+        self.live_status = tk.Label(
+            live,
+            text="UNIQA NEOVĚŘENA",
+            bg=HEADER_BG,
+            fg=TEXT_MUTED,
+            font=("Helvetica", 10, "bold"),
+        )
+
+        self.live_status.pack(
+            side="left",
+        )
+
+
+        # ====================================================
+        # ZDROJE
+        # ====================================================
+
+        sources = tk.Frame(
+            root,
+            bg=BG,
+        )
+
+        sources.pack(
+            fill="x",
+            padx=28,
+            pady=(14, 10),
+        )
+
+        tir_box = tk.Frame(
+            sources,
+            bg=PANEL,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+            padx=15,
+            pady=10,
+        )
+
+        tir_box.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(0, 6),
+        )
+
+        self.tir_source_status = tk.Label(
+            tir_box,
+            text="TIRBAZAR DB • Zatím nenačteno",
+            bg=PANEL,
+            fg=TEXT_MUTED,
+            font=("Helvetica", 10, "bold"),
+        )
+
+        self.tir_source_status.pack(
+            anchor="w",
+        )
+
+        self.tir_source_detail = tk.Label(
+            tir_box,
+            text="SQL Server • pouze čtení",
+            bg=PANEL,
+            fg=TEXT_MUTED,
+            font=("Helvetica", 9),
+        )
+
+        self.tir_source_detail.pack(
+            anchor="w",
+            pady=(4, 0),
+        )
+
+        uniqa_box = tk.Frame(
+            sources,
+            bg=PANEL,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+            padx=15,
+            pady=10,
+        )
+
+        uniqa_box.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(6, 0),
+        )
+
+        self.uniqa_source_status = tk.Label(
+            uniqa_box,
+            text="UNIQA PORTÁL • Zatím nenačteno",
+            bg=PANEL,
+            fg=TEXT_MUTED,
+            font=("Helvetica", 10, "bold"),
+        )
+
+        self.uniqa_source_status.pack(
+            anchor="w",
+        )
+
+        self.uniqa_source_detail = tk.Label(
+            uniqa_box,
+            text="AIV UNIQA • Denní POV • Aktivní",
+            bg=PANEL,
+            fg=TEXT_MUTED,
+            font=("Helvetica", 9),
+        )
+
+        self.uniqa_source_detail.pack(
+            anchor="w",
+            pady=(4, 0),
+        )
+
+
+        # ====================================================
+        # TOOLBAR
+        # ====================================================
+
+        toolbar = tk.Frame(
+            root,
+            bg=BG,
+        )
+
+        toolbar.pack(
+            fill="x",
+            padx=28,
+            pady=(0, 10),
+        )
+
+        self.run_button = tk.Button(
+            toolbar,
+            text="▶  SPUSTIT KONTROLU",
+            command=self.run_check,
+            bg=ACCENT,
+            fg="#04131f",
+            activebackground="#83d8ff",
+            relief="flat",
+            font=("Helvetica", 10, "bold"),
+            cursor="pointinghand",
+            padx=16,
+            pady=9,
+        )
+
+        self.run_button.pack(
+            side="left",
+        )
+
+        tk.Button(
+            toolbar,
+            text="Otevřít CSV",
+            command=self.open_csv,
+            bg=PANEL,
+            fg=TEXT,
+            relief="flat",
+            padx=12,
+            pady=9,
+        ).pack(
+            side="left",
+            padx=6,
+        )
+
+        search_frame = tk.Frame(
+            toolbar,
+            bg=BG,
+        )
+
+        search_frame.pack(
+            side="right",
+        )
+
+        tk.Label(
+            search_frame,
+            text="Hledat VIN / SPZ / ČPS / poznámku:",
+            bg=BG,
+            fg=TEXT_MUTED,
+        ).pack(
+            side="left",
+            padx=(0, 6),
+        )
+
+        tk.Entry(
+            search_frame,
+            textvariable=self.search_var,
+            bg=PANEL,
+            fg=TEXT,
+            insertbackground=TEXT,
+            relief="flat",
+            width=28,
+            font=("Helvetica", 11),
+        ).pack(
+            side="left",
+            ipady=7,
+        )
+
+        self.search_var.trace_add(
+            "write",
+            lambda *_: self.fill_table(),
+        )
+
+        tk.Button(
+            search_frame,
+            text="Vše",
+            command=self.clear_filter,
+            bg=PANEL,
+            fg=TEXT,
+            relief="flat",
+            padx=12,
+            pady=7,
+        ).pack(
+            side="left",
+            padx=(7, 0),
+        )
+
+
+        # ====================================================
+        # KARTY
+        # ====================================================
+
+        cards_frame = tk.Frame(
+            root,
+            bg=BG,
+        )
+
+        cards_frame.pack(
+            fill="x",
+            padx=24,
+            pady=(0, 10),
+        )
+
+        self.cards = {}
+
+        cards = [
+            ("ACTIVE", "AKTIVNÍ", ACTIVE_BG, ACTIVE_FG),
+            ("OK", "OK", GREEN_BG, GREEN_FG),
+            ("CHYBÍ V UNIQA", "CHYBÍ V UNIQA", RED_BG, RED_FG),
+            ("PRODANÉ, ALE V UNIQA", "PRODANÉ V UNIQA", PURPLE_BG, PURPLE_FG),
+            ("SPZ NESOUHLASÍ", "SPZ NESOUHLASÍ", ORANGE_BG, ORANGE_FG),
+            ("NAVÍC V UNIQA", "NAVÍC V UNIQA", BLUE_BG, BLUE_FG),
+            ("DUPLICITNÍ V UNIQA", "DUPLICITNÍ", DUP_BG, DUP_FG),
+            ("VYŘEŠENO", "VYŘEŠENO", RESOLVED_BG, RESOLVED_FG),
+        ]
+
+        for key, title, bg, fg in cards:
+
+            frame = tk.Frame(
+                cards_frame,
+                bg=bg,
+                highlightbackground=BORDER,
+                highlightthickness=1,
+                padx=9,
+                pady=9,
+                cursor="pointinghand",
+            )
+
+            frame.pack(
+                side="left",
+                fill="x",
+                expand=True,
+                padx=3,
+            )
+
+            label = tk.Label(
+                frame,
+                text=title,
+                bg=bg,
+                fg=fg,
+                font=("Helvetica", 8, "bold"),
+                cursor="pointinghand",
+            )
+
+            label.pack(
+                anchor="w",
+            )
+
+            value = tk.Label(
+                frame,
+                text="0",
+                bg=bg,
+                fg=fg,
+                font=("Helvetica", 22, "bold"),
+                cursor="pointinghand",
+            )
+
+            value.pack(
+                anchor="w",
+                pady=(4, 0),
+            )
+
+            self.cards[key] = value
+
+            for widget in (
+                frame,
+                label,
+                value,
+            ):
+                widget.bind(
+                    "<Button-1>",
+                    lambda e, k=key: self.card_filter(k),
+                )
+
+
+        # ====================================================
+        # TABULKA
+        # ====================================================
+
+        table_frame = tk.Frame(
+            root,
+            bg=PANEL,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+        )
+
+        table_frame.pack(
+            fill="both",
+            expand=True,
+            padx=28,
+            pady=(0, 8),
+        )
+
+        columns = (
+            "status",
+            "workflow",
+            "vin",
+            "spz_tir",
+            "spz_uniqa",
+            "note",
+            "detail",
+        )
+
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=columns,
+            show="headings",
+            style="App.Treeview",
+        )
+
+        headings = {
+            "status": "STATUS KONTROLY",
+            "workflow": "ŘEŠENÍ",
+            "vin": "VIN",
+            "spz_tir": "SPZ TIRBAZAR",
+            "spz_uniqa": "SPZ UNIQA",
+            "note": "POZNÁMKA",
+            "detail": "DETAIL",
+        }
+
+        for column, text in headings.items():
+            self.tree.heading(
+                column,
+                text=text,
+                anchor="w",
+            )
+
+        self.tree.column("status", width=185)
+        self.tree.column("workflow", width=115)
+        self.tree.column("vin", width=190)
+        self.tree.column("spz_tir", width=115)
+        self.tree.column("spz_uniqa", width=115)
+        self.tree.column("note", width=300)
+        self.tree.column("detail", width=430)
+
+        y_scroll = ttk.Scrollbar(
+            table_frame,
+            orient="vertical",
+            command=self.tree.yview,
+        )
+
+        self.tree.configure(
+            yscrollcommand=y_scroll.set,
+        )
+
+        self.tree.pack(
+            side="left",
+            fill="both",
+            expand=True,
+        )
+
+        y_scroll.pack(
+            side="right",
+            fill="y",
+        )
+
+        for status, colors in STATUS_COLORS.items():
+            bg, fg = colors
+
+            self.tree.tag_configure(
+                status,
+                background=bg,
+                foreground=fg,
+            )
+
+        self.tree.bind(
+            "<<TreeviewSelect>>",
+            self.on_select,
+        )
+
+
+        # ====================================================
+        # EDITOR POZNÁMKY
+        # ====================================================
+
+        editor = tk.Frame(
+            root,
+            bg=PANEL,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+            padx=15,
+            pady=12,
+        )
+
+        editor.pack(
+            fill="x",
+            padx=28,
+            pady=(0, 12),
+        )
+
+        editor_left = tk.Frame(
+            editor,
+            bg=PANEL,
+        )
+
+        editor_left.pack(
+            side="left",
+            fill="both",
+            expand=True,
+        )
+
+        self.editor_title = tk.Label(
+            editor_left,
+            text="Vyber vozidlo v tabulce",
+            bg=PANEL,
+            fg=ACCENT,
+            font=("Helvetica", 10, "bold"),
+        )
+
+        self.editor_title.pack(
+            anchor="w",
+        )
+
+        self.note_text = tk.Text(
+            editor_left,
+            height=3,
+            bg=HEADER_BG,
+            fg=TEXT,
+            insertbackground=TEXT,
+            relief="flat",
+            wrap="word",
+            font=("Helvetica", 10),
+        )
+
+        self.note_text.pack(
+            fill="x",
+            pady=(7, 0),
+        )
+
+        editor_right = tk.Frame(
+            editor,
+            bg=PANEL,
+            padx=14,
+        )
+
+        editor_right.pack(
+            side="right",
+            fill="y",
+        )
+
+        tk.Label(
+            editor_right,
+            text="STAV ŘEŠENÍ",
+            bg=PANEL,
+            fg=TEXT_MUTED,
+            font=("Helvetica", 9, "bold"),
+        ).pack(
+            anchor="w",
+        )
+
+        self.workflow_combo = ttk.Combobox(
+            editor_right,
+            values=WORKFLOW_STATUSES,
+            textvariable=self.workflow_var,
+            state="readonly",
+            width=17,
+        )
+
+        self.workflow_combo.pack(
+            anchor="w",
+            pady=(5, 8),
+        )
+
+        tk.Button(
+            editor_right,
+            text="ULOŽIT",
+            command=self.save_case,
+            bg=ACCENT,
+            fg="#04131f",
+            relief="flat",
+            font=("Helvetica", 9, "bold"),
+            padx=15,
+            pady=7,
+        ).pack(
+            fill="x",
+        )
+
+        tk.Button(
+            editor_right,
+            text="✓ OZNAČIT VYŘEŠENO",
+            command=self.mark_resolved,
+            bg=GREEN_BG,
+            fg=GREEN_FG,
+            relief="flat",
+            font=("Helvetica", 9, "bold"),
+            padx=15,
+            pady=7,
+        ).pack(
+            fill="x",
+            pady=(6, 0),
+        )
+
+
+        # ====================================================
+        # FOOTER
+        # ====================================================
+
+        footer = tk.Frame(
+            root,
+            bg=BG,
+        )
+
+        footer.pack(
+            fill="x",
+            padx=28,
+            pady=(0, 12),
+        )
+
+        self.footer_left = tk.Label(
+            footer,
+            text="Připraveno",
+            bg=BG,
+            fg=TEXT_MUTED,
+            font=("Helvetica", 9),
+        )
+
+        self.footer_left.pack(
+            side="left",
+        )
+
+        self.footer_right = tk.Label(
+            footer,
+            text="VIN = hlavní klíč",
+            bg=BG,
+            fg=ACCENT,
+            font=("Helvetica", 9, "bold"),
+        )
+
+        self.footer_right.pack(
+            side="right",
+        )
+
+
+    # ========================================================
+    # HELPERY CASE
+    # ========================================================
+
+    def case_for(
+        self,
+        vin: str,
+        issue_status: str,
+    ):
+        return self.case_store.get(
+            vin,
+            issue_status,
+        )
+
+    def workflow_for(
+        self,
+        vin: str,
+        issue_status: str,
+    ) -> str:
+
+        row = self.case_for(
+            vin,
+            issue_status,
+        )
+
+        if row:
+            return row["workflow_status"]
+
+        if issue_status == "OK":
+            return ""
+
+        return "K ŘEŠENÍ"
+
+    def note_for(
+        self,
+        vin: str,
+        issue_status: str,
+    ) -> str:
+
+        row = self.case_for(
+            vin,
+            issue_status,
+        )
+
+        if not row:
+            return ""
+
+        return row["note"] or ""
+
+
+    # ========================================================
+    # FILTRY
+    # ========================================================
+
+    def card_filter(self, key):
+        self.filter_var.set(key)
+        self.fill_table()
+
+    def clear_filter(self):
+        self.filter_var.set("Vše")
+        self.search_var.set("")
+        self.fill_table()
+
+
+    # ========================================================
+    # SPUSTIT
+    # ========================================================
+
+    def run_check(self):
+
+        self.run_button.config(
+            state="disabled",
+            text="Probíhá kontrola...",
+        )
+
+        self.live_status.config(
+            text="KONTROLA PROBÍHÁ",
+            fg=ORANGE_FG,
+        )
+
+        self.tir_source_status.config(
+            text="TIRBAZAR DB • Načítám...",
+            fg=ORANGE_FG,
+        )
+
+        self.uniqa_source_status.config(
+            text="UNIQA PORTÁL • Čekám...",
+            fg=TEXT_MUTED,
+        )
+
+        threading.Thread(
+            target=self._run_check_thread,
+            daemon=True,
+        ).start()
+
+
+    # ========================================================
+    # BACKGROUND
+    # ========================================================
+
+    def _run_check_thread(self):
+
+        try:
+
+            config = load_config()
+
+            tir, duplicates = load_tirbazar_vehicles(
+                config
+            )
+
+            self.tir_vehicles = tir
+
+            self.active_count = sum(
+                1
+                for vehicle in tir
+                if not vehicle.datum_prodeje
+            )
+
+            self.tirbazar_loaded_at = datetime.now().strftime(
+                "%d.%m.%Y %H:%M:%S"
+            )
+
+            self.after(
+                0,
+                self._tir_loaded,
+            )
+
+            self.after(
+                0,
+                self._uniqa_loading,
+            )
+
+            uniqa = load_uniqa_vehicles()
+
+            self.uniqa_loaded_at = datetime.now().strftime(
+                "%d.%m.%Y %H:%M:%S"
+            )
+
+            self.uniqa_duplicates = getattr(
+                uniqa,
+                "duplicates",
+                [],
+            )
+
+            self.uniqa_raw_count = getattr(
+                uniqa,
+                "raw_count",
+                len(uniqa.vehicles),
+            )
+
+            self.uniqa_unique_count = len(
+                uniqa.vehicles
+            )
+
+            results = compare_vehicles(
+                tir=tir,
+                uniqa=uniqa.vehicles,
+                uniqa_available=uniqa.available,
+                uniqa_error=uniqa.error,
+            )
+
+            base = prepare_output()
+
+            try:
+                write_tirbazar_snapshot(
+                    tir,
+                    base,
+                )
+            except TypeError:
+                active = [
+                    v for v in tir
+                    if not v.datum_prodeje
+                ]
+
+                sold = [
+                    v for v in tir
+                    if v.datum_prodeje
+                ]
+
+                write_tirbazar_snapshot(
+                    active,
+                    sold,
+                    base,
+                )
+
+            write_duplicates(
+                duplicates,
+                base,
+            )
+
+            self.last_csv = write_comparison(
+                results,
+                base,
+            )
+
+            self.results = results
+
+            self.after(
+                0,
+                self._finish_check,
+                uniqa,
+            )
+
+        except Exception as exc:
+
+            self.after(
+                0,
+                self._show_error,
+                str(exc),
+            )
+
+
+    # ========================================================
+    # ZDROJE
+    # ========================================================
+
+    def _tir_loaded(self):
+
+        self.tir_source_status.config(
+            text=(
+                f"TIRBAZAR DB • Načteno "
+                f"{self.tirbazar_loaded_at}"
+            ),
+            fg=GREEN_FG,
+        )
+
+        self.tir_source_detail.config(
+            text=(
+                f"Aktivních ke kontrole: "
+                f"{self.active_count}"
+            )
+        )
+
+    def _uniqa_loading(self):
+
+        self.uniqa_source_status.config(
+            text="UNIQA PORTÁL • Načítám...",
+            fg=ORANGE_FG,
+        )
+
+    def _finish_check(self, uniqa):
+
+        if uniqa.available:
+
+            self.live_status.config(
+                text="UNIQA LIVE ✓",
+                fg=GREEN_FG,
+            )
+
+            duplicate_groups = len(
+                self.uniqa_duplicates
+            )
+
+            extra = max(
+                0,
+                self.uniqa_raw_count
+                - self.uniqa_unique_count,
+            )
+
+            self.uniqa_source_status.config(
+                text=(
+                    f"UNIQA PORTÁL • Načteno "
+                    f"{self.uniqa_loaded_at}"
+                ),
+                fg=GREEN_FG,
+            )
+
+            self.uniqa_source_detail.config(
+                text=(
+                    f"{self.uniqa_unique_count} unikátních VIN • "
+                    f"{self.uniqa_raw_count} záznamů • "
+                    f"{duplicate_groups} duplicitních VIN • "
+                    f"{extra} záznamů navíc"
+                )
+            )
+
+        else:
+
+            self.live_status.config(
+                text="UNIQA NEDOSTUPNÁ",
+                fg=RED_FG,
+            )
+
+        self.update_cards()
+        self.fill_table()
+
+        self.run_button.config(
+            state="normal",
+            text="▶  SPUSTIT KONTROLU",
+        )
+
+        self.footer_left.config(
+            text=(
+                "Kontrola dokončena: "
+                + datetime.now().strftime(
+                    "%d.%m.%Y %H:%M:%S"
+                )
+            )
+        )
+
+
+    # ========================================================
+    # KARTY
+    # ========================================================
+
+    def update_cards(self):
+
+        counts = Counter()
+
+        for result in self.results:
+
+            workflow = self.workflow_for(
+                result.vin,
+                result.status,
+            )
+
+            if workflow == "VYŘEŠENO":
+                continue
+
+            counts[result.status] += 1
+
+        self.cards["ACTIVE"].config(
+            text=str(
+                self.active_count
+            )
+        )
+
+        for status in (
+            "OK",
+            "CHYBÍ V UNIQA",
+            "PRODANÉ, ALE V UNIQA",
+            "SPZ NESOUHLASÍ",
+            "NAVÍC V UNIQA",
+        ):
+            self.cards[status].config(
+                text=str(
+                    counts.get(
+                        status,
+                        0,
+                    )
+                )
+            )
+
+        unresolved_duplicate_vins = 0
+
+        for group in self.uniqa_duplicates:
+
+            if not group:
+                continue
+
+            vin = group[0].vin
+
+            if self.workflow_for(
+                vin,
+                "DUPLICITNÍ V UNIQA",
+            ) != "VYŘEŠENO":
+                unresolved_duplicate_vins += 1
+
+        self.cards[
+            "DUPLICITNÍ V UNIQA"
+        ].config(
+            text=str(
+                unresolved_duplicate_vins
+            )
+        )
+
+        self._update_resolved_card()
+
+    def _update_resolved_card(self):
+
+        self.cards["VYŘEŠENO"].config(
+            text=str(
+                self.case_store.count_resolved()
+            )
+        )
+
+
+    # ========================================================
+    # TABULKA
+    # ========================================================
+
+    def fill_table(self):
+
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        search = (
+            self.search_var.get()
+            .strip()
+            .upper()
+        )
+
+        selected_filter = self.filter_var.get()
+
+        shown = 0
+
+
+        # ====================================================
+        # VYŘEŠENO
+        # ====================================================
+
+        if selected_filter == "VYŘEŠENO":
+
+            for row in self.case_store.resolved():
+
+                searchable = " ".join(
+                    [
+                        row["vin"],
+                        row["issue_status"],
+                        row["note"],
+                        row["tir_spz"],
+                        row["uniqa_spz"],
+                        row["detail"],
+                    ]
+                ).upper()
+
+                if search and search not in searchable:
+                    continue
+
+                self.tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        row["issue_status"],
+                        "VYŘEŠENO",
+                        row["vin"],
+                        row["tir_spz"],
+                        row["uniqa_spz"],
+                        row["note"],
+                        row["detail"],
+                    ),
+                    tags=(
+                        row["issue_status"],
+                    ),
+                )
+
+                shown += 1
+
+            self.footer_right.config(
+                text=f"Vyřešených případů: {shown}"
+            )
+
+            return
+
+
+        # ====================================================
+        # DUPLICITNÍ UNIQA
+        # ====================================================
+
+        if selected_filter == "DUPLICITNÍ V UNIQA":
+
+            for group in self.uniqa_duplicates:
+
+                if not group:
+                    continue
+
+                vin = group[0].vin
+
+                workflow = self.workflow_for(
+                    vin,
+                    "DUPLICITNÍ V UNIQA",
+                )
+
+                if workflow == "VYŘEŠENO":
+                    continue
+
+                note = self.note_for(
+                    vin,
+                    "DUPLICITNÍ V UNIQA",
+                )
+
+                searchable = " ".join(
+                    [
+                        vin,
+                        note,
+                    ]
+                    + [
+                        v.spz or ""
+                        for v in group
+                    ]
+                    + [
+                        v.cps or ""
+                        for v in group
+                    ]
+                ).upper()
+
+                if search and search not in searchable:
+                    continue
+
+                detail = (
+                    f"{len(group)} aktivních pojistných záznamů: "
+                    + " | ".join(
+                        [
+                            (
+                                f"ČPS {v.cps or '-'}, "
+                                f"SPZ {v.spz or '-'}, "
+                                f"od {v.poj_od or '-'}"
+                            )
+                            for v in group
+                        ]
+                    )
+                )
+
+                self.tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        "DUPLICITNÍ V UNIQA",
+                        workflow,
+                        vin,
+                        "",
+                        group[0].spz or "",
+                        note,
+                        detail,
+                    ),
+                    tags=(
+                        "DUPLICITNÍ V UNIQA",
+                    ),
+                )
+
+                shown += 1
+
+            self.footer_right.config(
+                text=f"Duplicitních VIN: {shown}"
+            )
+
+            return
+
+
+        # ====================================================
+        # BĚŽNÉ VÝSLEDKY
+        # ====================================================
+
+        for result in self.results:
+
+            workflow = self.workflow_for(
+                result.vin,
+                result.status,
+            )
+
+            # vyřešené už jsou v samostatné kartě
+            if workflow == "VYŘEŠENO":
+                continue
+
+            if selected_filter == "ACTIVE":
+
+                if result.status not in (
+                    "OK",
+                    "CHYBÍ V UNIQA",
+                    "SPZ NESOUHLASÍ",
+                    "NELZE OVĚŘIT",
+                ):
+                    continue
+
+            elif selected_filter != "Vše":
+
+                if result.status != selected_filter:
+                    continue
+
+            note = self.note_for(
+                result.vin,
+                result.status,
+            )
+
+            searchable = " ".join(
+                [
+                    result.status or "",
+                    workflow,
+                    result.vin or "",
+                    result.tir_spz or "",
+                    result.uniqa_spz or "",
+                    note,
+                    result.detail or "",
+                ]
+            ).upper()
+
+            if search and search not in searchable:
+                continue
+
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    result.status,
+                    workflow,
+                    result.vin,
+                    result.tir_spz or "",
+                    result.uniqa_spz or "",
+                    note,
+                    result.detail,
+                ),
+                tags=(
+                    result.status,
+                ),
+            )
+
+            shown += 1
+
+        self.footer_right.config(
+            text=f"Zobrazeno: {shown}"
+        )
+
+
+    # ========================================================
+    # SELECT
+    # ========================================================
+
+    def on_select(self, _event=None):
+
+        selected = self.tree.selection()
+
+        if not selected:
+            return
+
+        values = self.tree.item(
+            selected[0]
+        ).get(
+            "values",
+            [],
+        )
+
+        if len(values) < 7:
+            return
+
+        (
+            issue_status,
+            workflow,
+            vin,
+            tir_spz,
+            uniqa_spz,
+            note,
+            detail,
+        ) = values
+
+        self.selected_case = {
+            "vin": str(vin),
+            "issue_status": str(issue_status),
+            "tir_spz": str(tir_spz),
+            "uniqa_spz": str(uniqa_spz),
+            "detail": str(detail),
+        }
+
+        self.editor_title.config(
+            text=(
+                f"{vin}  •  {issue_status}"
+            )
+        )
+
+        self.workflow_var.set(
+            workflow
+            if workflow in WORKFLOW_STATUSES
+            else "K ŘEŠENÍ"
+        )
+
+        self.note_text.delete(
+            "1.0",
+            "end",
+        )
+
+        self.note_text.insert(
+            "1.0",
+            note or "",
+        )
+
+
+    # ========================================================
+    # ULOŽIT
+    # ========================================================
+
+    def save_case(self):
+
+        if not self.selected_case:
+
+            messagebox.showinfo(
+                "UNIQA CHECKER",
+                "Nejdřív vyber vozidlo v tabulce.",
+            )
+
+            return
+
+        vin = self.selected_case["vin"]
+        issue_status = self.selected_case[
+            "issue_status"
+        ]
+
+        note = self.note_text.get(
+            "1.0",
+            "end",
+        ).strip()
+
+        workflow = self.workflow_var.get()
+
+        self.case_store.save(
+            vin=vin,
+            issue_status=issue_status,
+            workflow_status=workflow,
+            note=note,
+            tir_spz=self.selected_case["tir_spz"],
+            uniqa_spz=self.selected_case["uniqa_spz"],
+            detail=self.selected_case["detail"],
+        )
+
+        self.update_cards()
+        self.fill_table()
+
+        self.footer_left.config(
+            text=(
+                f"Poznámka uložena: {vin} • "
+                f"{datetime.now().strftime('%H:%M:%S')}"
+            )
+        )
+
+
+    # ========================================================
+    # VYŘEŠENO
+    # ========================================================
+
+    def mark_resolved(self):
+
+        if not self.selected_case:
+
+            messagebox.showinfo(
+                "UNIQA CHECKER",
+                "Nejdřív vyber vozidlo.",
+            )
+
+            return
+
+        self.workflow_var.set(
+            "VYŘEŠENO"
+        )
+
+        self.save_case()
+
+
+    # ========================================================
+    # ERROR
+    # ========================================================
+
+    def _show_error(self, text):
+
+        self.run_button.config(
+            state="normal",
+            text="▶  SPUSTIT KONTROLU",
+        )
+
+        self.live_status.config(
+            text="CHYBA",
+            fg=RED_FG,
+        )
+
+        messagebox.showerror(
+            "UNIQA CHECKER",
+            text,
+        )
+
+
+    # ========================================================
+    # CSV
+    # ========================================================
+
+    def open_csv(self):
+
+        if not self.last_csv:
+
+            messagebox.showinfo(
+                "UNIQA CHECKER",
+                "Nejdřív spusť kontrolu.",
+            )
+
+            return
+
+        subprocess.run(
+            [
+                "open",
+                str(self.last_csv),
+            ]
+        )
+
+
+# ============================================================
+# START
+# ============================================================
+
+if __name__ == "__main__":
+
+    app = UniqaCheckerApp()
+    app.mainloop()

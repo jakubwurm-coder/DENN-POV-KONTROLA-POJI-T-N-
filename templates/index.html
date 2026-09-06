@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kontrola pojištění vozidel</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>KONTROLA POJIŠTĚNÍ</h1>
+      <p>TIRBazar → UNIQA → Allianz → Depozit</p>
+    </div>
+    <div class="live"><span id="liveDot" class="dot idle"></span><strong id="liveStatus">PŘIPRAVENO</strong></div>
+  </header>
+
+  <main class="page">
+    <section class="panel logic">
+      <div class="eyebrow">LOGIKA KONTROLY</div>
+      <p>Aktivní vozidlo je v pořádku, pokud je pojištěné v UNIQA nebo Allianz. Pokud není v žádné pojišťovně, kontroluje se poznámka TIRBazar. Obsahuje-li text DEPOZIT, zobrazí se jako NEPOJIŠTĚNO, ALE DEPOZIT.</p>
+      <small>VIN = hlavní identifikátor • SPZ = sekundární identifikátor • TIRBazar = pouze čtení • výkup nebo výkup z komise</small>
+    </section>
+
+    <section class="sources">
+      <article class="panel source"><div class="source-title"><span id="tirDot" class="dot idle"></span>TIRBAZAR DB</div><strong id="tirStatus">Zatím nenačteno</strong><small id="tirDetail">SQL Server / pouze čtení</small></article>
+      <article class="panel source"><div class="source-title"><span id="uniqaDot" class="dot idle"></span>UNIQA</div><strong id="uniqaStatus">Zatím nenačteno</strong><small id="uniqaDetail">AIV / Denní POV / Aktivní</small></article>
+      <article class="panel source"><div class="source-title"><span id="allianzDot" class="dot idle"></span>ALLIANZ</div><strong id="allianzStatus">Zatím nenačteno</strong><small id="allianzDetail">Flotilové PDF</small></article>
+    </section>
+
+    <section class="toolbar">
+      <div class="toolbar-left">
+        <button id="runBtn" class="primary">▶ SPUSTIT KONTROLU</button>
+        <a id="csvBtn" class="button secondary disabled" href="/download/csv">Stáhnout CSV</a>
+      </div>
+      <div class="searchbox"><label for="search">VIN / SPZ:</label><input id="search" autocomplete="off" placeholder="Hledat…"><button id="clearBtn" class="secondary">Vše</button></div>
+    </section>
+
+    <section class="cards" id="cards">
+      <button class="card active" data-filter="ACTIVE"><span>AKTIVNÍ KE KONTROLE</span><strong id="cActive">0</strong></button>
+      <button class="card ok" data-filter="OK_TOTAL"><span>OK CELKEM</span><strong id="cOkTotal">0</strong></button>
+      <button class="card ok" data-filter="OK_UNIQA"><span>OK – UNIQA</span><strong id="cOkUniqa">0</strong></button>
+      <button class="card allianz" data-filter="OK_ALLIANZ"><span>OK – ALLIANZ</span><strong id="cOkAllianz">0</strong></button>
+      <button class="card missing" data-filter="MISSING"><span>CHYBÍ POJIŠTĚNÍ</span><strong id="cMissing">0</strong></button>
+      <button class="card deposit" data-filter="DEPOSIT"><span>NEPOJIŠTĚNO, ALE DEPOZIT</span><strong id="cDeposit">0</strong></button>
+      <button class="card sold" data-filter="SOLD_UNIQA"><span>PRODANÉ, ALE V UNIQA</span><strong id="cSold">0</strong></button>
+      <button class="card extra" data-filter="EXTRA_UNIQA"><span>NAVÍC V UNIQA</span><strong id="cExtra">0</strong></button>
+    </section>
+
+    <section class="panel table-wrap">
+      <table>
+        <thead><tr><th>STATUS</th><th>POJIŠŤOVNA</th><th>VIN</th><th>SPZ TIRBAZAR</th><th>SPZ UNIQA</th><th>DATUM VÝKUPU</th><th>DATUM PRODEJE</th><th>VÝSLEDEK</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="8" class="empty">Zatím nejsou načtené žádné výsledky.</td></tr></tbody>
+      </table>
+    </section>
+
+    <footer><span id="footerLeft">Připraveno</span><strong id="footerRight">Zobrazeno: 0</strong></footer>
+  </main>
+
+  <dialog id="detailDialog"><button id="closeDialog" class="dialog-close">×</button><h2>Detail vozidla</h2><div id="detailBody"></div></dialog>
+  <div id="toast" class="toast" hidden></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

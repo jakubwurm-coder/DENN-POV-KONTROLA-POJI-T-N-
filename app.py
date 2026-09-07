@@ -40,6 +40,16 @@ def _now() -> str:
     return datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
 
+def _is_commission_vehicle(vehicle) -> bool:
+    state = " ".join(
+        str(getattr(vehicle, "stav", "") or "")
+        .strip()
+        .upper()
+        .split()
+    )
+    return state == "V KOMISI"
+
+
 def _insurance_company(result) -> str:
     detail = (getattr(result, "detail", "") or "").upper()
     if "ALLIANZ" in detail:
@@ -156,10 +166,41 @@ def _run_check_worker() -> None:
 
         _set_source("tirbazar", "loading", "Načítám…")
         vehicles, duplicates = load_tirbazar_vehicles(config)
-        active_count = sum(1 for vehicle in vehicles if not vehicle.datum_prodeje)
+
+        # Vozidla v komisním prodeji nejsou majetkem společnosti a
+        # do kontroly pojištění se vůbec nezahrnují.
+        commission_vehicles = [
+            vehicle
+            for vehicle in vehicles
+            if _is_commission_vehicle(vehicle)
+        ]
+        commission_vins = {
+            vehicle.vin
+            for vehicle in commission_vehicles
+            if vehicle.vin
+        }
+        control_vehicles = [
+            vehicle
+            for vehicle in vehicles
+            if not _is_commission_vehicle(vehicle)
+        ]
+
+        active_count = sum(
+            1
+            for vehicle in control_vehicles
+            if not vehicle.datum_prodeje
+        )
         with _lock:
             _state["active_count"] = active_count
-        _set_source("tirbazar", "ok", f"Načteno: {_now()}", f"SQL Server • Aktivních ke kontrole: {active_count}")
+        _set_source(
+            "tirbazar",
+            "ok",
+            f"Načteno: {_now()}",
+            (
+                f"SQL Server • Aktivních ke kontrole: {active_count}"
+                f" • V komisi ignorováno: {len(commission_vehicles)}"
+            ),
+        )
 
         _set_source("uniqa", "loading", "Načítám UNIQA…")
         uniqa = load_uniqa_vehicles()
@@ -176,9 +217,18 @@ def _run_check_worker() -> None:
         else:
             _set_source("allianz", "error", "Načtení selhalo", allianz.error or "Allianz není dostupná")
 
+        # Pokud je komisní vozidlo náhodou stále v UNIQA, také ho z
+        # porovnání vynecháme. Jinak by se po odstranění z TIR seznamu
+        # chybně zobrazilo jako "NAVÍC V UNIQA".
+        uniqa_for_compare = [
+            vehicle
+            for vehicle in uniqa.vehicles
+            if getattr(vehicle, "vin", "") not in commission_vins
+        ]
+
         results = compare_vehicles(
-            tir=vehicles,
-            uniqa=uniqa.vehicles,
+            tir=control_vehicles,
+            uniqa=uniqa_for_compare,
             uniqa_available=uniqa.available,
             uniqa_error=uniqa.error,
             allianz=allianz.vehicles,
@@ -190,8 +240,8 @@ def _run_check_worker() -> None:
         try:
             write_tirbazar_snapshot(vehicles, base)
         except TypeError:
-            active = [vehicle for vehicle in vehicles if not vehicle.datum_prodeje]
-            sold = [vehicle for vehicle in vehicles if vehicle.datum_prodeje]
+            active = [vehicle for vehicle in control_vehicles if not vehicle.datum_prodeje]
+            sold = [vehicle for vehicle in control_vehicles if vehicle.datum_prodeje]
             write_tirbazar_snapshot(active, sold, base)
 
         write_duplicates(duplicates, base)

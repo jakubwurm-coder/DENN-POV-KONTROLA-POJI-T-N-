@@ -25,6 +25,10 @@ FORBIDDEN_SQL = (
 )
 
 
+def _is_commission_state(value: str) -> bool:
+    return " ".join(str(value or "").strip().upper().split()) == "V KOMISI"
+
+
 def get_password() -> str:
     result = subprocess.run(
         [
@@ -117,6 +121,23 @@ SELECT
             ),
             CHAR(10),
             ''
+        ),
+        ''
+    ) + '|' +
+
+    ISNULL(
+        REPLACE(
+            REPLACE(
+                REPLACE(
+                    LTRIM(RTRIM(v.Stav)),
+                    CHAR(13),
+                    ' '
+                ),
+                CHAR(10),
+                ' '
+            ),
+            '|',
+            '/'
         ),
         ''
     ) + '|' +
@@ -243,7 +264,7 @@ def load_tirbazar_vehicles(
     print("Připojuji se READ-ONLY k TIRBazar...")
     print("Načítám všechna vozidla z dbo.Vozidlo.")
     print("Zařazení: DatumVykupu NEBO Vykoupení z komise.")
-    print("Stav vozidla se NEPOUŽÍVÁ.")
+    print("Stav vozidla se používá pouze k vyřazení vozidel 'V komisi'.")
     print("VIN = hlavní identifikátor.")
     print("SPZ = sekundární kontrola.")
     print()
@@ -301,19 +322,20 @@ def load_tirbazar_vehicles(
             continue
 
         value = line[line.find("__ROW__|"):]
-        parts = value.split("|", 8)
+        parts = value.split("|", 9)
 
-        if len(parts) != 9:
+        if len(parts) != 10:
             continue
 
         # POZOR: pořadí musí přesně odpovídat build_sql().
-        # __ROW__ | OID | VIN | SPZ | výkup | výkup z komise |
+        # __ROW__ | OID | VIN | SPZ | stav | výkup | výkup z komise |
         # prodej | země původu | poznámky
         (
             _,
             oid_text,
             vin,
             spz,
+            stav,
             datum_vykupu,
             datum_vykupu_komise,
             datum_prodeje,
@@ -343,6 +365,7 @@ def load_tirbazar_vehicles(
                 vin=normalize_vin(vin),
                 spz=normalize_spz(spz),
                 zeme_puvodu=zeme_puvodu.strip(),
+                stav=stav.strip(),
                 datum_vykupu=effective_purchase,
                 datum_prodeje=datum_prodeje.strip(),
                 poznamky=poznamky.strip(),
@@ -357,21 +380,25 @@ def load_tirbazar_vehicles(
     # ========================================================
     # ZAŘAZENÍ DO KONTROLY
     #
-    # Musí mít:
-    # - DatumVykupu
-    # NEBO
-    # - DatumVykupu z VykoupeniZKomise
-    #
-    # Pokud nemá ani jedno, je vyřazeno.
-    #
-    # Vozidlo se zemí původu mimo ČR bez registrační značky
-    # se do kontroly pojištění nezařazuje.
+    # Standardně musí mít DatumVykupu nebo Vykoupení z komise.
+    # Vozidla se stavem "V komisi" si ale necháváme v pomocném
+    # seznamu, aby jejich VIN nebyl později omylem označen jako
+    # "NAVÍC V UNIQA". Samotná kontrola pojištění je ignoruje.
     # ========================================================
+
+    commission = [
+        v
+        for v in raw_rows
+        if _is_commission_state(v.stav)
+    ]
 
     excluded = [
         v
         for v in raw_rows
-        if not v.datum_vykupu
+        if (
+            not v.datum_vykupu
+            and not _is_commission_state(v.stav)
+        )
     ]
 
     foreign_without_spz = [
@@ -379,6 +406,7 @@ def load_tirbazar_vehicles(
         for v in raw_rows
         if (
             v.datum_vykupu
+            and not _is_commission_state(v.stav)
             and v.zeme_puvodu.strip()
             and v.zeme_puvodu.strip().upper()
             not in {
@@ -401,7 +429,10 @@ def load_tirbazar_vehicles(
         v
         for v in raw_rows
         if (
-            v.datum_vykupu
+            (
+                v.datum_vykupu
+                or _is_commission_state(v.stav)
+            )
             and v.oid not in foreign_without_spz_oids
         )
     ]
@@ -449,13 +480,25 @@ def load_tirbazar_vehicles(
     active = sum(
         1
         for v in vehicles
-        if not v.datum_prodeje
+        if (
+            not v.datum_prodeje
+            and not _is_commission_state(v.stav)
+        )
     )
 
     sold = sum(
         1
         for v in vehicles
-        if v.datum_prodeje
+        if (
+            v.datum_prodeje
+            and not _is_commission_state(v.stav)
+        )
+    )
+
+    commission_unique = sum(
+        1
+        for v in vehicles
+        if _is_commission_state(v.stav)
     )
 
     print("=" * 68)
@@ -465,14 +508,18 @@ def load_tirbazar_vehicles(
     print("Všechna nesmazaná vozidla:", total or len(raw_rows))
     print("Bez výkupu / výkupu z komise - VYŘAZENO:", len(excluded))
     print(
+        f"V komisi - IGNOROVÁNO PŘI KONTROLE: "
+        f"{commission_unique}"
+    )
+    print(
         f"Cizina bez registrační značky - VYŘAZENO: "
         f"{len(foreign_without_spz)}"
     )
-    print("Zařazeno do kontroly:", len(included))
-    print("Zařazené bez VIN:", len(without_vin))
+    print("Načteno pro porovnání:", len(included))
+    print("Načtené bez VIN:", len(without_vin))
     print("Unikátních VIN po deduplikaci:", len(vehicles))
     print()
-    print("Aktivní - bez DatumProdeje:", active)
+    print("Aktivní ke kontrole - bez DatumProdeje:", active)
     print("Prodaná - mají DatumProdeje:", sold)
     print("Duplicitních VIN skupin:", len(duplicates))
     print()

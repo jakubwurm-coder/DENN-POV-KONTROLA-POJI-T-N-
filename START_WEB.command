@@ -9,6 +9,23 @@ printf ' DENNI POV - WEB\n'
 printf ' Spusteni webove aplikace pro macOS\n'
 printf '==============================================\n\n'
 
+# Pokud je projekt naklonovaný z GitHubu, vždy si před spuštěním
+# stáhne nejnovější verzi. U ZIP kopie to možné není.
+if [ -d ".git" ] && command -v git >/dev/null 2>&1; then
+  echo "Kontroluji nejnovější verzi z GitHubu..."
+  if git pull --ff-only origin main; then
+    VERSION="$(git rev-parse --short HEAD 2>/dev/null || true)"
+    [ -n "$VERSION" ] && echo "✅ Aktuální verze: $VERSION"
+  else
+    echo "⚠️ Automatická aktualizace se nepodařila. Spouštím současnou místní verzi."
+  fi
+  echo
+else
+  echo "⚠️ Tato složka je ZIP kopie a neumí se sama aktualizovat z GitHubu."
+  echo "   Pro automatické aktualizace ji jednou naklonuj přes GitHub Desktop."
+  echo
+fi
+
 PYTHON_BIN="$(command -v python3 || true)"
 if [ -z "$PYTHON_BIN" ]; then
   echo "❌ Python 3 nebyl nalezen."

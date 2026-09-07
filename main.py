@@ -15,6 +15,16 @@ from tirbazar import load_tirbazar_vehicles
 from uniqa import load_uniqa_vehicles
 
 
+def _is_commission_vehicle(vehicle) -> bool:
+    state = " ".join(
+        str(getattr(vehicle, "stav", "") or "")
+        .strip()
+        .upper()
+        .split()
+    )
+    return state == "V KOMISI"
+
+
 def main() -> None:
 
     print()
@@ -37,15 +47,38 @@ def main() -> None:
         config
     )
 
+    commission_vehicles = [
+        vehicle
+        for vehicle in vehicles
+        if _is_commission_vehicle(vehicle)
+    ]
+
+    commission_vins = {
+        vehicle.vin
+        for vehicle in commission_vehicles
+        if vehicle.vin
+    }
+
+    control_vehicles = [
+        vehicle
+        for vehicle in vehicles
+        if not _is_commission_vehicle(vehicle)
+    ]
+
     active_count = sum(
         1
-        for vehicle in vehicles
+        for vehicle in control_vehicles
         if not vehicle.datum_prodeje
     )
 
     print(
         "Aktivních vozidel ke kontrole:",
         active_count,
+    )
+
+    print(
+        "Vozidel V komisi - ignorováno:",
+        len(commission_vehicles),
     )
 
     uniqa = load_uniqa_vehicles()
@@ -82,9 +115,15 @@ def main() -> None:
             allianz.error
         )
 
+    uniqa_for_compare = [
+        vehicle
+        for vehicle in uniqa.vehicles
+        if getattr(vehicle, "vin", "") not in commission_vins
+    ]
+
     results = compare_vehicles(
-        tir=vehicles,
-        uniqa=uniqa.vehicles,
+        tir=control_vehicles,
+        uniqa=uniqa_for_compare,
         uniqa_available=uniqa.available,
         uniqa_error=uniqa.error,
         allianz=allianz.vehicles,
@@ -206,13 +245,13 @@ def main() -> None:
 
         active = [
             vehicle
-            for vehicle in vehicles
+            for vehicle in control_vehicles
             if not vehicle.datum_prodeje
         ]
 
         sold = [
             vehicle
-            for vehicle in vehicles
+            for vehicle in control_vehicles
             if vehicle.datum_prodeje
         ]
 

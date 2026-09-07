@@ -9,6 +9,7 @@ class TirVehicle:
     vin: str
     spz: str
     zeme_puvodu: str = ""
+    stav: str = ""
     datum_vykupu: str = ""
     datum_prodeje: str = ""
     poznamky: str = ""

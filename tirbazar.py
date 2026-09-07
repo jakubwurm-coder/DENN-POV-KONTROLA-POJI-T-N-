@@ -24,9 +24,25 @@ FORBIDDEN_SQL = (
     "CREATE ",
 )
 
+CZECH_COUNTRY_VALUES = {
+    "CZ",
+    "CZE",
+    "ČR",
+    "CR",
+    "ČESKO",
+    "CESKO",
+    "ČESKÁ REPUBLIKA",
+    "CESKA REPUBLIKA",
+    "CZECH REPUBLIC",
+}
+
 
 def _is_commission_state(value: str) -> bool:
     return " ".join(str(value or "").strip().upper().split()) == "V KOMISI"
+
+
+def _is_czech_country(value: str) -> bool:
+    return " ".join(str(value or "").strip().upper().split()) in CZECH_COUNTRY_VALUES
 
 
 def get_password() -> str:
@@ -83,6 +99,29 @@ SELECT
     CAST(COUNT(*) AS VARCHAR(20))
 FROM dbo.Vozidlo
 WHERE GCRecord IS NULL;
+GO
+
+SELECT
+    '__FOREIGN_NO_RZ__|' +
+    CAST(COUNT(*) AS VARCHAR(20))
+FROM dbo.Vozidlo v
+WHERE
+    v.GCRecord IS NULL
+    AND UPPER(LTRIM(RTRIM(ISNULL(v.Stav, '')))) <> N'V KOMISI'
+    AND LTRIM(RTRIM(ISNULL(v.ZemePuvodu, ''))) <> ''
+    AND UPPER(LTRIM(RTRIM(v.ZemePuvodu))) NOT IN (
+        'CZ', 'CZE', N'ČR', 'CR', N'ČESKO', 'CESKO',
+        N'ČESKÁ REPUBLIKA', 'CESKA REPUBLIKA', 'CZECH REPUBLIC'
+    )
+    AND LTRIM(RTRIM(ISNULL(
+        CASE
+            WHEN v.NovaRegistracniZnacka IS NOT NULL
+                 AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> ''
+            THEN v.NovaRegistracniZnacka
+            ELSE v.RegistracniZnacka
+        END,
+        ''
+    ))) = '';
 GO
 
 SELECT
@@ -221,6 +260,23 @@ OUTER APPLY (
 
 WHERE
     v.GCRecord IS NULL
+    AND NOT (
+        UPPER(LTRIM(RTRIM(ISNULL(v.Stav, '')))) <> N'V KOMISI'
+        AND LTRIM(RTRIM(ISNULL(v.ZemePuvodu, ''))) <> ''
+        AND UPPER(LTRIM(RTRIM(v.ZemePuvodu))) NOT IN (
+            'CZ', 'CZE', N'ČR', 'CR', N'ČESKO', 'CESKO',
+            N'ČESKÁ REPUBLIKA', 'CESKA REPUBLIKA', 'CZECH REPUBLIC'
+        )
+        AND LTRIM(RTRIM(ISNULL(
+            CASE
+                WHEN v.NovaRegistracniZnacka IS NOT NULL
+                     AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> ''
+                THEN v.NovaRegistracniZnacka
+                ELSE v.RegistracniZnacka
+            END,
+            ''
+        ))) = ''
+    )
 
 ORDER BY
     v.OID;
@@ -265,6 +321,7 @@ def load_tirbazar_vehicles(
     print("Načítám všechna vozidla z dbo.Vozidlo.")
     print("Zařazení: DatumVykupu NEBO Vykoupení z komise.")
     print("Stav vozidla se používá pouze k vyřazení vozidel 'V komisi'.")
+    print("Cizí země bez registrační značky se vyřazuje už v SQL.")
     print("VIN = hlavní identifikátor.")
     print("SPZ = sekundární kontrola.")
     print()
@@ -303,6 +360,7 @@ def load_tirbazar_vehicles(
         )
 
     total = 0
+    foreign_without_spz_sql = 0
     raw_rows: list[TirVehicle] = []
 
     for original in stdout.splitlines():
@@ -310,11 +368,15 @@ def load_tirbazar_vehicles(
 
         if "__TOTAL__|" in line:
             value = line[line.find("__TOTAL__|"):]
-
             try:
-                total = int(
-                    value.split("|", 1)[1].strip()
-                )
+                total = int(value.split("|", 1)[1].strip())
+            except Exception:
+                pass
+
+        if "__FOREIGN_NO_RZ__|" in line:
+            value = line[line.find("__FOREIGN_NO_RZ__|"):]
+            try:
+                foreign_without_spz_sql = int(value.split("|", 1)[1].strip())
             except Exception:
                 pass
 
@@ -327,9 +389,6 @@ def load_tirbazar_vehicles(
         if len(parts) != 10:
             continue
 
-        # POZOR: pořadí musí přesně odpovídat build_sql().
-        # __ROW__ | OID | VIN | SPZ | stav | výkup | výkup z komise |
-        # prodej | země původu | poznámky
         (
             _,
             oid_text,
@@ -350,14 +409,7 @@ def load_tirbazar_vehicles(
 
         normal_purchase = datum_vykupu.strip()
         commission_purchase = datum_vykupu_komise.strip()
-
-        # Hlavní datum výkupu:
-        # pokud existuje normální výkup, použijeme ho;
-        # jinak použijeme výkup z komise.
-        effective_purchase = (
-            normal_purchase
-            or commission_purchase
-        )
+        effective_purchase = normal_purchase or commission_purchase
 
         raw_rows.append(
             TirVehicle(
@@ -377,21 +429,6 @@ def load_tirbazar_vehicles(
             "Z TIRBazar nebyla načtena žádná vozidla."
         )
 
-    # ========================================================
-    # ZAŘAZENÍ DO KONTROLY
-    #
-    # Standardně musí mít DatumVykupu nebo Vykoupení z komise.
-    # Vozidla se stavem "V komisi" si ale necháváme v pomocném
-    # seznamu, aby jejich VIN nebyl později omylem označen jako
-    # "NAVÍC V UNIQA". Samotná kontrola pojištění je ignoruje.
-    # ========================================================
-
-    commission = [
-        v
-        for v in raw_rows
-        if _is_commission_state(v.stav)
-    ]
-
     excluded = [
         v
         for v in raw_rows
@@ -401,6 +438,8 @@ def load_tirbazar_vehicles(
         )
     ]
 
+    # Druhá pojistka v Pythonu: i kdyby SQL filtr někdy někdo změnil,
+    # cizí vozidlo bez registrační značky se do kontroly nedostane.
     foreign_without_spz = [
         v
         for v in raw_rows
@@ -408,15 +447,7 @@ def load_tirbazar_vehicles(
             v.datum_vykupu
             and not _is_commission_state(v.stav)
             and v.zeme_puvodu.strip()
-            and v.zeme_puvodu.strip().upper()
-            not in {
-                "CZ",
-                "CZE",
-                "ČR",
-                "CR",
-                "ČESKÁ REPUBLIKA",
-                "CESKA REPUBLIKA",
-            }
+            and not _is_czech_country(v.zeme_puvodu)
             and not v.spz
         )
     ]
@@ -464,18 +495,12 @@ def load_tirbazar_vehicles(
             reverse=True,
         )
 
-        vehicles.append(
-            group[0]
-        )
+        vehicles.append(group[0])
 
         if len(group) > 1:
-            duplicates.append(
-                group
-            )
+            duplicates.append(group)
 
-    vehicles.sort(
-        key=lambda x: x.oid
-    )
+    vehicles.sort(key=lambda x: x.oid)
 
     active = sum(
         1
@@ -513,7 +538,7 @@ def load_tirbazar_vehicles(
     )
     print(
         f"Cizina bez registrační značky - VYŘAZENO: "
-        f"{len(foreign_without_spz)}"
+        f"{foreign_without_spz_sql + len(foreign_without_spz)}"
     )
     print("Načteno pro porovnání:", len(included))
     print("Načtené bez VIN:", len(without_vin))

@@ -1,7 +1,5 @@
 #!/bin/zsh
 
-cd "$(dirname "$0")" || exit 1
-
 HOST="${TIRBAZAR_SERVER:-192.168.1.100}"
 PORT="${TIRBAZAR_PORT:-1433}"
 DB="${TIRBAZAR_DATABASE:-TIRBazar}"
@@ -9,7 +7,12 @@ USER="${TIRBAZAR_USER:-TB}"
 SERVICE="UNIQA_CHECKER_TIRBAZAR"
 ACCOUNT="TB"
 TSQL="/opt/homebrew/bin/tsql"
-FREETDS_CONF="$PWD/freetds.conf"
+
+pause_exit() {
+  echo
+  read -k 1 "?Stiskni libovolnou klávesu pro zavření..."
+  echo
+}
 
 echo "============================================"
 echo " TEST SQL SERVERU - TIRBazar"
@@ -22,9 +25,7 @@ echo
 if ! nc -z -w 3 "$HOST" "$PORT" >/dev/null 2>&1; then
   echo "❌ SQL server není dostupný na $HOST:$PORT"
   echo "Zkontroluj, že jsi ve stejné síti/VPN a že SQL Server běží."
-  echo
-  read -k 1 "?Stiskni libovolnou klávesu pro zavření..."
-  echo
+  pause_exit
   exit 1
 fi
 
@@ -32,18 +33,8 @@ echo "✅ Port $PORT je dostupný."
 
 if [ ! -x "$TSQL" ]; then
   echo "❌ Chybí FreeTDS tsql: $TSQL"
-  echo "Projekt ho používá pro připojení k SQL Serveru."
-  echo
-  read -k 1 "?Stiskni libovolnou klávesu pro zavření..."
-  echo
-  exit 1
-fi
-
-if [ ! -f "$FREETDS_CONF" ]; then
-  echo "❌ Chybí $FREETDS_CONF"
-  echo
-  read -k 1 "?Stiskni libovolnou klávesu pro zavření..."
-  echo
+  echo "Nainstaluj FreeTDS přes Homebrew a spusť test znovu."
+  pause_exit
   exit 1
 fi
 
@@ -51,14 +42,34 @@ PASSWORD=$(/usr/bin/security find-generic-password -a "$ACCOUNT" -s "$SERVICE" -
 if [ -z "$PASSWORD" ]; then
   echo "❌ Heslo SQL nebylo nalezeno v macOS Klíčence."
   echo "Service: $SERVICE, account: $ACCOUNT"
-  echo
-  read -k 1 "?Stiskni libovolnou klávesu pro zavření..."
-  echo
+  pause_exit
   exit 1
 fi
 
-export FREETDSCONF="$FREETDS_CONF"
+# Dočasná FreeTDS konfigurace se vytvoří automaticky,
+# takže vedle TEST_SQL.command není potřeba žádný freetds.conf.
+TMP_CONF=$(mktemp -t test_sql_freetds.XXXXXX)
+cat > "$TMP_CONF" <<EOF
+[global]
+    client charset = UTF-8
+    encryption = off
+
+[tirbazar]
+    host = $HOST
+    port = $PORT
+    tds version = 7.2
+    client charset = UTF-8
+    encryption = off
+EOF
+
+export FREETDSCONF="$TMP_CONF"
 export TDSVER="7.2"
+
+cleanup() {
+  PASSWORD=""
+  rm -f "$TMP_CONF" >/dev/null 2>&1
+}
+trap cleanup EXIT
 
 SQL=$(cat <<EOF
 USE [$DB]
@@ -81,9 +92,7 @@ if [ $STATUS -ne 0 ]; then
   echo "❌ Přihlášení nebo SQL dotaz selhal."
   echo
   echo "$OUTPUT"
-  echo
-  read -k 1 "?Stiskni libovolnou klávesu pro zavření..."
-  echo
+  pause_exit
   exit $STATUS
 fi
 
@@ -101,6 +110,4 @@ fi
 
 echo
 echo "Hotovo. Test pouze ČTE data, nic v databázi nemění."
-echo
-read -k 1 "?Stiskni libovolnou klávesu pro zavření..."
-echo
+pause_exit

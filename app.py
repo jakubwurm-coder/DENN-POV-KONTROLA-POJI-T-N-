@@ -13,7 +13,6 @@ from allianz import load_allianz_vehicles
 from compare import compare_vehicles
 from config import load_config
 from report import prepare_output, write_comparison, write_duplicates, write_tirbazar_snapshot
-from tirbazar import _is_loan_vehicle as _tirbazar_is_loan_vehicle
 from tirbazar import load_tirbazar_vehicles
 from uniqa import load_uniqa_vehicles
 
@@ -55,7 +54,8 @@ def _is_commission_vehicle(vehicle) -> bool:
 
 
 def _is_loan_vehicle(vehicle) -> bool:
-    return _tirbazar_is_loan_vehicle(vehicle)
+    state = _normalized_state(vehicle)
+    return "PŮJČ" in state or "PUJC" in state
 
 
 def _insurance_company(result) -> str:
@@ -172,7 +172,7 @@ def _run_check_worker() -> None:
         _set_source("tirbazar", "loading", "Načítám…")
         vehicles, duplicates = load_tirbazar_vehicles(config)
 
-        # V komisi a aktuálně půjčená vozidla se interně drží jen proto,
+        # V komisi a půjčená vozidla se interně drží jen proto,
         # abychom jejich VIN mohli vyřadit i z UNIQA porovnání.
         commission_vehicles = [
             vehicle for vehicle in vehicles if _is_commission_vehicle(vehicle)

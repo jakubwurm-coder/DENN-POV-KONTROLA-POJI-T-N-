@@ -13,7 +13,7 @@ from allianz import load_allianz_vehicles
 from compare import compare_vehicles
 from config import load_config
 from report import prepare_output, write_comparison, write_duplicates, write_tirbazar_snapshot
-from tirbazar import load_tirbazar_vehicles
+from tirbazar import _is_ignored_pov_state, load_tirbazar_vehicles
 from uniqa import load_uniqa_vehicles
 
 app = Flask(__name__)
@@ -38,24 +38,6 @@ _state: dict[str, Any] = {
 
 def _now() -> str:
     return datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-
-
-def _normalized_state(vehicle) -> str:
-    return " ".join(
-        str(getattr(vehicle, "stav", "") or "")
-        .strip()
-        .upper()
-        .split()
-    )
-
-
-def _is_commission_vehicle(vehicle) -> bool:
-    return _normalized_state(vehicle) == "V KOMISI"
-
-
-def _is_loan_vehicle(vehicle) -> bool:
-    state = _normalized_state(vehicle)
-    return "PŮJČ" in state or "PUJC" in state
 
 
 def _insurance_company(result) -> str:
@@ -172,23 +154,21 @@ def _run_check_worker() -> None:
         _set_source("tirbazar", "loading", "Načítám…")
         vehicles, duplicates = load_tirbazar_vehicles(config)
 
-        # V komisi a půjčená vozidla se interně drží jen proto,
-        # abychom jejich VIN mohli vyřadit i z UNIQA porovnání.
-        commission_vehicles = [
-            vehicle for vehicle in vehicles if _is_commission_vehicle(vehicle)
-        ]
-        loan_vehicles = [
-            vehicle for vehicle in vehicles if _is_loan_vehicle(vehicle)
+        # Vozidla ve stavech bez povinnosti POV se ponechají pouze interně,
+        # abychom jejich VIN odstranili i z UNIQA porovnání. Díky tomu
+        # nevznikne falešné "NAVÍC V UNIQA".
+        ignored_vehicles = [
+            vehicle for vehicle in vehicles if _is_ignored_pov_state(vehicle.stav)
         ]
         ignored_vins = {
             vehicle.vin
-            for vehicle in commission_vehicles + loan_vehicles
+            for vehicle in ignored_vehicles
             if vehicle.vin
         }
         control_vehicles = [
             vehicle
             for vehicle in vehicles
-            if not _is_commission_vehicle(vehicle) and not _is_loan_vehicle(vehicle)
+            if not _is_ignored_pov_state(vehicle.stav)
         ]
 
         active_count = sum(
@@ -204,8 +184,7 @@ def _run_check_worker() -> None:
             f"Načteno: {_now()}",
             (
                 f"SQL Server • Aktivních ke kontrole: {active_count}"
-                f" • V komisi ignorováno: {len(commission_vehicles)}"
-                f" • Půjčené ignorováno: {len(loan_vehicles)}"
+                f" • Stavem bez POV ignorováno: {len(ignored_vehicles)}"
             ),
         )
 
@@ -243,7 +222,6 @@ def _run_check_worker() -> None:
         base = prepare_output()
 
         # Snapshot i report dostávají pouze vozidla relevantní pro POV.
-        # Půjčená ani "V komisi" se tak neobjeví ve výstupním seznamu.
         try:
             write_tirbazar_snapshot(control_vehicles, base)
         except TypeError:

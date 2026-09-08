@@ -31,8 +31,6 @@ function Test-PythonCommand($spec) {
         & $spec.Exe @($spec.Prefix) -m pip --version *> $null
         if ($LASTEXITCODE -eq 0) { return $true }
 
-        # Some normal python.org installs have ensurepip but pip was not
-        # initialized yet. Try to repair the base interpreter once.
         & $spec.Exe @($spec.Prefix) -m ensurepip --upgrade *> $null
         if ($LASTEXITCODE -ne 0) { return $false }
 
@@ -47,7 +45,6 @@ function Find-WorkingPython {
     $choices = @()
 
     if (Get-Command py -ErrorAction SilentlyContinue) {
-        # Prefer versions with the broadest package compatibility.
         $choices += [pscustomobject]@{ Exe = "py"; Prefix = @("-3.12"); Label = "Python 3.12" }
         $choices += [pscustomobject]@{ Exe = "py"; Prefix = @("-3.11"); Label = "Python 3.11" }
         $choices += [pscustomobject]@{ Exe = "py"; Prefix = @("-3.13"); Label = "Python 3.13" }
@@ -89,15 +86,43 @@ if (-not $python) {
         exit 1
     }
 
-    winget install --id Python.Python.3.12 -e --scope user --accept-package-agreements --accept-source-agreements
+    # Important: explicitly use the community winget source. Some PCs have
+    # a broken msstore certificate; without --source winget, winget can stop
+    # before installation even though the Python package is available.
+    winget install --id Python.Python.3.12 -e --source winget --scope user --accept-package-agreements --accept-source-agreements --disable-interactivity
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "Automaticka instalace Pythonu pres winget selhala."
+        Write-Host "Zkusim jeste obnovit zdroj winget a instalaci zopakovat..."
+        winget source reset --force
+        winget install --id Python.Python.3.12 -e --source winget --scope user --accept-package-agreements --accept-source-agreements --disable-interactivity
+    }
 
-    # The Python launcher reads installed versions from the registry, so it
-    # often sees the new interpreter immediately even before a new terminal.
-    $python = Find-WorkingPython
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "CHYBA: Python 3.12 se nepodarilo automaticky nainstalovat."
+        Write-Host "Nainstaluj Python 3.12 z python.org a pak spust START_WEB_WINDOWS.bat znovu."
+        Read-Host "Stiskni Enter pro zavreni"
+        exit 1
+    }
+
+    # Refresh PATH for common per-user Python 3.12 locations in this process.
+    $python312 = Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"
+    if (Test-Path $python312) {
+        $python = [pscustomobject]@{ Exe = $python312; Prefix = @(); Label = "Python 3.12" }
+        if (-not (Test-PythonCommand $python)) {
+            $python = $null
+        }
+    }
+
+    if (-not $python) {
+        $python = Find-WorkingPython
+    }
 
     if (-not $python) {
         Write-Host ""
-        Write-Host "Python 3.12 byl nainstalovan. Zavri toto okno a spust START_WEB_WINDOWS.bat znovu."
+        Write-Host "Python 3.12 byl nainstalovan, ale tento proces ho jeste nevidi."
+        Write-Host "Zavri toto okno a spust START_WEB_WINDOWS.bat znovu."
         Read-Host "Stiskni Enter pro zavreni"
         exit 0
     }
@@ -108,7 +133,6 @@ Write-Host ("Pouzivam: " + $python.Label)
 $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 $useVenv = $false
 
-# Remove a half-created environment left behind by a failed ensurepip.
 if (Test-Path ".venv") {
     $venvOk = $false
     if (Test-Path $venvPython) {
@@ -152,9 +176,6 @@ if ($useVenv) {
     if ($LASTEXITCODE -ne 0) { throw "Instalace Python balicku selhala." }
     $runtimeMode = "venv"
 } else {
-    # A broken ensurepip can prevent venv creation even when the base Python
-    # and pip work normally. The application does not require a venv, so use
-    # the user's site-packages as a safe fallback.
     Write-Host ""
     Write-Host "Vytvoreni .venv se nepodarilo. Pouziji funkcni systemovy Python."
     Write-Host "Instaluji potrebne balicky pro aktualniho uzivatele..."

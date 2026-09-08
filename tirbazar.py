@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 from config import Config
@@ -46,6 +48,20 @@ LOAN_STATE_VALUES = {
     "PUJCENO",
 }
 
+LOAN_NOTE_MARKERS = (
+    "PŮJČENO",
+    "PUJCENO",
+    "PŮJČENÉ",
+    "PUJCENE",
+)
+
+RETURN_NOTE_MARKERS = (
+    "VRÁCENO",
+    "VRACENO",
+    "VRÁCENÉ",
+    "VRACENE",
+)
+
 
 def _normalize_state(value: str) -> str:
     return " ".join(str(value or "").strip().upper().split())
@@ -65,7 +81,51 @@ def _is_returned_commission_state(value: str) -> bool:
 
 def _is_loan_state(value: str) -> bool:
     normalized = _normalize_state(value)
-    return normalized in LOAN_STATE_VALUES or "PŮJČ" in normalized or "PUJC" in normalized
+    if normalized in LOAN_STATE_VALUES:
+        return True
+    return any(
+        normalized.startswith(marker + " ")
+        for marker in LOAN_NOTE_MARKERS
+    )
+
+
+def _is_current_loan_note(value: str) -> bool:
+    normalized = _normalize_state(value)
+
+    if not any(marker in normalized for marker in LOAN_NOTE_MARKERS):
+        return False
+
+    # Historická poznámka typu "BYLO PŮJČENO ... JIŽ VRÁCENO"
+    # nesmí vozidlo vyřadit z aktuální POV kontroly.
+    if any(marker in normalized for marker in RETURN_NOTE_MARKERS):
+        return False
+
+    # Pokud je v poznámce výslovně uvedeno "PŮJČENO DO dd.mm.rrrr"
+    # a datum už uplynulo, nepovažujeme půjčení za aktuální.
+    match = re.search(
+        r"(?:PŮJČENO|PUJCENO|PŮJČENÉ|PUJCENE)\s+DO\s+(\d{1,2})\.(\d{1,2})\.(\d{4})",
+        normalized,
+    )
+    if match:
+        try:
+            loan_until = datetime(
+                int(match.group(3)),
+                int(match.group(2)),
+                int(match.group(1)),
+            ).date()
+            if loan_until < datetime.now().date():
+                return False
+        except ValueError:
+            pass
+
+    return True
+
+
+def _is_loan_vehicle(vehicle: TirVehicle) -> bool:
+    return (
+        _is_loan_state(vehicle.stav)
+        or _is_current_loan_note(vehicle.poznamky)
+    )
 
 
 def _is_czech_country(value: str) -> bool:
@@ -527,7 +587,7 @@ def load_tirbazar_vehicles(
         if (
             not v.datum_vykupu
             and not _is_commission_state(v.stav)
-            and not _is_loan_state(v.stav)
+            and not _is_loan_vehicle(v)
         )
     ]
 
@@ -537,7 +597,7 @@ def load_tirbazar_vehicles(
         if (
             v.datum_vykupu
             or _is_commission_state(v.stav)
-            or _is_loan_state(v.stav)
+            or _is_loan_vehicle(v)
         )
     ]
 
@@ -581,7 +641,7 @@ def load_tirbazar_vehicles(
         if (
             not v.datum_prodeje
             and not _is_commission_state(v.stav)
-            and not _is_loan_state(v.stav)
+            and not _is_loan_vehicle(v)
         )
     )
 
@@ -591,7 +651,7 @@ def load_tirbazar_vehicles(
         if (
             v.datum_prodeje
             and not _is_commission_state(v.stav)
-            and not _is_loan_state(v.stav)
+            and not _is_loan_vehicle(v)
         )
     )
 
@@ -604,7 +664,7 @@ def load_tirbazar_vehicles(
     loaned = sum(
         1
         for v in vehicles
-        if _is_loan_state(v.stav)
+        if _is_loan_vehicle(v)
     )
 
     print()

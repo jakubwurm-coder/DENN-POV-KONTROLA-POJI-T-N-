@@ -3,8 +3,10 @@ from __future__ import annotations
 import argparse
 import os
 import platform
+import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -16,6 +18,47 @@ SYNC_TOKEN = os.getenv(
 )
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
 AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "900"))
+
+
+def _auto_update_from_github() -> None:
+    """Před každou kontrolou stáhne main a při změně restartuje agenta."""
+    base_dir = Path(__file__).resolve().parent
+    if not (base_dir / ".git").exists():
+        return
+
+    try:
+        before = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        ).stdout.strip()
+
+        pull = subprocess.run(
+            ["git", "pull", "--ff-only", "origin", "main"],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if pull.returncode != 0:
+            print("⚠️ Automatická aktualizace z GitHubu se nepodařila:", (pull.stderr or pull.stdout).strip())
+            return
+
+        after = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        ).stdout.strip()
+
+        if before and after and before != after:
+            print("✅ Stažena nová verze z GitHubu. Restartuji agenta...")
+            os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]])
+    except Exception as exc:
+        print("⚠️ Kontrola aktualizace GitHubu selhala:", exc)
 
 
 def _load_local_app():
@@ -99,6 +142,8 @@ def get_command() -> dict[str, Any] | None:
 
 
 def run_and_sync(reason: str) -> None:
+    _auto_update_from_github()
+
     print()
     print("==============================================")
     print(" DENNI POV - ONLINE SYNCHRONIZACE")

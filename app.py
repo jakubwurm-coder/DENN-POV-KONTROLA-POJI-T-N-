@@ -40,14 +40,22 @@ def _now() -> str:
     return datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
 
-def _is_commission_vehicle(vehicle) -> bool:
-    state = " ".join(
+def _normalized_state(vehicle) -> str:
+    return " ".join(
         str(getattr(vehicle, "stav", "") or "")
         .strip()
         .upper()
         .split()
     )
-    return state == "V KOMISI"
+
+
+def _is_commission_vehicle(vehicle) -> bool:
+    return _normalized_state(vehicle) == "V KOMISI"
+
+
+def _is_loan_vehicle(vehicle) -> bool:
+    state = _normalized_state(vehicle)
+    return "PŮJČ" in state or "PUJC" in state
 
 
 def _insurance_company(result) -> str:
@@ -167,22 +175,32 @@ def _run_check_worker() -> None:
         _set_source("tirbazar", "loading", "Načítám…")
         vehicles, duplicates = load_tirbazar_vehicles(config)
 
-        # Vozidla v komisním prodeji nejsou majetkem společnosti a
-        # do kontroly pojištění se vůbec nezahrnují.
-        commission_vehicles = [
+        # Vozidla v komisním prodeji ani půjčená vozidla nejsou určena
+        # k POV kontrole. Půjčená vozidla nemusí mít pojištění společnosti.
+        ignored_vehicles = [
             vehicle
             for vehicle in vehicles
-            if _is_commission_vehicle(vehicle)
+            if _is_commission_vehicle(vehicle) or _is_loan_vehicle(vehicle)
         ]
-        commission_vins = {
+        ignored_vins = {
             vehicle.vin
-            for vehicle in commission_vehicles
+            for vehicle in ignored_vehicles
             if vehicle.vin
         }
+        commission_vehicles = [
+            vehicle
+            for vehicle in ignored_vehicles
+            if _is_commission_vehicle(vehicle)
+        ]
+        loan_vehicles = [
+            vehicle
+            for vehicle in ignored_vehicles
+            if _is_loan_vehicle(vehicle)
+        ]
         control_vehicles = [
             vehicle
             for vehicle in vehicles
-            if not _is_commission_vehicle(vehicle)
+            if not _is_commission_vehicle(vehicle) and not _is_loan_vehicle(vehicle)
         ]
 
         active_count = sum(
@@ -199,6 +217,7 @@ def _run_check_worker() -> None:
             (
                 f"SQL Server • Aktivních ke kontrole: {active_count}"
                 f" • V komisi ignorováno: {len(commission_vehicles)}"
+                f" • Půjčené ignorováno: {len(loan_vehicles)}"
             ),
         )
 
@@ -217,13 +236,12 @@ def _run_check_worker() -> None:
         else:
             _set_source("allianz", "error", "Načtení selhalo", allianz.error or "Allianz není dostupná")
 
-        # Pokud je komisní vozidlo náhodou stále v UNIQA, také ho z
-        # porovnání vynecháme. Jinak by se po odstranění z TIR seznamu
-        # chybně zobrazilo jako "NAVÍC V UNIQA".
+        # Ignorované VIN vynecháme i z UNIQA porovnání. Jinak by se
+        # mohly chybně zobrazit jako "NAVÍC V UNIQA".
         uniqa_for_compare = [
             vehicle
             for vehicle in uniqa.vehicles
-            if getattr(vehicle, "vin", "") not in commission_vins
+            if getattr(vehicle, "vin", "") not in ignored_vins
         ]
 
         results = compare_vehicles(

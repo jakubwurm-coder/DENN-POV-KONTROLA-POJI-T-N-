@@ -4,8 +4,7 @@ import os
 import pathlib
 import re
 import subprocess
-
-import pymssql
+import tempfile
 
 import tirbazar
 import uniqa
@@ -19,7 +18,7 @@ class _FakeTsqlPath:
         return True
 
     def __str__(self) -> str:
-        return "__WINDOWS_PYMSSQL__"
+        return "__WINDOWS_DOTNET_SQLCLIENT__"
 
 
 def _compat_path(value):
@@ -39,57 +38,125 @@ def _arg_value(args: list[str], flag: str, default: str = "") -> str:
 
 def _execute_tirbazar_sql(sql: str, args: list[str]) -> str:
     server = os.getenv("TIRBAZAR_SERVER", "192.168.1.100").strip()
-    port = int(os.getenv("TIRBAZAR_PORT", "1433"))
     database = os.getenv("TIRBAZAR_DATABASE", "TIRBazar").strip()
     username = _arg_value(args, "-U", os.getenv("TIRBAZAR_USER", "TB").strip())
     password = _arg_value(args, "-P", os.getenv("TIRBAZAR_PASSWORD", ""))
 
     if not password:
-        raise RuntimeError("Chybí TIRBAZAR_PASSWORD. Spusť aplikaci přes START_WEB_WINDOWS.bat.")
+        raise RuntimeError(
+            "Chybi TIRBAZAR_PASSWORD. Spust aplikaci pres START_WEB_WINDOWS.bat."
+        )
 
-    lines: list[str] = []
+    # Windows version deliberately uses System.Data.SqlClient from .NET,
+    # because the original TIRBazar application uses the same provider.
+    # This avoids FreeTDS / DB-Lib compatibility differences.
+    powershell = r'''
+$ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
-    connection = pymssql.connect(
-        server=server,
-        port=port,
-        user=username,
-        password=password,
-        database=database,
-        charset="UTF-8",
-        login_timeout=15,
-        timeout=120,
-    )
+$server = $env:TIRBAZAR_SERVER
+if ([string]::IsNullOrWhiteSpace($server)) { $server = "192.168.1.100" }
 
+$database = $env:TIRBAZAR_DATABASE
+if ([string]::IsNullOrWhiteSpace($database)) { $database = "TIRBazar" }
+
+$user = $env:TIRBAZAR_USER
+if ([string]::IsNullOrWhiteSpace($user)) { $user = "TB" }
+
+$password = $env:TIRBAZAR_PASSWORD
+if ([string]::IsNullOrWhiteSpace($password)) { throw "TIRBAZAR_PASSWORD neni nastaveno." }
+
+$builder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+$builder["Data Source"] = $server
+$builder["Initial Catalog"] = $database
+$builder["User ID"] = $user
+$builder["Password"] = $password
+$builder["Connect Timeout"] = 15
+$builder["Application Name"] = "DENNI POV KONTROLA"
+
+$conn = New-Object System.Data.SqlClient.SqlConnection($builder.ConnectionString)
+$conn.Open()
+
+try {
+    $sql = [System.IO.File]::ReadAllText($env:DENNI_POV_SQL_FILE, [System.Text.Encoding]::UTF8)
+    $batches = [System.Text.RegularExpressions.Regex]::Split($sql, '(?im)^\s*GO\s*$')
+
+    foreach ($batchRaw in $batches) {
+        $batch = [System.Text.RegularExpressions.Regex]::Replace($batchRaw, '(?im)^\s*exit\s*$', '').Trim()
+        if ([string]::IsNullOrWhiteSpace($batch)) { continue }
+
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = $batch
+        $cmd.CommandTimeout = 120
+
+        $reader = $cmd.ExecuteReader()
+        try {
+            while ($reader.Read()) {
+                if (-not $reader.IsDBNull(0)) {
+                    [Console]::Out.WriteLine($reader.GetValue(0).ToString())
+                }
+            }
+        }
+        finally {
+            $reader.Close()
+        }
+    }
+}
+finally {
+    $conn.Close()
+}
+'''
+
+    env = os.environ.copy()
+    env["TIRBAZAR_SERVER"] = server
+    env["TIRBAZAR_DATABASE"] = database
+    env["TIRBAZAR_USER"] = username
+    env["TIRBAZAR_PASSWORD"] = password
+
+    temp_path = ""
     try:
-        cursor = connection.cursor()
-        batches = re.split(r"(?im)^\s*GO\s*$", sql)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            suffix=".sql",
+            delete=False,
+        ) as handle:
+            handle.write(sql)
+            temp_path = handle.name
 
-        for batch in batches:
-            batch = batch.strip()
-            if not batch:
-                continue
+        env["DENNI_POV_SQL_FILE"] = temp_path
 
-            if batch.lower() == "exit":
-                continue
-
-            batch = re.sub(r"(?im)^\s*exit\s*$", "", batch).strip()
-            if not batch:
-                continue
-
-            cursor.execute(batch)
-
-            if cursor.description:
-                for row in cursor.fetchall():
-                    if not row or row[0] is None:
-                        continue
-                    value = row[0]
-                    if isinstance(value, bytes):
-                        value = value.decode("utf-8", errors="replace")
-                    lines.append(str(value))
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                powershell,
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            timeout=180,
+        )
     finally:
-        connection.close()
+        if temp_path:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        password = ""
 
-    return "\n".join(lines) + ("\n" if lines else "")
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(
+            "Windows .NET SqlClient se nepripojil k TIRBazar SQL. " + detail
+        )
+
+    return result.stdout or ""
 
 
 def _windows_run(args, *pargs, **kwargs):
@@ -98,9 +165,14 @@ def _windows_run(args, *pargs, **kwargs):
 
     if executable == "/usr/bin/security":
         password = os.getenv("TIRBAZAR_PASSWORD", "")
-        return subprocess.CompletedProcess(argv, 0 if password else 1, stdout=(password + "\n") if password else "", stderr="" if password else "TIRBAZAR_PASSWORD není nastaveno")
+        return subprocess.CompletedProcess(
+            argv,
+            0 if password else 1,
+            stdout=(password + "\n") if password else "",
+            stderr="" if password else "TIRBAZAR_PASSWORD neni nastaveno",
+        )
 
-    if executable == "__WINDOWS_PYMSSQL__":
+    if executable == "__WINDOWS_DOTNET_SQLCLIENT__":
         try:
             stdout = _execute_tirbazar_sql(kwargs.get("input", ""), argv)
             return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
@@ -113,7 +185,7 @@ def _windows_run(args, *pargs, **kwargs):
 def _uniqa_secret(service: str) -> str:
     if service == uniqa.USER_SERVICE:
         value = os.getenv("UNIQA_USER", "").strip()
-        label = "UNIQA uživatel"
+        label = "UNIQA uzivatel"
     elif service == uniqa.PASS_SERVICE:
         value = os.getenv("UNIQA_PASSWORD", "")
         label = "UNIQA heslo"
@@ -122,7 +194,9 @@ def _uniqa_secret(service: str) -> str:
         label = service
 
     if not value:
-        raise RuntimeError(f"Chybí {label}. Spusť aplikaci přes START_WEB_WINDOWS.bat.")
+        raise RuntimeError(
+            f"Chybi {label}. Spust aplikaci pres START_WEB_WINDOWS.bat."
+        )
 
     return value
 

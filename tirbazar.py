@@ -37,21 +37,39 @@ CZECH_COUNTRY_VALUES = {
     "CZECH REPUBLIC",
 }
 
+LOAN_STATE_VALUES = {
+    "PŮJČENÉ",
+    "PUJCENE",
+    "PŮJČENÉ VOZIDLO",
+    "PUJCENE VOZIDLO",
+    "PŮJČENO",
+    "PUJCENO",
+}
+
+
+def _normalize_state(value: str) -> str:
+    return " ".join(str(value or "").strip().upper().split())
+
 
 def _is_commission_state(value: str) -> bool:
-    return " ".join(str(value or "").strip().upper().split()) == "V KOMISI"
+    return _normalize_state(value) == "V KOMISI"
 
 
 def _is_returned_commission_state(value: str) -> bool:
-    normalized = " ".join(str(value or "").strip().upper().split())
+    normalized = _normalize_state(value)
     return normalized in {
         "VRÁCENÉ Z KOMISE",
         "VRACENE Z KOMISE",
     }
 
 
+def _is_loan_state(value: str) -> bool:
+    normalized = _normalize_state(value)
+    return normalized in LOAN_STATE_VALUES or "PŮJČ" in normalized or "PUJC" in normalized
+
+
 def _is_czech_country(value: str) -> bool:
-    return " ".join(str(value or "").strip().upper().split()) in CZECH_COUNTRY_VALUES
+    return _normalize_state(value) in CZECH_COUNTRY_VALUES
 
 
 def _eligible_for_pov_check(vehicle: TirVehicle) -> bool:
@@ -59,6 +77,7 @@ def _eligible_for_pov_check(vehicle: TirVehicle) -> bool:
         _is_czech_country(vehicle.zeme_puvodu)
         and bool(vehicle.spz)
         and not _is_returned_commission_state(vehicle.stav)
+        and not _is_loan_state(vehicle.stav)
     )
 
 
@@ -363,6 +382,7 @@ def load_tirbazar_vehicles(
     print("Vozidla z jiné země se vyřazují už v SQL.")
     print("Vozidla bez registrační značky se vyřazují už v SQL.")
     print("Vozidla 'Vrácené z komise' se vyřazují už v SQL.")
+    print("Půjčená vozidla se vyřazují z POV kontroly.")
     print("Stav 'V komisi' zůstává mimo aktivní POV kontrolu.")
     print("VIN = hlavní identifikátor.")
     print("SPZ = sekundární kontrola.")
@@ -569,37 +589,33 @@ def load_tirbazar_vehicles(
         )
     )
 
-    commission_unique = sum(
+    commission = sum(
         1
         for v in vehicles
         if _is_commission_state(v.stav)
     )
 
-    print("=" * 68)
-    print("TIRBAZAR - VÝBĚR")
-    print("=" * 68)
-    print()
-    print("Všechna nesmazaná vozidla:", total or len(raw_rows))
-    print("Z jiné země než CZ - VYŘAZENO V SQL:", non_czech_sql)
-    print("Bez registrační značky - VYŘAZENO V SQL:", without_spz_sql)
-    print(
-        "Vrácené z komise - VYŘAZENO V SQL:",
-        returned_commission_sql,
+    loaned = sum(
+        1
+        for v in raw_rows
+        if _is_loan_state(v.stav)
     )
-    if pov_filter_excluded:
-        print("POV filtr - VYŘAZENO POJISTKOU V PYTHONU:", len(pov_filter_excluded))
-    print("Bez výkupu / výkupu z komise - VYŘAZENO:", len(excluded))
-    print(
-        f"V komisi - IGNOROVÁNO PŘI KONTROLE: "
-        f"{commission_unique}"
-    )
-    print("Načteno pro porovnání:", len(included))
-    print("Načtené bez VIN:", len(without_vin))
-    print("Unikátních VIN po deduplikaci:", len(vehicles))
+
     print()
-    print("Aktivní ke kontrole - bez DatumProdeje:", active)
-    print("Prodaná - mají DatumProdeje:", sold)
+    print("TIRBazar LIVE:")
+    print("Celkem záznamů:", total)
+    print("Jiná země - vyřazeno:", non_czech_sql)
+    print("Bez registrační značky - vyřazeno:", without_spz_sql)
+    print("Vrácené z komise - vyřazeno:", returned_commission_sql)
+    print("Půjčené - vyřazeno z POV:", loaned)
+    print("Další vyřazené POV filtrem:", len(pov_filter_excluded))
+    print("Bez výkupu - vyřazeno:", len(excluded))
+    print("Bez VIN - vyřazeno:", len(without_vin))
     print("Duplicitních VIN skupin:", len(duplicates))
+    print("Aktivních:", active)
+    print("Prodaných:", sold)
+    print("V komisi:", commission)
+    print("Ke kontrole celkem:", len(vehicles))
     print()
 
     return vehicles, duplicates

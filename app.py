@@ -126,9 +126,6 @@ def _snapshot() -> dict[str, Any]:
     with _lock:
         results = list(_state["results"])
 
-        # Do webu neposíláme tisíce historických prodaných vozidel,
-        # která jsou správně bez aktivního pojištění.
-        # Zobrazíme všechna aktivní vozidla a všechny důležité problémy.
         visible_statuses = {
             "CHYBÍ V UNIQA",
             "PRODANÉ, ALE V UNIQA",
@@ -175,28 +172,19 @@ def _run_check_worker() -> None:
         _set_source("tirbazar", "loading", "Načítám…")
         vehicles, duplicates = load_tirbazar_vehicles(config)
 
-        # Vozidla v komisním prodeji ani půjčená vozidla nejsou určena
-        # k POV kontrole. Půjčená vozidla nemusí mít pojištění společnosti.
-        ignored_vehicles = [
-            vehicle
-            for vehicle in vehicles
-            if _is_commission_vehicle(vehicle) or _is_loan_vehicle(vehicle)
+        # V komisi a půjčená vozidla se interně drží jen proto,
+        # abychom jejich VIN mohli vyřadit i z UNIQA porovnání.
+        commission_vehicles = [
+            vehicle for vehicle in vehicles if _is_commission_vehicle(vehicle)
+        ]
+        loan_vehicles = [
+            vehicle for vehicle in vehicles if _is_loan_vehicle(vehicle)
         ]
         ignored_vins = {
             vehicle.vin
-            for vehicle in ignored_vehicles
+            for vehicle in commission_vehicles + loan_vehicles
             if vehicle.vin
         }
-        commission_vehicles = [
-            vehicle
-            for vehicle in ignored_vehicles
-            if _is_commission_vehicle(vehicle)
-        ]
-        loan_vehicles = [
-            vehicle
-            for vehicle in ignored_vehicles
-            if _is_loan_vehicle(vehicle)
-        ]
         control_vehicles = [
             vehicle
             for vehicle in vehicles
@@ -236,8 +224,6 @@ def _run_check_worker() -> None:
         else:
             _set_source("allianz", "error", "Načtení selhalo", allianz.error or "Allianz není dostupná")
 
-        # Ignorované VIN vynecháme i z UNIQA porovnání. Jinak by se
-        # mohly chybně zobrazit jako "NAVÍC V UNIQA".
         uniqa_for_compare = [
             vehicle
             for vehicle in uniqa.vehicles
@@ -255,8 +241,11 @@ def _run_check_worker() -> None:
         )
 
         base = prepare_output()
+
+        # Snapshot i report dostávají pouze vozidla relevantní pro POV.
+        # Půjčená ani "V komisi" se tak neobjeví ve výstupním seznamu.
         try:
-            write_tirbazar_snapshot(vehicles, base)
+            write_tirbazar_snapshot(control_vehicles, base)
         except TypeError:
             active = [vehicle for vehicle in control_vehicles if not vehicle.datum_prodeje]
             sold = [vehicle for vehicle in control_vehicles if vehicle.datum_prodeje]

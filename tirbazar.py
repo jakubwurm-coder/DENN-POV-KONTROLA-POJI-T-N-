@@ -73,11 +73,13 @@ def _is_czech_country(value: str) -> bool:
 
 
 def _eligible_for_pov_check(vehicle: TirVehicle) -> bool:
+    # Půjčená vozidla se zde záměrně ještě ponechávají v interním seznamu.
+    # Web je následně vyřadí z POV kontroly a zároveň jejich VIN odstraní
+    # z UNIQA porovnání, aby nevzniklo falešné "NAVÍC V UNIQA".
     return (
         _is_czech_country(vehicle.zeme_puvodu)
         and bool(vehicle.spz)
         and not _is_returned_commission_state(vehicle.stav)
-        and not _is_loan_state(vehicle.stav)
     )
 
 
@@ -382,7 +384,7 @@ def load_tirbazar_vehicles(
     print("Vozidla z jiné země se vyřazují už v SQL.")
     print("Vozidla bez registrační značky se vyřazují už v SQL.")
     print("Vozidla 'Vrácené z komise' se vyřazují už v SQL.")
-    print("Půjčená vozidla se vyřazují z POV kontroly.")
+    print("Půjčená vozidla se interně načtou, ale do POV kontroly se nezařadí.")
     print("Stav 'V komisi' zůstává mimo aktivní POV kontrolu.")
     print("VIN = hlavní identifikátor.")
     print("SPZ = sekundární kontrola.")
@@ -525,6 +527,7 @@ def load_tirbazar_vehicles(
         if (
             not v.datum_vykupu
             and not _is_commission_state(v.stav)
+            and not _is_loan_state(v.stav)
         )
     ]
 
@@ -534,6 +537,7 @@ def load_tirbazar_vehicles(
         if (
             v.datum_vykupu
             or _is_commission_state(v.stav)
+            or _is_loan_state(v.stav)
         )
     ]
 
@@ -577,6 +581,7 @@ def load_tirbazar_vehicles(
         if (
             not v.datum_prodeje
             and not _is_commission_state(v.stav)
+            and not _is_loan_state(v.stav)
         )
     )
 
@@ -586,6 +591,7 @@ def load_tirbazar_vehicles(
         if (
             v.datum_prodeje
             and not _is_commission_state(v.stav)
+            and not _is_loan_state(v.stav)
         )
     )
 
@@ -597,7 +603,7 @@ def load_tirbazar_vehicles(
 
     loaned = sum(
         1
-        for v in raw_rows
+        for v in vehicles
         if _is_loan_state(v.stav)
     )
 
@@ -607,15 +613,15 @@ def load_tirbazar_vehicles(
     print("Jiná země - vyřazeno:", non_czech_sql)
     print("Bez registrační značky - vyřazeno:", without_spz_sql)
     print("Vrácené z komise - vyřazeno:", returned_commission_sql)
-    print("Půjčené - vyřazeno z POV:", loaned)
     print("Další vyřazené POV filtrem:", len(pov_filter_excluded))
     print("Bez výkupu - vyřazeno:", len(excluded))
     print("Bez VIN - vyřazeno:", len(without_vin))
     print("Duplicitních VIN skupin:", len(duplicates))
-    print("Aktivních:", active)
+    print("Aktivních ke kontrole:", active)
     print("Prodaných:", sold)
-    print("V komisi:", commission)
-    print("Ke kontrole celkem:", len(vehicles))
+    print("V komisi - ignorováno:", commission)
+    print("Půjčené - ignorováno:", loaned)
+    print("Interně načteno celkem:", len(vehicles))
     print()
 
     return vehicles, duplicates

@@ -155,7 +155,7 @@ def _run_check_worker() -> None:
         vehicles, duplicates = load_tirbazar_vehicles(config)
 
         # POV se kontroluje pouze u vozidel, která splní současně:
-        # - země původu CZ / kód A
+        # - země původu kód A
         # - VIN je vyplněný
         # - Stav je Vykoupené nebo Rezervované
         # - není vyplněno DatumProdeje
@@ -166,6 +166,17 @@ def _run_check_worker() -> None:
         ignored_vehicles = [
             vehicle for vehicle in vehicles if not _requires_pov_check(vehicle)
         ]
+
+        # Pro status NAVÍC V UNIQA je rozhodující existence VIN KDEKOLI
+        # v TIRBazar. Proto odstraníme z UNIQA všechny známé VIN, které jsou
+        # v TIRBazar, ale nepatří do aktivní POV kontroly (V komisi, Pronajaté,
+        # Volné, Prodané, cizí země atd.). Teprve VIN, který není nikde v
+        # TIRBazar, smí skončit jako NAVÍC V UNIQA.
+        ignored_vins = {
+            vehicle.vin
+            for vehicle in ignored_vehicles
+            if vehicle.vin
+        }
 
         active_count = len(control_vehicles)
         without_spz_count = sum(1 for vehicle in control_vehicles if not vehicle.spz)
@@ -209,12 +220,15 @@ def _run_check_worker() -> None:
         else:
             _set_source("allianz", "error", "Načtení selhalo", allianz.error or "Allianz není dostupná")
 
-        # UNIQA se porovnává CELÁ proti pouze Vykoupeným/Rezervovaným.
-        # VIN vozidel mimo POV kontrolu se NEODSTRAŇUJÍ. Pokud jsou stále
-        # mezi aktivními vozidly UNIQA, výsledkem bude NAVÍC V UNIQA.
+        uniqa_for_compare = [
+            vehicle
+            for vehicle in uniqa.vehicles
+            if getattr(vehicle, "vin", "") not in ignored_vins
+        ]
+
         results = compare_vehicles(
             tir=control_vehicles,
-            uniqa=uniqa.vehicles,
+            uniqa=uniqa_for_compare,
             uniqa_available=uniqa.available,
             uniqa_error=uniqa.error,
             allianz=allianz.vehicles,
@@ -224,7 +238,7 @@ def _run_check_worker() -> None:
 
         base = prepare_output()
 
-        # Snapshot a report obsahují pouze vozidla, která mají být kontrolována.
+        # Snapshot obsahuje pouze vozidla, která mají být kontrolována.
         try:
             write_tirbazar_snapshot(control_vehicles, base)
         except TypeError:

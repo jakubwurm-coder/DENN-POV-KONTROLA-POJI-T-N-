@@ -24,20 +24,6 @@ FORBIDDEN_SQL = (
     "CREATE ",
 )
 
-CZECH_COUNTRY_VALUES = {
-    "A",
-    "CZ",
-    "CZE",
-    "ČR",
-    "CR",
-    "ČESKO",
-    "CESKO",
-    "ČESKÁ REPUBLIKA",
-    "CESKA REPUBLIKA",
-    "CZECH REPUBLIC",
-}
-
-# JEDINÉ stavy, které mají být kontrolované na POV.
 CONTROL_POV_STATE_VALUES = {
     "VYKOUPENÉ",
     "VYKOUPENE",
@@ -45,9 +31,6 @@ CONTROL_POV_STATE_VALUES = {
     "REZERVOVANE",
 }
 
-# Výslovně vyjmenované stavy bez POV. Prakticky se ale ignoruje každý stav,
-# který není v CONTROL_POV_STATE_VALUES, protože uživatel požaduje kontrolovat
-# pouze Vykoupené a Rezervované.
 EXCLUDED_POV_STATE_VALUES = {
     "PRONAJATÉ",
     "PRONAJATE",
@@ -72,7 +55,8 @@ def _normalize_state(value: str) -> str:
 
 
 def _is_czech_country(value: str) -> bool:
-    return _normalize_state(value) in CZECH_COUNTRY_VALUES
+    # Pro POV je rozhodující přesně kód země původu A.
+    return _normalize_state(value) == "A"
 
 
 def _is_control_pov_state(value: str) -> bool:
@@ -80,7 +64,7 @@ def _is_control_pov_state(value: str) -> bool:
 
 
 def _is_ignored_pov_state(value: str) -> bool:
-    # Povolené jsou pouze Vykoupené a Rezervované. Vše ostatní je mimo POV.
+    # POV se kontroluje pouze u Vykoupené / Rezervované.
     return not _is_control_pov_state(value)
 
 
@@ -127,6 +111,11 @@ def validate_read_only(sql: str) -> None:
 
 
 def build_sql() -> str:
+    # DŮLEŽITÉ:
+    # Interně načítáme VŠECHNA nesmazaná vozidla, ne jen kód A.
+    # Je to nutné, aby VIN existující v TIRBazar (např. V komisi, cizina,
+    # Pronajaté apod.) nikdy nevytvořil falešné "NAVÍC V UNIQA".
+    # Samotný POV filtr se aplikuje až v Pythonu přes _requires_pov_check().
     return r"""
 USE TIRBazar;
 GO
@@ -141,11 +130,11 @@ WHERE GCRecord IS NULL;
 GO
 
 SELECT
-    '__NON_CZECH__|' + CAST(COUNT(*) AS VARCHAR(20))
+    '__CODE_A__|' + CAST(COUNT(*) AS VARCHAR(20))
 FROM dbo.Vozidlo v
 WHERE
     v.GCRecord IS NULL
-    AND UPPER(LTRIM(RTRIM(ISNULL(v.ZemePuvoduKod, '')))) <> 'A';
+    AND UPPER(LTRIM(RTRIM(ISNULL(v.ZemePuvoduKod, '')))) = 'A';
 GO
 
 SELECT
@@ -170,7 +159,6 @@ SELECT
 FROM dbo.Vozidlo v
 WHERE
     v.GCRecord IS NULL
-    AND UPPER(LTRIM(RTRIM(ISNULL(v.ZemePuvoduKod, '')))) = 'A'
     AND LTRIM(RTRIM(ISNULL(v.VIN, ''))) = '';
 GO
 
@@ -201,7 +189,7 @@ SELECT
     ISNULL(CONVERT(VARCHAR(19), normalni_vykup.DatumVykupu, 120), '') + '|' +
     ISNULL(CONVERT(VARCHAR(19), komise_vykup.DatumVykupu, 120), '') + '|' +
     ISNULL(CONVERT(VARCHAR(19), prodej.DatumProdeje, 120), '') + '|' +
-    'CZ' + '|' +
+    ISNULL(REPLACE(REPLACE(LTRIM(RTRIM(v.ZemePuvoduKod)), CHAR(13), ''), CHAR(10), ''), '') + '|' +
     ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Poznamky)), CHAR(13), ' '), CHAR(10), ' '), '|', '/'), '')
 FROM dbo.Vozidlo v
 OUTER APPLY (
@@ -227,7 +215,6 @@ OUTER APPLY (
 ) prodej
 WHERE
     v.GCRecord IS NULL
-    AND UPPER(LTRIM(RTRIM(ISNULL(v.ZemePuvoduKod, '')))) = 'A'
 ORDER BY v.OID;
 GO
 
@@ -261,11 +248,11 @@ def load_tirbazar_vehicles(
 
     print()
     print("Připojuji se READ-ONLY k TIRBazar...")
-    print("Země původu: pouze kód státu A (CZ).")
-    print("POV kontrola: pouze stav Vykoupené nebo Rezervované.")
-    print("VIN je povinný pro kontrolu.")
+    print("Interně načítám všechna nesmazaná vozidla kvůli kontrole VIN v UNIQA.")
+    print("POV kontrola: pouze stav Vykoupené nebo Rezervované + kód země A + VIN.")
     print("SPZ není povinná - bez SPZ se kontroluje podle VIN.")
-    print("Prodané a všechny ostatní stavy se nekontrolují.")
+    print("Pronajaté, Nepřítomné, Volné, Parkované, Parkování ukončeno,")
+    print("Prodané, Vrácené z komise, V komisi a všechny ostatní stavy se nekontrolují.")
     print()
 
     try:
@@ -292,7 +279,7 @@ def load_tirbazar_vehicles(
         raise RuntimeError(stderr.strip() or stdout.strip())
 
     total = 0
-    non_czech_sql = 0
+    code_a_sql = 0
     without_spz_sql = 0
     without_vin_sql = 0
     raw_rows: list[TirVehicle] = []
@@ -306,9 +293,9 @@ def load_tirbazar_vehicles(
             except Exception:
                 pass
 
-        if "__NON_CZECH__|" in line:
+        if "__CODE_A__|" in line:
             try:
-                non_czech_sql = int(line[line.find("__NON_CZECH__|"):].split("|", 1)[1].strip())
+                code_a_sql = int(line[line.find("__CODE_A__|"):].split("|", 1)[1].strip())
             except Exception:
                 pass
 
@@ -360,7 +347,7 @@ def load_tirbazar_vehicles(
         )
 
     if not raw_rows:
-        raise RuntimeError("Z TIRBazar nebyla načtena žádná vozidla s kódem země A.")
+        raise RuntimeError("Z TIRBazar nebyla načtena žádná vozidla.")
 
     without_vin = [v for v in raw_rows if not v.vin]
     comparable = [v for v in raw_rows if v.vin]
@@ -381,26 +368,35 @@ def load_tirbazar_vehicles(
     vehicles.sort(key=lambda x: x.oid)
 
     control = [v for v in vehicles if _requires_pov_check(v)]
-    reserved = [v for v in control if _normalize_state(v.stav) in {"REZERVOVANÉ", "REZERVOVANE"}]
-    purchased = [v for v in control if _normalize_state(v.stav) in {"VYKOUPENÉ", "VYKOUPENE"}]
-    sold = [v for v in vehicles if bool(v.datum_prodeje) or _normalize_state(v.stav) in {"PRODANÉ", "PRODANE"}]
-    ignored = [v for v in vehicles if v not in control]
+    purchased = [
+        v for v in control
+        if _normalize_state(v.stav) in {"VYKOUPENÉ", "VYKOUPENE"}
+    ]
+    reserved = [
+        v for v in control
+        if _normalize_state(v.stav) in {"REZERVOVANÉ", "REZERVOVANE"}
+    ]
     control_without_spz = [v for v in control if not v.spz]
+    sold = [
+        v for v in vehicles
+        if bool(v.datum_prodeje) or _normalize_state(v.stav) in {"PRODANÉ", "PRODANE"}
+    ]
+    ignored = [v for v in vehicles if v not in control]
 
     print()
     print("TIRBazar LIVE:")
-    print("Celkem záznamů:", total)
-    print("Jiná země - mimo SQL výběr:", non_czech_sql)
-    print("CZ bez registrační značky - načteno pro kontrolu VIN:", without_spz_sql)
-    print("CZ bez VIN - nelze kontrolovat:", max(without_vin_sql, len(without_vin)))
+    print("Celkem nesmazaných záznamů:", total)
+    print("Záznamů s kódem země A:", code_a_sql)
+    print("Kód A bez registrační značky:", without_spz_sql)
+    print("Bez VIN - nelze porovnat podle VIN:", max(without_vin_sql, len(without_vin)))
+    print("Unikátních známých VIN v TIRBazar:", len(vehicles))
     print("Duplicitních VIN skupin:", len(duplicates))
     print("Vykoupené ke kontrole:", len(purchased))
     print("Rezervované ke kontrole:", len(reserved))
     print("Ke kontrole bez SPZ (podle VIN):", len(control_without_spz))
     print("Prodané - ignorováno:", len(sold))
-    print("Ostatní stavy - ignorováno:", len(ignored))
+    print("Ostatní stavy / jiné země - ignorováno:", len(ignored))
     print("Aktivních ke kontrole celkem:", len(control))
-    print("Interně načteno s VIN celkem:", len(vehicles))
     print()
 
     return vehicles, duplicates

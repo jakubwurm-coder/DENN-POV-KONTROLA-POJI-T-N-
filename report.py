@@ -20,9 +20,20 @@ def prepare_output() -> Path:
 
 
 def _write_csv(path: Path, rows: Iterable[dict[str, object]], fieldnames: list[str]) -> Path:
+    """Write an Excel-friendly CSV for Czech Windows/Excel.
+
+    Czech Excel normally expects a semicolon as the list separator. UTF-8 BOM
+    keeps Czech characters readable when the file is opened by double-click.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=fieldnames,
+            extrasaction="ignore",
+            delimiter=";",
+            quoting=csv.QUOTE_MINIMAL,
+        )
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
@@ -34,6 +45,7 @@ def _vehicle_row(vehicle: TirVehicle) -> dict[str, object]:
         "oid": vehicle.oid,
         "vin": vehicle.vin,
         "spz": vehicle.spz,
+        "stav": getattr(vehicle, "stav", "") or "",
         "zeme_puvodu": getattr(vehicle, "zeme_puvodu", "") or "",
         "datum_vykupu": vehicle.datum_vykupu,
         "datum_prodeje": vehicle.datum_prodeje,
@@ -66,6 +78,7 @@ def write_tirbazar_snapshot(
             "oid",
             "vin",
             "spz",
+            "stav",
             "zeme_puvodu",
             "datum_vykupu",
             "datum_prodeje",
@@ -91,6 +104,7 @@ def write_duplicates(duplicates: list[list[TirVehicle]], base: Path) -> Path:
             "oid",
             "vin",
             "spz",
+            "stav",
             "zeme_puvodu",
             "datum_vykupu",
             "datum_prodeje",

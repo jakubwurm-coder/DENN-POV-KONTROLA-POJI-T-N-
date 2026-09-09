@@ -169,9 +169,7 @@ def _run_check_worker() -> None:
 
         # Pro status NAVÍC V UNIQA je rozhodující existence VIN KDEKOLI
         # v TIRBazar. Proto odstraníme z UNIQA všechny známé VIN, které jsou
-        # v TIRBazar, ale nepatří do aktivní POV kontroly (V komisi, Pronajaté,
-        # Volné, Prodané, cizí země atd.). Teprve VIN, který není nikde v
-        # TIRBazar, smí skončit jako NAVÍC V UNIQA.
+        # v TIRBazar, ale nepatří do aktivní POV kontroly.
         ignored_vins = {
             vehicle.vin
             for vehicle in ignored_vehicles
@@ -196,14 +194,29 @@ def _run_check_worker() -> None:
         )
 
         _set_source("uniqa", "loading", "Načítám UNIQA…")
-        uniqa = load_uniqa_vehicles()
+
+        # Důležité: hromadný aktivní seznam UNIQA může některý VIN vynechat.
+        # Proto předáme všechny VIN určené ke kontrole. Chybějící VIN se v
+        # UNIQA následně ověří ještě jednotlivě přes formulářový filtr VIN.
+        control_vins = [
+            vehicle.vin
+            for vehicle in control_vehicles
+            if vehicle.vin
+        ]
+        uniqa = load_uniqa_vehicles(required_vins=control_vins)
+
         if uniqa.available:
             duplicate_count = len(getattr(uniqa, "duplicates", []))
+            direct_count = int(getattr(uniqa, "direct_verified_count", 0) or 0)
             _set_source(
                 "uniqa",
                 "ok",
                 f"Načteno: {_now()}",
-                f"Aktivních VIN: {len(uniqa.vehicles)} • Duplicitních VIN: {duplicate_count}",
+                (
+                    f"Aktivních VIN: {len(uniqa.vehicles)}"
+                    f" • Duplicitních VIN: {duplicate_count}"
+                    f" • Přímým VIN ověřením doplněno: {direct_count}"
+                ),
             )
         else:
             _set_source("uniqa", "error", "Načtení selhalo", uniqa.error or "UNIQA není dostupná")

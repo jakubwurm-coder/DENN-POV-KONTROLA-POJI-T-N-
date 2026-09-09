@@ -73,14 +73,18 @@ def _is_czech_spz(value: str) -> bool:
 
 def _is_czech_for_pov(vehicle: TirVehicle) -> bool:
     country = _normalize_state(vehicle.zeme_puvodu)
+    spz = normalize_spz(vehicle.spz)
 
-    # Primární pravidlo: kód země původu A.
+    # Kód A: kontrolujeme i bez registrační značky, podle VIN.
     if country == "A":
         return True
 
-    # Výjimka: země původu není vyplněná, ale vozidlo má českou SPZ.
-    # Pokud je vyplněn jiný kód země, SPZ tuto podmínku nepřebíjí.
-    if not country and _is_czech_spz(vehicle.spz):
+    # Jiný vyplněný kód země: pokud má vozidlo SPZ, také kontrolujeme.
+    if country and spz:
+        return True
+
+    # Prázdný kód země: kontrolujeme, pokud SPZ odpovídá českému formátu.
+    if not country and _is_czech_spz(spz):
         return True
 
     return False
@@ -276,8 +280,9 @@ def load_tirbazar_vehicles(
     print()
     print("Připojuji se READ-ONLY k TIRBazar...")
     print("Interně načítám všechna nesmazaná vozidla kvůli kontrole VIN v UNIQA.")
-    print("POV kontrola: Vykoupené/Rezervované + VIN + (kód A NEBO prázdný kód a česká SPZ).")
-    print("U kódu A není SPZ povinná - bez SPZ se kontroluje podle VIN.")
+    print("POV kontrola: pouze Vykoupené/Rezervované + VIN + pravidla země/SPZ.")
+    print("Kód A: kontrola i bez SPZ. Jiný kód země + SPZ: také kontrola.")
+    print("Prázdný kód země + česká SPZ: také kontrola.")
     print("Pronajaté, Nepřítomné, Volné, Parkované, Parkování ukončeno,")
     print("Prodané, Vrácené z komise, V komisi a všechny ostatní stavy se nekontrolují.")
     print()
@@ -408,6 +413,12 @@ def load_tirbazar_vehicles(
         v for v in control
         if not _normalize_state(v.zeme_puvodu) and _is_czech_spz(v.spz)
     ]
+    other_country_with_spz = [
+        v for v in control
+        if _normalize_state(v.zeme_puvodu)
+        and _normalize_state(v.zeme_puvodu) != "A"
+        and bool(v.spz)
+    ]
     sold = [
         v for v in vehicles
         if bool(v.datum_prodeje) or _normalize_state(v.stav) in {"PRODANÉ", "PRODANE"}
@@ -425,9 +436,10 @@ def load_tirbazar_vehicles(
     print("Vykoupené ke kontrole:", len(purchased))
     print("Rezervované ke kontrole:", len(reserved))
     print("Prázdný kód země + česká SPZ ke kontrole:", len(blank_country_czech_spz))
+    print("Jiný kód země + SPZ ke kontrole:", len(other_country_with_spz))
     print("Ke kontrole bez SPZ (kód A, podle VIN):", len(control_without_spz))
     print("Prodané - ignorováno:", len(sold))
-    print("Ostatní stavy / jiné země - ignorováno:", len(ignored))
+    print("Ostatní vozidla mimo pravidla POV - ignorováno:", len(ignored))
     print("Aktivních ke kontrole celkem:", len(control))
     print()
 

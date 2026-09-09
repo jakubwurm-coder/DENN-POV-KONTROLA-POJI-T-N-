@@ -55,7 +55,7 @@
         <div>
           <div class="breadcrumb">DENNÍ POV <span>/</span> KONTROLA</div>
           <h1>Kontrola pojištění vozidel</h1>
-          <p>TIRBazar → UNIQA → Allianz → Depozit</p>
+          <p>SQL INTERNÍ DATABÁZE → UNIQA → ALLIANZ</p>
         </div>
         <div class="top-actions">
           <a id="csvBtn" class="btn btn-secondary disabled" href="/download/csv">Stáhnout CSV</a>
@@ -71,11 +71,7 @@
             <div class="hero-copy">
               <span class="section-kicker">Denní kontrola</span>
               <h2>Aktuální stav pojištění vozidel</h2>
-              <p>
-                Kontrola porovnává aktivní vozidla z TIRBazar s UNIQA a Allianz.
-                Vozidla v depozitu jsou označena samostatně. Historická prodaná vozidla
-                bez problému se v tabulce nezobrazují.
-              </p>
+              <p>Kontrola porovnává aktivní vozidla SQL databáze s databází pojišťovny</p>
             </div>
             <div class="hero-number">
               <span>Aktivní vozidla</span>
@@ -89,7 +85,7 @@
             <div>
               <span>POJIŠTĚNÍ V POŘÁDKU</span>
               <strong id="cOkTotal">0</strong>
-              <small>UNIQA + Allianz</small>
+              <small></small>
             </div>
           </article>
 
@@ -98,7 +94,7 @@
             <div>
               <span>CHYBÍ POJIŠTĚNÍ</span>
               <strong id="cMissing">0</strong>
-              <small>vyžaduje kontrolu</small>
+              <small></small>
             </div>
           </article>
         </section>
@@ -107,9 +103,9 @@
           <div class="section-heading">
             <div>
               <span class="section-kicker">Datové zdroje</span>
-              <h2>Stav načtení</h2>
+              <h2>SQL Interní databáze vozidel</h2>
             </div>
-            <div class="section-note">TIRBazar je používán pouze pro čtení</div>
+            <div class="section-note"></div>
           </div>
 
           <div class="source-grid">
@@ -117,14 +113,14 @@
               <div class="source-head">
                 <div class="source-logo source-logo-tir">TB</div>
                 <div>
-                  <strong>TIRBazar DB</strong>
+                  <strong>TIRBazar SQL</strong>
                   <span>Interní evidence vozidel</span>
                 </div>
                 <span id="tirDot" class="status-dot idle"></span>
               </div>
               <div class="source-body">
                 <strong id="tirStatus">Zatím nenačteno</strong>
-                <span id="tirDetail">SQL Server / pouze čtení</span>
+                <span id="tirDetail">• ke kontrole: 0</span>
               </div>
             </article>
 
@@ -133,13 +129,13 @@
                 <div class="source-logo source-logo-uniqa">U</div>
                 <div>
                   <strong>UNIQA</strong>
-                  <span>AIV · Denní POV</span>
+                  <span>· Denní POV</span>
                 </div>
                 <span id="uniqaDot" class="status-dot idle"></span>
               </div>
               <div class="source-body">
                 <strong id="uniqaStatus">Zatím nenačteno</strong>
-                <span id="uniqaDetail">AIV / Denní POV / Aktivní</span>
+                <span id="uniqaDetail">Aktivních VIN: 0 • Duplicitních VIN: 0</span>
               </div>
             </article>
 
@@ -147,14 +143,14 @@
               <div class="source-head">
                 <div class="source-logo source-logo-allianz">A</div>
                 <div>
-                  <strong>Allianz</strong>
-                  <span>Flotilové pojištění</span>
+                  <strong>ALLIANZ</strong>
+                  <span></span>
                 </div>
                 <span id="allianzDot" class="status-dot idle"></span>
               </div>
               <div class="source-body">
                 <strong id="allianzStatus">Zatím nenačteno</strong>
-                <span id="allianzDetail">Flotilové PDF</span>
+                <span id="allianzDetail"></span>
               </div>
             </article>
           </div>

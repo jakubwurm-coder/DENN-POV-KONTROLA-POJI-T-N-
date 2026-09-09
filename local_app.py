@@ -13,7 +13,7 @@ from allianz import load_allianz_vehicles
 from compare import compare_vehicles
 from config import load_config
 from report import prepare_output, write_comparison, write_duplicates, write_tirbazar_snapshot
-from tirbazar import _is_ignored_pov_state, load_tirbazar_vehicles
+from tirbazar import _requires_pov_check, load_tirbazar_vehicles
 from uniqa import load_uniqa_vehicles
 
 app = Flask(__name__)
@@ -154,37 +154,42 @@ def _run_check_worker() -> None:
         _set_source("tirbazar", "loading", "Načítám…")
         vehicles, duplicates = load_tirbazar_vehicles(config)
 
-        # Vozidla ve stavech bez povinnosti POV se ponechají pouze interně,
-        # abychom jejich VIN odstranili i z UNIQA porovnání. Díky tomu
-        # nevznikne falešné "NAVÍC V UNIQA".
-        ignored_vehicles = [
-            vehicle for vehicle in vehicles if _is_ignored_pov_state(vehicle.stav)
+        # POV se kontroluje pouze u vozidel, která splní současně:
+        # - země původu CZ / kód A
+        # - VIN je vyplněný
+        # - Stav je Vykoupené nebo Rezervované
+        # - není vyplněno DatumProdeje
+        # SPZ není povinná: bez SPZ se vozidlo ověřuje podle VIN.
+        control_vehicles = [
+            vehicle for vehicle in vehicles if _requires_pov_check(vehicle)
         ]
+        ignored_vehicles = [
+            vehicle for vehicle in vehicles if not _requires_pov_check(vehicle)
+        ]
+
+        # VIN všech ignorovaných vozidel vyřadíme i z UNIQA "navíc",
+        # aby Pronajaté/Volné/Parkované/Prodané/V komisi atd. nevytvářely
+        # falešný výsledek NAVÍC V UNIQA.
         ignored_vins = {
             vehicle.vin
             for vehicle in ignored_vehicles
             if vehicle.vin
         }
-        control_vehicles = [
-            vehicle
-            for vehicle in vehicles
-            if not _is_ignored_pov_state(vehicle.stav)
-        ]
 
-        active_count = sum(
-            1
-            for vehicle in control_vehicles
-            if not vehicle.datum_prodeje
-        )
+        active_count = len(control_vehicles)
+        without_spz_count = sum(1 for vehicle in control_vehicles if not vehicle.spz)
+
         with _lock:
             _state["active_count"] = active_count
+
         _set_source(
             "tirbazar",
             "ok",
             f"Načteno: {_now()}",
             (
-                f"SQL Server • Aktivních ke kontrole: {active_count}"
-                f" • Stavem bez POV ignorováno: {len(ignored_vehicles)}"
+                f"SQL Server • Vykoupené/Rezervované ke kontrole: {active_count}"
+                f" • Bez SPZ, kontrola podle VIN: {without_spz_count}"
+                f" • Ostatní ignorováno: {len(ignored_vehicles)}"
             ),
         )
 
@@ -192,14 +197,24 @@ def _run_check_worker() -> None:
         uniqa = load_uniqa_vehicles()
         if uniqa.available:
             duplicate_count = len(getattr(uniqa, "duplicates", []))
-            _set_source("uniqa", "ok", f"Načteno: {_now()}", f"Aktivních VIN: {len(uniqa.vehicles)} • Duplicitních VIN: {duplicate_count}")
+            _set_source(
+                "uniqa",
+                "ok",
+                f"Načteno: {_now()}",
+                f"Aktivních VIN: {len(uniqa.vehicles)} • Duplicitních VIN: {duplicate_count}",
+            )
         else:
             _set_source("uniqa", "error", "Načtení selhalo", uniqa.error or "UNIQA není dostupná")
 
         _set_source("allianz", "loading", "Načítám Allianz…")
         allianz = load_allianz_vehicles()
         if allianz.available:
-            _set_source("allianz", "ok", f"Načteno: {_now()}", f"Vozidel: {len(allianz.vehicles)} • Období: {allianz.period_od} – {allianz.period_do}")
+            _set_source(
+                "allianz",
+                "ok",
+                f"Načteno: {_now()}",
+                f"Vozidel: {len(allianz.vehicles)} • Období: {allianz.period_od} – {allianz.period_do}",
+            )
         else:
             _set_source("allianz", "error", "Načtení selhalo", allianz.error or "Allianz není dostupná")
 
@@ -221,13 +236,11 @@ def _run_check_worker() -> None:
 
         base = prepare_output()
 
-        # Snapshot i report dostávají pouze vozidla relevantní pro POV.
+        # Snapshot a report obsahují pouze vozidla, která mají být kontrolována.
         try:
             write_tirbazar_snapshot(control_vehicles, base)
         except TypeError:
-            active = [vehicle for vehicle in control_vehicles if not vehicle.datum_prodeje]
-            sold = [vehicle for vehicle in control_vehicles if vehicle.datum_prodeje]
-            write_tirbazar_snapshot(active, sold, base)
+            write_tirbazar_snapshot(control_vehicles, [], base)
 
         write_duplicates(duplicates, base)
         csv_path = write_comparison(results, base)

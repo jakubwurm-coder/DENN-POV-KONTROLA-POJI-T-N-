@@ -167,15 +167,6 @@ def _run_check_worker() -> None:
             vehicle for vehicle in vehicles if not _requires_pov_check(vehicle)
         ]
 
-        # VIN všech ignorovaných vozidel vyřadíme i z UNIQA "navíc",
-        # aby Pronajaté/Volné/Parkované/Prodané/V komisi atd. nevytvářely
-        # falešný výsledek NAVÍC V UNIQA.
-        ignored_vins = {
-            vehicle.vin
-            for vehicle in ignored_vehicles
-            if vehicle.vin
-        }
-
         active_count = len(control_vehicles)
         without_spz_count = sum(1 for vehicle in control_vehicles if not vehicle.spz)
 
@@ -189,7 +180,7 @@ def _run_check_worker() -> None:
             (
                 f"SQL Server • Vykoupené/Rezervované ke kontrole: {active_count}"
                 f" • Bez SPZ, kontrola podle VIN: {without_spz_count}"
-                f" • Ostatní ignorováno: {len(ignored_vehicles)}"
+                f" • Ostatní mimo POV kontrolu: {len(ignored_vehicles)}"
             ),
         )
 
@@ -218,15 +209,12 @@ def _run_check_worker() -> None:
         else:
             _set_source("allianz", "error", "Načtení selhalo", allianz.error or "Allianz není dostupná")
 
-        uniqa_for_compare = [
-            vehicle
-            for vehicle in uniqa.vehicles
-            if getattr(vehicle, "vin", "") not in ignored_vins
-        ]
-
+        # UNIQA se porovnává CELÁ proti pouze Vykoupeným/Rezervovaným.
+        # VIN vozidel mimo POV kontrolu se NEODSTRAŇUJÍ. Pokud jsou stále
+        # mezi aktivními vozidly UNIQA, výsledkem bude NAVÍC V UNIQA.
         results = compare_vehicles(
             tir=control_vehicles,
-            uniqa=uniqa_for_compare,
+            uniqa=uniqa.vehicles,
             uniqa_available=uniqa.available,
             uniqa_error=uniqa.error,
             allianz=allianz.vehicles,

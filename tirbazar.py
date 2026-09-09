@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -49,14 +50,40 @@ EXCLUDED_POV_STATE_VALUES = {
     "V KOMISI",
 }
 
+# Krajské písmeno v běžné české registrační značce.
+# Příklady: 6ST9595, 9AK7158, 7AC6140, 1TV1811.
+CZECH_REGION_LETTERS = "ABCEHJKLM PSTUZ".replace(" ", "")
+CZECH_STANDARD_SPZ_RE = re.compile(
+    rf"^[0-9][{CZECH_REGION_LETTERS}][A-Z0-9][0-9]{{4}}$"
+)
+
 
 def _normalize_state(value: str) -> str:
     return " ".join(str(value or "").strip().upper().split())
 
 
 def _is_czech_country(value: str) -> bool:
-    # Pro POV je rozhodující přesně kód země původu A.
     return _normalize_state(value) == "A"
+
+
+def _is_czech_spz(value: str) -> bool:
+    spz = normalize_spz(value)
+    return bool(CZECH_STANDARD_SPZ_RE.fullmatch(spz))
+
+
+def _is_czech_for_pov(vehicle: TirVehicle) -> bool:
+    country = _normalize_state(vehicle.zeme_puvodu)
+
+    # Primární pravidlo: kód země původu A.
+    if country == "A":
+        return True
+
+    # Výjimka: země původu není vyplněná, ale vozidlo má českou SPZ.
+    # Pokud je vyplněn jiný kód země, SPZ tuto podmínku nepřebíjí.
+    if not country and _is_czech_spz(vehicle.spz):
+        return True
+
+    return False
 
 
 def _is_control_pov_state(value: str) -> bool:
@@ -70,7 +97,7 @@ def _is_ignored_pov_state(value: str) -> bool:
 
 def _requires_pov_check(vehicle: TirVehicle) -> bool:
     return (
-        _is_czech_country(vehicle.zeme_puvodu)
+        _is_czech_for_pov(vehicle)
         and bool(vehicle.vin)
         and _is_control_pov_state(vehicle.stav)
         and not bool(vehicle.datum_prodeje)
@@ -249,8 +276,8 @@ def load_tirbazar_vehicles(
     print()
     print("Připojuji se READ-ONLY k TIRBazar...")
     print("Interně načítám všechna nesmazaná vozidla kvůli kontrole VIN v UNIQA.")
-    print("POV kontrola: pouze stav Vykoupené nebo Rezervované + kód země A + VIN.")
-    print("SPZ není povinná - bez SPZ se kontroluje podle VIN.")
+    print("POV kontrola: Vykoupené/Rezervované + VIN + (kód A NEBO prázdný kód a česká SPZ).")
+    print("U kódu A není SPZ povinná - bez SPZ se kontroluje podle VIN.")
     print("Pronajaté, Nepřítomné, Volné, Parkované, Parkování ukončeno,")
     print("Prodané, Vrácené z komise, V komisi a všechny ostatní stavy se nekontrolují.")
     print()
@@ -377,6 +404,10 @@ def load_tirbazar_vehicles(
         if _normalize_state(v.stav) in {"REZERVOVANÉ", "REZERVOVANE"}
     ]
     control_without_spz = [v for v in control if not v.spz]
+    blank_country_czech_spz = [
+        v for v in control
+        if not _normalize_state(v.zeme_puvodu) and _is_czech_spz(v.spz)
+    ]
     sold = [
         v for v in vehicles
         if bool(v.datum_prodeje) or _normalize_state(v.stav) in {"PRODANÉ", "PRODANE"}
@@ -393,7 +424,8 @@ def load_tirbazar_vehicles(
     print("Duplicitních VIN skupin:", len(duplicates))
     print("Vykoupené ke kontrole:", len(purchased))
     print("Rezervované ke kontrole:", len(reserved))
-    print("Ke kontrole bez SPZ (podle VIN):", len(control_without_spz))
+    print("Prázdný kód země + česká SPZ ke kontrole:", len(blank_country_czech_spz))
+    print("Ke kontrole bez SPZ (kód A, podle VIN):", len(control_without_spz))
     print("Prodané - ignorováno:", len(sold))
     print("Ostatní stavy / jiné země - ignorováno:", len(ignored))
     print("Aktivních ke kontrole celkem:", len(control))

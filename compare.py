@@ -415,8 +415,8 @@ def compare_vehicles(
                     status="NAVÍC V UNIQA",
                     detail=(
                         "VIN je mezi aktivními vozidly UNIQA, "
-                        "ale v TIRBazar nebyl nalezen mezi vozidly "
-                        "s výkupem ani mezi vozidly vykoupenými z komise."
+                        "ale není mezi vozidly TIRBazar se stavem "
+                        "Vykoupené nebo Rezervované určenými k POV kontrole."
                     ),
                     datum_vykupu="",
                     datum_prodeje="",

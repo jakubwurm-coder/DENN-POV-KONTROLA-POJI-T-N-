@@ -29,9 +29,9 @@ _state: dict[str, Any] = {
     "results": [],
     "last_csv": None,
     "sources": {
-        "tirbazar": {"state": "idle", "status": "Zatím nenačteno", "detail": "SQL Server / pouze čtení"},
-        "uniqa": {"state": "idle", "status": "Zatím nenačteno", "detail": "AIV / Denní POV / Aktivní"},
-        "allianz": {"state": "idle", "status": "Zatím nenačteno", "detail": "Flotilové PDF"},
+        "tirbazar": {"state": "idle", "status": "Zatím nenačteno", "detail": "• ke kontrole: 0"},
+        "uniqa": {"state": "idle", "status": "Zatím nenačteno", "detail": "Aktivních VIN: 0 • Duplicitních VIN: 0"},
+        "allianz": {"state": "idle", "status": "Zatím nenačteno", "detail": ""},
     },
 }
 
@@ -186,11 +186,7 @@ def _run_check_worker() -> None:
             "tirbazar",
             "ok",
             f"Načteno: {_now()}",
-            (
-                f"SQL Server • Vykoupené/Rezervované ke kontrole: {active_count}"
-                f" • Bez SPZ, kontrola podle VIN: {without_spz_count}"
-                f" • Ostatní mimo POV kontrolu: {len(ignored_vehicles)}"
-            ),
+            f"– • ke kontrole: {active_count}",
         )
 
         _set_source("uniqa", "loading", "Načítám UNIQA…")
@@ -215,7 +211,6 @@ def _run_check_worker() -> None:
                 (
                     f"Aktivních VIN: {len(uniqa.vehicles)}"
                     f" • Duplicitních VIN: {duplicate_count}"
-                    f" • Přímým VIN ověřením doplněno: {direct_count}"
                 ),
             )
         else:
@@ -228,7 +223,7 @@ def _run_check_worker() -> None:
                 "allianz",
                 "ok",
                 f"Načteno: {_now()}",
-                f"Vozidel: {len(allianz.vehicles)} • Období: {allianz.period_od} – {allianz.period_do}",
+                "",
             )
         else:
             _set_source("allianz", "error", "Načtení selhalo", allianz.error or "Allianz není dostupná")
@@ -294,9 +289,9 @@ def api_run():
         _state["finished_at"] = None
         _state["error"] = None
         _state["sources"] = {
-            "tirbazar": {"state": "loading", "status": "Čekám…", "detail": "SQL Server / pouze čtení"},
-            "uniqa": {"state": "idle", "status": "Čekám…", "detail": "AIV / Denní POV / Aktivní"},
-            "allianz": {"state": "idle", "status": "Čekám…", "detail": "Flotilové PDF"},
+            "tirbazar": {"state": "loading", "status": "Čekám…", "detail": "• ke kontrole: 0"},
+            "uniqa": {"state": "idle", "status": "Čekám…", "detail": "Aktivních VIN: 0 • Duplicitních VIN: 0"},
+            "allianz": {"state": "idle", "status": "Čekám…", "detail": ""},
         }
 
     threading.Thread(target=_run_check_worker, daemon=True).start()

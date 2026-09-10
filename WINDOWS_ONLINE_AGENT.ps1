@@ -21,10 +21,24 @@ function Load-SecureCredential([string]$path) {
     }
 }
 
+function Find-GitExe {
+    $cmd = Get-Command git -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source) { return $cmd.Source }
+
+    $candidates = @(
+        "C:\Program Files\Git\cmd\git.exe",
+        "C:\Program Files\Git\bin\git.exe",
+        (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd\git.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) { return $candidate }
+    }
+    return $null
+}
+
 Write-AgentLog "DENNI POV online agent startuje."
 
-# Agent bezi pod stejnym Windows uzivatelem jako GitHub Desktop a ulozene DPAPI udaje.
-# Proto muze bez dalsiho zadavani hesel nacist lokalni prihlaseni a soukromy GitHub.
+# Agent bezi pod stejnym Windows uzivatelem jako ulozene DPAPI udaje.
 $savedSql = Load-SecureCredential $sqlCredPath
 if ($savedSql) {
     $net = $savedSql.GetNetworkCredential()
@@ -49,15 +63,15 @@ if (-not $env:UNIQA_USER -or -not $env:UNIQA_PASSWORD) {
     exit 3
 }
 
-$git = Get-Command git -ErrorAction SilentlyContinue
-if ($git -and (Test-Path ".git")) {
+$gitExe = Find-GitExe
+if ($gitExe -and (Test-Path ".git")) {
     try {
-        Write-AgentLog "Kontroluji aktualizaci z GitHubu..."
-        $fetchOutput = (& git fetch origin main 2>&1 | Out-String).Trim()
+        Write-AgentLog ("Kontroluji aktualizaci z GitHubu pres " + $gitExe)
+        $fetchOutput = (& $gitExe fetch origin main 2>&1 | Out-String).Trim()
         if ($LASTEXITCODE -ne 0) {
             Write-AgentLog ("VAROVANI: git fetch selhal: " + $fetchOutput)
         } else {
-            $resetOutput = (& git reset --hard origin/main 2>&1 | Out-String).Trim()
+            $resetOutput = (& $gitExe reset --hard origin/main 2>&1 | Out-String).Trim()
             if ($LASTEXITCODE -eq 0) {
                 Write-AgentLog ("GitHub aktualizace OK: " + $resetOutput)
             } else {
@@ -67,6 +81,8 @@ if ($git -and (Test-Path ".git")) {
     } catch {
         Write-AgentLog ("VAROVANI: aktualizace z GitHubu se nepodarila: " + $_.Exception.Message)
     }
+} elseif (-not $gitExe) {
+    Write-AgentLog "VAROVANI: Git nebyl nalezen. Agent pobezi, ale nebude se sam aktualizovat z GitHubu."
 }
 
 $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"

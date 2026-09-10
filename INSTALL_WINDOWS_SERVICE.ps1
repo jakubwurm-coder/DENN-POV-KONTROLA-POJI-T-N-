@@ -79,13 +79,79 @@ function Find-Python {
     $localCandidates = @(
         (Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"),
         (Join-Path $env:LOCALAPPDATA "Programs\Python\Python311\python.exe"),
+        "C:\Program Files\Python312\python.exe",
+        "C:\Program Files\Python311\python.exe",
         "C:\Python312\python.exe",
         "C:\Python311\python.exe"
     )
     foreach ($candidate in $localCandidates) {
-        if (Test-Path $candidate) { return @($candidate) }
+        if (Test-Path $candidate) {
+            try {
+                & $candidate -c "import sys" *> $null
+                if ($LASTEXITCODE -eq 0) { return @($candidate) }
+            } catch {}
+        }
     }
     return $null
+}
+
+function Install-PythonIfNeeded {
+    $pythonSpec = Find-Python
+    if ($pythonSpec) { return $pythonSpec }
+
+    $pythonVersion = "3.11.9"
+    $installer = Join-Path $env:TEMP ("python-" + $pythonVersion + "-amd64.exe")
+    $installLog = Join-Path $env:TEMP "denni-pov-python-install.log"
+    $targetDir = Join-Path $env:LOCALAPPDATA "Programs\Python\Python311"
+    $downloadUrl = "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-amd64.exe"
+
+    Write-Host "Python neni nainstalovany. Instaluji automaticky Python $pythonVersion..."
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        if (-not (Test-Path $installer)) {
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $installer -UseBasicParsing
+        }
+
+        $args = @(
+            "/quiet",
+            "InstallAllUsers=0",
+            "TargetDir=$targetDir",
+            "PrependPath=1",
+            "Include_pip=1",
+            "Include_launcher=0",
+            "Include_test=0",
+            "Include_doc=0",
+            "Include_tcltk=0",
+            "Shortcuts=0",
+            "/log",
+            $installLog
+        )
+        $process = Start-Process -FilePath $installer -ArgumentList $args -Wait -PassThru
+        if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {
+            throw "Python instalator skoncil kodem $($process.ExitCode). Log: $installLog"
+        }
+    } catch {
+        throw "Automaticka instalace Pythonu selhala: $($_.Exception.Message)"
+    }
+
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+
+    Start-Sleep -Seconds 2
+    $pythonSpec = Find-Python
+    if (-not $pythonSpec) {
+        throw "Python instalace probehla, ale python.exe nebyl nalezen. Log instalace: $installLog"
+    }
+
+    $pythonExe = $pythonSpec[0]
+    if ($pythonSpec.Count -gt 1) {
+        $versionText = (& $pythonSpec[0] $pythonSpec[1] --version 2>&1 | Out-String).Trim()
+    } else {
+        $versionText = (& $pythonExe --version 2>&1 | Out-String).Trim()
+    }
+    Write-Host ("Python pripraven: " + $versionText)
+    return $pythonSpec
 }
 
 function Find-Git {
@@ -131,7 +197,6 @@ function Install-GitIfNeeded {
         throw "Automaticka instalace Git for Windows selhala. Posli mi text chyby z tohoto okna."
     }
 
-    # Obnov PATH aktualniho PowerShell procesu a Git znovu dohledame.
     $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     $env:Path = "$machinePath;$userPath"
@@ -193,10 +258,7 @@ if (Test-Path (Join-Path $appDir ".git")) {
 }
 
 # 3) Python prostredi pro sluzbu.
-$pythonSpec = Find-Python
-if (-not $pythonSpec) {
-    throw "Na Windows neni nalezen Python. Nejdrive spust START_WEB_WINDOWS_AUTO, ktery Python umi doinstalovat."
-}
+$pythonSpec = Install-PythonIfNeeded
 
 $venvPython = Join-Path $appDir ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {

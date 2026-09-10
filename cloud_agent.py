@@ -12,6 +12,18 @@ from typing import Any
 
 import requests
 
+
+def _configure_stdio() -> None:
+    """Keep Windows Server service output UTF-8 safe even with legacy code pages."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+
+_configure_stdio()
+
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
 SYNC_TOKEN = os.getenv(
     "DENNI_POV_SYNC_TOKEN",
@@ -228,7 +240,7 @@ def run_and_sync(reason: str) -> None:
     print(" DENNI POV - ONLINE SYNCHRONIZACE")
     print("==============================================")
     print(f"Důvod kontroly: {reason}")
-    print("Načítám TIRBazar → UNIQA → Allianz → depozit...")
+    print("Načítám TIRBazar -> UNIQA -> Allianz -> depozit...")
     snapshot = run_local_check()
     if snapshot.get("error"):
         print("Kontrola skončila chybou:", snapshot.get("error"))

@@ -6,6 +6,7 @@ import platform
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,8 +38,6 @@ def _auto_update_from_github() -> None:
         ).stdout.strip()
 
         if SERVICE_MODE:
-            # Servisní kopie je oddělená od pracovní složky uživatele.
-            # Může se proto bezpečně srovnat přesně s origin/main.
             fetch = subprocess.run(
                 ["git", "fetch", "origin", "main"],
                 cwd=base_dir,
@@ -58,7 +57,6 @@ def _auto_update_from_github() -> None:
                 timeout=30,
             )
         else:
-            # Běžná pracovní kopie: nikdy nemažeme lokální změny.
             update = subprocess.run(
                 ["git", "pull", "--ff-only", "origin", "main"],
                 cwd=base_dir,
@@ -81,8 +79,6 @@ def _auto_update_from_github() -> None:
 
         if before and after and before != after:
             print("Stažena nová verze z GitHubu.")
-
-            # Pokud se změnily závislosti, servisní Python si je sám dorovná.
             requirements = base_dir / "requirements.txt"
             if requirements.exists():
                 deps = subprocess.run(
@@ -181,6 +177,49 @@ def get_command() -> dict[str, Any] | None:
     return command if isinstance(command, dict) else None
 
 
+def _error_snapshot(exc: Exception) -> dict[str, Any]:
+    message = str(exc).strip() or exc.__class__.__name__
+    now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    return {
+        "running": False,
+        "started_at": None,
+        "finished_at": now,
+        "error": message,
+        "sources": {
+            "tirbazar": {
+                "state": "error",
+                "status": "Kontrola se nepodařila",
+                "detail": message,
+            },
+            "uniqa": {
+                "state": "idle",
+                "status": "Neprovedeno",
+                "detail": "Kontrola skončila před dokončením.",
+            },
+            "allianz": {
+                "state": "idle",
+                "status": "Neprovedeno",
+                "detail": "Kontrola skončila před dokončením.",
+            },
+        },
+        "summary": {
+            "active": 0,
+            "ok_total": 0,
+            "ok_uniqa": 0,
+            "ok_allianz": 0,
+            "missing": 0,
+            "deposit": 0,
+            "sold_uniqa": 0,
+            "extra_uniqa": 0,
+        },
+        "results": [],
+        "agent": {
+            "computer": platform.node(),
+            "system": platform.system(),
+        },
+    }
+
+
 def run_and_sync(reason: str) -> None:
     _auto_update_from_github()
 
@@ -234,6 +273,11 @@ def main() -> int:
             return 0
         except Exception as exc:
             print("Synchronizace se nepodařila:", exc)
+            try:
+                push_snapshot(_error_snapshot(exc))
+                print("Chyba byla odeslána na online web.")
+            except Exception as report_exc:
+                print("Nepodařilo se odeslat chybu na online web:", report_exc)
 
         time.sleep(max(5, POLL_SECONDS))
 

@@ -53,14 +53,19 @@ $git = Get-Command git -ErrorAction SilentlyContinue
 if ($git -and (Test-Path ".git")) {
     try {
         Write-AgentLog "Kontroluji aktualizaci z GitHubu..."
-        $pullOutput = (& git pull --ff-only origin main 2>&1 | Out-String).Trim()
-        if ($LASTEXITCODE -eq 0) {
-            Write-AgentLog ("GitHub aktualizace OK: " + $pullOutput)
+        $fetchOutput = (& git fetch origin main 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) {
+            Write-AgentLog ("VAROVANI: git fetch selhal: " + $fetchOutput)
         } else {
-            Write-AgentLog ("VAROVANI: git pull selhal: " + $pullOutput)
+            $resetOutput = (& git reset --hard origin/main 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -eq 0) {
+                Write-AgentLog ("GitHub aktualizace OK: " + $resetOutput)
+            } else {
+                Write-AgentLog ("VAROVANI: git reset selhal: " + $resetOutput)
+            }
         }
     } catch {
-        Write-AgentLog ("VAROVANI: git pull se nepodaril: " + $_.Exception.Message)
+        Write-AgentLog ("VAROVANI: aktualizace z GitHubu se nepodarila: " + $_.Exception.Message)
     }
 }
 
@@ -71,6 +76,7 @@ if (-not (Test-Path $venvPython)) {
 }
 
 $env:DENNI_POV_CLOUD_URL = "https://denni-pov-kontrola.onrender.com"
+$env:DENNI_POV_SERVICE_MODE = "1"
 $env:PYTHONUNBUFFERED = "1"
 
 # Kdyby agent spadl nebo byl po aktualizaci ukoncen, runner ho znovu nastartuje.

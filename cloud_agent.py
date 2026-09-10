@@ -10,6 +10,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+# Embedded/portable Python on Windows runs in isolated _pth mode and may omit
+# the directory of cloud_agent.py from sys.path. Add the application directory
+# explicitly so local modules (windows_bootstrap, local_app, tirbazar, uniqa...)
+# are always importable.
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 import requests
 
 

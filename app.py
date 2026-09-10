@@ -14,6 +14,7 @@ else:
     _snapshot = _local._snapshot
     _lock = _local._lock
     _state = _local._state
+    _now = _local._now
 
 
 if __name__ == "__main__":

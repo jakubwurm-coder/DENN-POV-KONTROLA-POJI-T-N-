@@ -75,7 +75,75 @@ function Find-Python {
             if ($LASTEXITCODE -eq 0) { return @("python") }
         } catch {}
     }
+
+    $localCandidates = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python311\python.exe"),
+        "C:\Python312\python.exe",
+        "C:\Python311\python.exe"
+    )
+    foreach ($candidate in $localCandidates) {
+        if (Test-Path $candidate) { return @($candidate) }
+    }
     return $null
+}
+
+function Find-Git {
+    $cmd = Get-Command git -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source) { return $cmd.Source }
+
+    $candidates = @(
+        "C:\Program Files\Git\cmd\git.exe",
+        "C:\Program Files\Git\bin\git.exe",
+        (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd\git.exe"),
+        (Join-Path $env:LOCALAPPDATA "GitHubDesktop\app-*\resources\app\git\cmd\git.exe")
+    )
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -like "*`**") {
+            $found = Get-Item $candidate -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+            if ($found) { return $found.FullName }
+        } elseif (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Install-GitIfNeeded {
+    $gitExe = Find-Git
+    if ($gitExe) { return $gitExe }
+
+    Write-Host "Git neni nainstalovany. Zkusim ho automaticky doinstalovat pres winget..."
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        throw "Git neni dostupny a winget na tomto serveru neni nainstalovany. Nainstaluj Git for Windows a instalator spust znovu."
+    }
+
+    & winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Prvni instalace Gitu selhala. Zkusim obnovit zdroj winget a opakovat..."
+        & winget source reset --force
+        & winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
+    }
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Automaticka instalace Git for Windows selhala. Posli mi text chyby z tohoto okna."
+    }
+
+    # Obnov PATH aktualniho PowerShell procesu a Git znovu dohledame.
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+
+    Start-Sleep -Seconds 2
+    $gitExe = Find-Git
+    if (-not $gitExe) {
+        throw "Git byl nainstalovan, ale tento proces ho zatim nevidi. Zavri okno a spust INSTALOVAT_WINDOWS_SLUZBU.bat znovu."
+    }
+
+    Write-Host ("Git pripraven: " + $gitExe)
+    return $gitExe
 }
 
 Write-Host ""
@@ -107,23 +175,20 @@ if (-not (Load-SecureCredential $uniqaCredPath)) {
 }
 
 # 2) Cista servisni kopie repozitare. Nepracuje s uzivatelovou GitHub Desktop slozkou.
-$git = Get-Command git -ErrorAction SilentlyContinue
-if (-not $git) {
-    throw "Git neni dostupny. Nainstaluj Git for Windows nebo GitHub Desktop a instalator spust znovu."
-}
+$gitExe = Install-GitIfNeeded
 
 if (Test-Path (Join-Path $appDir ".git")) {
     Write-Host "Aktualizuji servisni kopii z GitHubu..."
-    & git -C $appDir fetch origin main
-    if ($LASTEXITCODE -ne 0) { throw "Git fetch selhal." }
-    & git -C $appDir reset --hard origin/main
+    & $gitExe -C $appDir fetch origin main
+    if ($LASTEXITCODE -ne 0) { throw "Git fetch selhal. Pokud je repozitar soukromy, prihlas tento Windows server jednou ke GitHubu." }
+    & $gitExe -C $appDir reset --hard origin/main
     if ($LASTEXITCODE -ne 0) { throw "Aktualizace servisni kopie selhala." }
 } else {
     if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
     Write-Host "Vytvarim cistou servisni kopii z GitHubu..."
-    & git clone --branch main --single-branch $repoUrl $appDir
+    & $gitExe clone --branch main --single-branch $repoUrl $appDir
     if ($LASTEXITCODE -ne 0) {
-        throw "Git clone selhal. Over, ze je GitHub Desktop prihlaseny k uctu s pristupem do repozitare."
+        throw "Git clone selhal. Repozitar je soukromy - tento Windows server je potreba jednou prihlasit ke GitHubu."
     }
 }
 
@@ -148,7 +213,7 @@ Write-Host "Instaluji/aktualizuji potrebne balicky..."
 & $venvPython -m pip install -r (Join-Path $appDir "requirements.txt")
 if ($LASTEXITCODE -ne 0) { throw "Instalace Python balicku selhala." }
 
-# 4) Trvaly skryty agent v Plánovači úloh pod stejnym Windows uctem.
+# 4) Trvaly skryty agent v Planovaci uloh pod stejnym Windows uctem.
 $runner = Join-Path $appDir "WINDOWS_ONLINE_AGENT.ps1"
 $quotedRunner = '"' + $runner + '"'
 $arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $quotedRunner"

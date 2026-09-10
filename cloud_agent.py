@@ -18,6 +18,7 @@ SYNC_TOKEN = os.getenv(
 )
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
 AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "900"))
+SERVICE_MODE = os.getenv("DENNI_POV_SERVICE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _auto_update_from_github() -> None:
@@ -35,15 +36,39 @@ def _auto_update_from_github() -> None:
             timeout=15,
         ).stdout.strip()
 
-        pull = subprocess.run(
-            ["git", "pull", "--ff-only", "origin", "main"],
-            cwd=base_dir,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if pull.returncode != 0:
-            print("⚠️ Automatická aktualizace z GitHubu se nepodařila:", (pull.stderr or pull.stdout).strip())
+        if SERVICE_MODE:
+            # Servisní kopie je oddělená od pracovní složky uživatele.
+            # Může se proto bezpečně srovnat přesně s origin/main.
+            fetch = subprocess.run(
+                ["git", "fetch", "origin", "main"],
+                cwd=base_dir,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if fetch.returncode != 0:
+                print("Automatická aktualizace z GitHubu se nepodařila:", (fetch.stderr or fetch.stdout).strip())
+                return
+
+            update = subprocess.run(
+                ["git", "reset", "--hard", "origin/main"],
+                cwd=base_dir,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        else:
+            # Běžná pracovní kopie: nikdy nemažeme lokální změny.
+            update = subprocess.run(
+                ["git", "pull", "--ff-only", "origin", "main"],
+                cwd=base_dir,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+
+        if update.returncode != 0:
+            print("Automatická aktualizace z GitHubu se nepodařila:", (update.stderr or update.stdout).strip())
             return
 
         after = subprocess.run(
@@ -55,10 +80,25 @@ def _auto_update_from_github() -> None:
         ).stdout.strip()
 
         if before and after and before != after:
-            print("✅ Stažena nová verze z GitHubu. Restartuji agenta...")
+            print("Stažena nová verze z GitHubu.")
+
+            # Pokud se změnily závislosti, servisní Python si je sám dorovná.
+            requirements = base_dir / "requirements.txt"
+            if requirements.exists():
+                deps = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-r", str(requirements)],
+                    cwd=base_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                )
+                if deps.returncode != 0:
+                    print("Varování: aktualizace Python balíčků se nepodařila:", (deps.stderr or deps.stdout).strip())
+
+            print("Restartuji agenta na nové verzi...")
             os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]])
     except Exception as exc:
-        print("⚠️ Kontrola aktualizace GitHubu selhala:", exc)
+        print("Kontrola aktualizace GitHubu selhala:", exc)
 
 
 def _load_local_app():
@@ -156,7 +196,7 @@ def run_and_sync(reason: str) -> None:
     else:
         print("Kontrola dokončena. Odesílám výsledek na Render...")
     push_snapshot(snapshot)
-    print("✅ Online web byl aktualizován:", CLOUD_URL)
+    print("Online web byl aktualizován:", CLOUD_URL)
 
 
 def main() -> int:
@@ -193,7 +233,7 @@ def main() -> int:
             print("\nAgent ukončen.")
             return 0
         except Exception as exc:
-            print("⚠️ Synchronizace se nepodařila:", exc)
+            print("Synchronizace se nepodařila:", exc)
 
         time.sleep(max(5, POLL_SECONDS))
 

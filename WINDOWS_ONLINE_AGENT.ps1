@@ -88,11 +88,16 @@ if (Test-Path $venvPython) {
 $env:DENNI_POV_CLOUD_URL = "https://denni-pov-kontrola.onrender.com"
 $env:DENNI_POV_SERVICE_MODE = "1"
 $env:PYTHONUNBUFFERED = "1"
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) } catch {}
 
 while ($true) {
     try {
         Write-AgentLog "Spoustim cloud_agent.py"
-        & $pythonExe -u (Join-Path $PSScriptRoot "cloud_agent.py") *>> $logPath
+        & $pythonExe -u (Join-Path $PSScriptRoot "cloud_agent.py") 2>&1 | ForEach-Object {
+            Add-Content -LiteralPath $logPath -Value ([string]$_) -Encoding UTF8
+        }
         $exitCode = $LASTEXITCODE
         Write-AgentLog ("cloud_agent.py skoncil s kodem " + $exitCode + ". Restart za 15 s.")
     } catch {

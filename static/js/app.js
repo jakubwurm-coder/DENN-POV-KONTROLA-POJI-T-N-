@@ -1,4 +1,4 @@
-let state={results:[],summary:{},sources:{},running:false};
+let state={results:[],summary:{},sources:{},running:false,progress:{percent:0,phase:'Připraveno',eta_seconds:0}};
 let activeFilter='VŠE';
 
 const $=id=>document.getElementById(id);
@@ -24,21 +24,8 @@ function source(name,prefix){
   $(prefix+'Detail').textContent='';
 }
 
-function hideSources(){
-  const section=$('sourceSection');
-  if(section)section.hidden=true;
-  const btn=$('navSources');
-  if(btn)btn.classList.remove('active');
-}
-
-function showSources(){
-  const section=$('sourceSection');
-  if(!section)return;
-  section.hidden=false;
-  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  $('navSources').classList.add('active');
-  section.scrollIntoView({behavior:'smooth',block:'start'});
-}
+function hideSources(){const section=$('sourceSection');if(section)section.hidden=true;const btn=$('navSources');if(btn)btn.classList.remove('active');}
+function showSources(){const section=$('sourceSection');if(!section)return;section.hidden=false;document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));$('navSources').classList.add('active');section.scrollIntoView({behavior:'smooth',block:'start'});}
 
 function matches(r){
   if(activeFilter==='VŠE')return true;
@@ -64,9 +51,27 @@ function renderRows(){
   document.querySelectorAll('#rows tr[data-index]').forEach(tr=>tr.addEventListener('click',()=>showDetail(state.results[Number(tr.dataset.index)])));
 }
 
+function formatEta(seconds){
+  const s=Math.max(0,Number(seconds)||0);
+  if(!state.running)return state.finished_at?'Dokončeno':'—';
+  if(s<60)return 'odhad cca '+Math.max(5,Math.round(s/5)*5)+' s';
+  return 'odhad cca '+Math.max(1,Math.round(s/60))+' min';
+}
+
+function renderProgress(){
+  const p=state.progress||{};
+  let percent=Math.max(0,Math.min(100,Number(p.percent)||0));
+  if(!state.running&&state.finished_at&&!state.error)percent=100;
+  $('progressPercent').textContent=Math.round(percent)+' %';
+  $('progressPhase').textContent=p.phase||(state.running?'Kontrola probíhá':'Připraveno');
+  $('progressEta').textContent=state.error?'Kontrola skončila chybou':formatEta(p.eta_seconds);
+  $('progressBar').style.width=percent+'%';
+  $('progressBar').style.background=state.error?'#dc2626':(percent===100?'#16a34a':'#2563eb');
+}
+
 function render(){
   const s=state.summary||{};$('cActive').textContent=s.active||0;$('cOkTotal').textContent=s.ok_total||0;$('cOkUniqa').textContent=s.ok_uniqa||0;$('cOkAllianz').textContent=s.ok_allianz||0;$('cMissing').textContent=s.missing||0;$('cDeposit').textContent=s.deposit||0;$('cSold').textContent=s.sold_uniqa||0;$('cExtra').textContent=s.extra_uniqa||0;
-  source('tirbazar','tir');source('uniqa','uniqa');source('allianz','allianz');
+  source('tirbazar','tir');source('uniqa','uniqa');source('allianz','allianz');renderProgress();
   $('runBtn').disabled=state.running;$('runBtn').innerHTML=state.running?'Kontrola probíhá…':'<span class="play">▶</span> Spustit kontrolu';$('csvBtn').classList.toggle('disabled',!state.csv_available);
   const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}
   $('footerLeft').textContent=state.finished_at?'Dokončeno: '+state.finished_at:(state.started_at?'Spuštěno: '+state.started_at:'Připraveno');renderRows();

@@ -26,9 +26,11 @@ function source(name,prefix){
 
 function hideSources(){const section=$('sourceSection');if(section)section.hidden=true;const btn=$('navSources');if(btn)btn.classList.remove('active');}
 function hideBreakdown(){const section=$('breakdownSection');if(section)section.hidden=true;const btn=$('navBreakdown');if(btn)btn.classList.remove('active');}
+function hideData(){const section=$('dataSection');if(section)section.hidden=true;}
+function showData(){const section=$('dataSection');if(!section)return;section.hidden=false;section.scrollIntoView({behavior:'smooth',block:'start'});}
 function showSources(){
   const section=$('sourceSection');if(!section)return;
-  hideBreakdown();
+  hideBreakdown();hideData();
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   $('navSources').classList.add('active');
@@ -36,7 +38,7 @@ function showSources(){
 }
 function showBreakdown(){
   const section=$('breakdownSection');if(!section)return;
-  hideSources();
+  hideSources();hideData();
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   $('navBreakdown').classList.add('active');
@@ -110,8 +112,8 @@ async function saveMeta(r){
   try{const res=await fetch('/api/result-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:resultKey(r),note:$('vehicleNote').value,workflow_status:$('workflowStatus').value})});const d=await res.json();if(!res.ok)throw new Error(d.message||'Uložení selhalo.');toast('Poznámka a status uloženy.');$('detailDialog').close();await refresh();}catch(e){toast(e.message||'Uložení selhalo.',true);}finally{btn.disabled=false;}
 }
 
-function setFilter(filter){hideSources();hideBreakdown();activeFilter=filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x.dataset.filter===filter));renderRows();}
-function clearFilter(){hideSources();hideBreakdown();activeFilter='VŠE';$('search').value='';document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('selected'));document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));$('navAllVehicles').classList.add('active');renderRows();}
+function setFilter(filter){hideSources();hideBreakdown();showData();activeFilter=filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x.dataset.filter===filter));document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));const side=document.querySelector(`.nav-item[data-filter="${filter}"]`);if(side)side.classList.add('active');renderRows();}
+function clearFilter(){hideSources();hideBreakdown();showData();activeFilter='VŠE';$('search').value='';document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('selected'));document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));$('navAllVehicles').classList.add('active');renderRows();}
 let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return;lastToast=msg;const t=$('toast');t.textContent=msg;t.className='toast'+(error?' error':'');t.hidden=false;setTimeout(()=>{t.hidden=true;lastToast='';},5000);}
 
 $('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navSources').addEventListener('click',showSources);$('navBreakdown').addEventListener('click',showBreakdown);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});

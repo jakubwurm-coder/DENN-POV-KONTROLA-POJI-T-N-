@@ -31,7 +31,7 @@ _configure_stdio()
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
 SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "OPYnDYQG4X5oVQPsKPE7qB25pw1YV9KUZWzFXcFrygfSvx1aKhkH_-MunoSx7Zof")
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
-AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "900"))
+AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "43200"))
 SERVICE_MODE = os.getenv("DENNI_POV_SERVICE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -84,9 +84,9 @@ def _reset_for_run(local_app) -> None:
         local_app._state["results"] = []
         local_app._state["last_csv"] = None
         local_app._state["sources"] = {
-            "tirbazar": {"state": "loading", "status": "Načítám SQL…", "detail": "SQL Server / pouze čtení"},
-            "uniqa": {"state": "idle", "status": "Čekám…", "detail": "AIV / Denní POV / Aktivní"},
-            "allianz": {"state": "idle", "status": "Čekám…", "detail": "Flotilové PDF"},
+            "tirbazar": {"state": "loading", "status": "Načítám vstupní data přehledu vozidel…", "detail": "SQL Server / pouze čtení"},
+            "uniqa": {"state": "idle", "status": "Čekám…", "detail": "Aktivní smlouvy"},
+            "allianz": {"state": "idle", "status": "Čekám…", "detail": "Aktivní smlouvy"},
         }
 
 
@@ -100,13 +100,13 @@ def _progress_for(snapshot: dict[str, Any]) -> dict[str, Any]:
     uniqa = (sources.get("uniqa") or {}).get("state", "idle")
     allianz = (sources.get("allianz") or {}).get("state", "idle")
     if tir == "loading":
-        return {"percent": 15, "phase": "Načítám interní SQL databázi", "eta_seconds": 70}
+        return {"percent": 15, "phase": "Načítám vstupní data přehledu vozidel", "eta_seconds": 70}
     if tir == "ok" and uniqa in {"idle", "loading"}:
-        return {"percent": 50, "phase": "Kontroluji UNIQA", "eta_seconds": 35}
+        return {"percent": 50, "phase": "Kontroluji přehled pojištěných vozidel – UNIQA", "eta_seconds": 35}
     if uniqa in {"ok", "error"} and allianz in {"idle", "loading"}:
-        return {"percent": 82, "phase": "Načítám Allianz", "eta_seconds": 12}
+        return {"percent": 82, "phase": "Kontroluji přehled pojištěných vozidel – ALLIANZ", "eta_seconds": 12}
     if allianz in {"ok", "error"}:
-        return {"percent": 94, "phase": "Porovnávám výsledky a připravuji přehled", "eta_seconds": 5}
+        return {"percent": 94, "phase": "Porovnávám TIRBazar × UNIQA × ALLIANZ", "eta_seconds": 5}
     return {"percent": 8, "phase": "Připravuji kontrolu", "eta_seconds": 80}
 
 
@@ -165,12 +165,16 @@ def run_and_sync(reason: str) -> None:
     _auto_update_from_github()
     print(); print("=============================================="); print(" DENNI POV - ONLINE SYNCHRONIZACE"); print("==============================================")
     print(f"Důvod kontroly: {reason}")
-    print("Načítám TIRBazar -> UNIQA -> Allianz -> depozit...")
+    print("Načítám TIRBazar -> UNIQA -> Allianz...")
     snapshot = run_local_check(progress_callback=push_snapshot)
     if snapshot.get("error"):
         print("Kontrola skončila chybou:", snapshot.get("error"))
     else:
-        print("Kontrola dokončena. Odesílám výsledek na Render...")
+        print("Kontrola dokončena. Ukládám výsledky na web...")
+        saving = dict(snapshot)
+        saving["running"] = True
+        saving["progress"] = {"percent": 98, "phase": "Ukládám výsledky na web", "eta_seconds": 3}
+        push_snapshot(saving)
     push_snapshot(snapshot)
     print("Online web byl aktualizován:", CLOUD_URL)
 
@@ -182,6 +186,7 @@ def main() -> int:
     args = parser.parse_args()
     print("DENNI POV - kancelářský agent")
     print("Online web:", CLOUD_URL)
+    print("Automatická kontrola: každých 12 hodin (2× denně).")
     print("Tento proces musí běžet na počítači, který vidí TIRBazar SQL a má přístup do UNIQA.")
     if args.once:
         run_and_sync("ruční jednorázová synchronizace"); return 0
@@ -197,7 +202,7 @@ def main() -> int:
                 run_and_sync("požadavek z online webu")
                 next_auto = time.monotonic() + AUTO_SYNC_SECONDS
             elif time.monotonic() >= next_auto:
-                run_and_sync("automatická pravidelná aktualizace")
+                run_and_sync("automatická kontrola 2× denně")
                 next_auto = time.monotonic() + AUTO_SYNC_SECONDS
         except KeyboardInterrupt:
             print("\nAgent ukončen."); return 0

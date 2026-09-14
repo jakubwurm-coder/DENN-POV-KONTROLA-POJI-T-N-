@@ -63,7 +63,7 @@ def _normalize_state(value: str) -> str:
 
 
 def _is_czech_country(value: str) -> bool:
-    return _normalize_state(value) == "A"
+    return _normalize_state(value) in {"CZ", "CZE", "ČR"}
 
 
 def _is_czech_spz(value: str) -> bool:
@@ -75,15 +75,15 @@ def _is_czech_for_pov(vehicle: TirVehicle) -> bool:
     country = _normalize_state(vehicle.zeme_puvodu)
     spz = normalize_spz(vehicle.spz)
 
-    # Kód A: kontrolujeme i bez registrační značky, podle VIN.
-    if country == "A":
+    # Česká země původu: kontrolujeme i bez registrační značky, podle VIN.
+    if _is_czech_country(country):
         return True
 
-    # Jiný vyplněný kód země: pokud má vozidlo SPZ, také kontrolujeme.
+    # Jiná vyplněná země: pokud má vozidlo SPZ, také kontrolujeme.
     if country and spz:
         return True
 
-    # Prázdný kód země: kontrolujeme, pokud SPZ odpovídá českému formátu.
+    # Prázdná země: kontrolujeme, pokud SPZ odpovídá českému formátu.
     if not country and _is_czech_spz(spz):
         return True
 
@@ -143,7 +143,9 @@ def validate_read_only(sql: str) -> None:
 
 def build_sql() -> str:
     # DŮLEŽITÉ:
-    # Interně načítáme VŠECHNA nesmazaná vozidla, ne jen kód A.
+    # Interně načítáme VŠECHNA nesmazaná vozidla.
+    # Země původu se nepřebírá z interního kódu A/B/C..., ale překládá se
+    # přes číselník dbo.CL_StatPuvodu (např. A -> CZ, B -> SK).
     # Je to nutné, aby VIN existující v TIRBazar (např. V komisi, cizina,
     # Pronajaté apod.) nikdy nevytvořil falešné "NAVÍC V UNIQA".
     # Samotný POV filtr se aplikuje až v Pythonu přes _requires_pov_check().
@@ -220,9 +222,32 @@ SELECT
     ISNULL(CONVERT(VARCHAR(19), normalni_vykup.DatumVykupu, 120), '') + '|' +
     ISNULL(CONVERT(VARCHAR(19), komise_vykup.DatumVykupu, 120), '') + '|' +
     ISNULL(CONVERT(VARCHAR(19), prodej.DatumProdeje, 120), '') + '|' +
-    ISNULL(REPLACE(REPLACE(LTRIM(RTRIM(v.ZemePuvoduKod)), CHAR(13), ''), CHAR(10), ''), '') + '|' +
+    ISNULL(
+        REPLACE(
+            REPLACE(
+                LTRIM(RTRIM(
+                    COALESCE(
+                        NULLIF(stat_puvodu.PopisStatu, ''),
+                        NULLIF(v.ZemePuvodu, ''),
+                        v.ZemePuvoduKod,
+                        ''
+                    )
+                )),
+                CHAR(13),
+                ''
+            ),
+            CHAR(10),
+            ''
+        ),
+        ''
+    ) + '|' +
     ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Poznamky)), CHAR(13), ' '), CHAR(10), ' '), '|', '/'), '')
 FROM dbo.Vozidlo v
+OUTER APPLY (
+    SELECT TOP 1 LTRIM(RTRIM(s.PopisStatu)) AS PopisStatu
+    FROM dbo.CL_StatPuvodu s
+    WHERE LTRIM(RTRIM(s.KodStatu)) = LTRIM(RTRIM(v.ZemePuvoduKod))
+) stat_puvodu
 OUTER APPLY (
     SELECT MAX(vv.DatumVykupu) AS DatumVykupu
     FROM dbo.VykupVozidla vv
@@ -280,9 +305,10 @@ def load_tirbazar_vehicles(
     print()
     print("Připojuji se READ-ONLY k TIRBazar...")
     print("Interně načítám všechna nesmazaná vozidla kvůli kontrole VIN v UNIQA.")
+    print("Země původu: překlad přes CL_StatPuvodu (A -> CZ, B -> SK atd.).")
     print("POV kontrola: pouze Vykoupené/Rezervované + VIN + pravidla země/SPZ.")
-    print("Kód A: kontrola i bez SPZ. Jiný kód země + SPZ: také kontrola.")
-    print("Prázdný kód země + česká SPZ: také kontrola.")
+    print("CZ: kontrola i bez SPZ. Jiná země + SPZ: také kontrola.")
+    print("Prázdná země + česká SPZ: také kontrola.")
     print("Pronajaté, Nepřítomné, Volné, Parkované, Parkování ukončeno,")
     print("Prodané, Vrácené z komise, V komisi a všechny ostatní stavy se nekontrolují.")
     print()
@@ -416,7 +442,7 @@ def load_tirbazar_vehicles(
     other_country_with_spz = [
         v for v in control
         if _normalize_state(v.zeme_puvodu)
-        and _normalize_state(v.zeme_puvodu) != "A"
+        and not _is_czech_country(v.zeme_puvodu)
         and bool(v.spz)
     ]
     sold = [
@@ -428,16 +454,16 @@ def load_tirbazar_vehicles(
     print()
     print("TIRBazar LIVE:")
     print("Celkem nesmazaných záznamů:", total)
-    print("Záznamů s kódem země A:", code_a_sql)
-    print("Kód A bez registrační značky:", without_spz_sql)
+    print("Záznamů s interním kódem země A (CZ):", code_a_sql)
+    print("CZ bez registrační značky:", without_spz_sql)
     print("Bez VIN - nelze porovnat podle VIN:", max(without_vin_sql, len(without_vin)))
     print("Unikátních známých VIN v TIRBazar:", len(vehicles))
     print("Duplicitních VIN skupin:", len(duplicates))
     print("Vykoupené ke kontrole:", len(purchased))
     print("Rezervované ke kontrole:", len(reserved))
-    print("Prázdný kód země + česká SPZ ke kontrole:", len(blank_country_czech_spz))
-    print("Jiný kód země + SPZ ke kontrole:", len(other_country_with_spz))
-    print("Ke kontrole bez SPZ (kód A, podle VIN):", len(control_without_spz))
+    print("Prázdná země + česká SPZ ke kontrole:", len(blank_country_czech_spz))
+    print("Jiná země + SPZ ke kontrole:", len(other_country_with_spz))
+    print("Ke kontrole bez SPZ (CZ, podle VIN):", len(control_without_spz))
     print("Prodané - ignorováno:", len(sold))
     print("Ostatní vozidla mimo pravidla POV - ignorováno:", len(ignored))
     print("Aktivních ke kontrole celkem:", len(control))

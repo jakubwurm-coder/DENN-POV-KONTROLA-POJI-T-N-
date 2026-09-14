@@ -76,12 +76,26 @@ function formatEta(seconds){
   return 'odhad cca '+Math.max(1,Math.round(s/60))+' min';
 }
 
+function progressLabel(percent,p){
+  if(state.error)return 'Kontrola skončila chybou';
+  if(!state.running&&state.finished_at)return 'Hotovo';
+  if(percent<=8)return 'Připravuji kontrolu';
+  if(percent<=15)return 'Načítám vstupní data přehledu vozidel';
+  if(percent<=50)return 'Kontroluji přehled pojištěných vozidel · UNIQA — načítám aktivní smlouvy';
+  if(percent<82)return 'UNIQA — ověřuji chybějící VIN jednotlivě';
+  if(percent<=82)return 'Kontroluji přehled pojištěných vozidel · ALLIANZ — načítám aktivní smlouvy';
+  if(percent<94)return 'ALLIANZ — ověřuji chybějící VIN jednotlivě';
+  if(percent<=94)return 'Porovnávám TIRBazar × UNIQA × ALLIANZ';
+  if(percent<100)return 'Ukládám výsledky na web';
+  return p.phase||'Hotovo';
+}
+
 function renderProgress(){
   const p=state.progress||{};
   let percent=Math.max(0,Math.min(100,Number(p.percent)||0));
   if(!state.running&&state.finished_at&&!state.error)percent=100;
   $('progressPercent').textContent=Math.round(percent)+' %';
-  $('progressPhase').textContent=p.phase||(state.running?'Kontrola probíhá':'Připraveno');
+  $('progressPhase').textContent=progressLabel(percent,p);
   $('progressEta').textContent=state.error?'Kontrola skončila chybou':formatEta(p.eta_seconds);
   $('progressBar').style.width=percent+'%';
   $('progressBar').style.background=state.error?'#dc2626':(percent===100?'#16a34a':'#2563eb');

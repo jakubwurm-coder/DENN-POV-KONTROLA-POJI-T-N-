@@ -7,7 +7,7 @@ const filterNames={
   'VŠE':'Všechna vozidla','ACTIVE':'Aktivní ke kontrole','OK_TOTAL':'Pojištění v pořádku','OK_UNIQA':'OK · UNIQA','OK_ALLIANZ':'OK · Allianz','MISSING':'Chybí pojištění','DEPOSIT':'Nepojištěno, ale depozit','SOLD_UNIQA':'Prodané, ale v UNIQA','EXTRA_UNIQA':'Navíc v UNIQA'
 };
 
-function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;,'"':'&quot;'}[c]));}
 function resultKey(r){const vin=(r.vin||'').trim().toUpperCase();const spz=(r.spz_tir||r.spz_uniqa||'').trim().toUpperCase();return vin||('SPZ:'+spz);}
 function badgeClass(r){
   if(r.workflow_status==='VYŘEŠENO') return 'badge-ok';
@@ -71,7 +71,7 @@ function renderRows(){
 
 function formatEta(seconds){
   const s=Math.max(0,Number(seconds)||0);
-  if(!state.running)return state.finished_at?'Dokončeno':'—';
+  if(!state.running)return state.finished_at?'Poslední kontrola: '+state.finished_at:'—';
   if(s<60)return 'odhad cca '+Math.max(5,Math.round(s/5)*5)+' s';
   return 'odhad cca '+Math.max(1,Math.round(s/60))+' min';
 }

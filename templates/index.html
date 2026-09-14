@@ -15,7 +15,7 @@
       </div>
 
       <nav class="nav" aria-label="Filtry vozidel">
-        <button id="navAllVehicles" class="nav-item active" type="button"><span class="nav-icon">▦</span>Všechna vozidla</button>
+        <button id="navAllVehicles" class="nav-item" type="button"><span class="nav-icon">▦</span>Všechna vozidla</button>
         <button class="nav-item" type="button" data-filter="ACTIVE"><span class="nav-icon">●</span>Aktivní ke kontrole</button>
         <button class="nav-item" type="button" data-filter="MISSING"><span class="nav-icon">!</span>Chybí pojištění</button>
         <button class="nav-item" type="button" data-filter="DEPOSIT"><span class="nav-icon">D</span>Depozit</button>
@@ -97,7 +97,7 @@
           </div>
         </section>
 
-        <section class="data-section">
+        <section id="dataSection" class="data-section" hidden>
           <div class="data-toolbar"><div><span class="section-kicker">Výsledky</span><h2>Vozidla ke kontrole</h2></div><div class="data-tools"><div class="search-control"><span class="search-icon">⌕</span><input id="search" autocomplete="off" placeholder="Hledat VIN nebo SPZ…"></div><button id="clearBtn" class="btn btn-secondary btn-small" type="button">Vše</button></div></div>
           <div id="activeFilter" class="active-filter" hidden>Aktivní filtr: <strong id="activeFilterLabel"></strong><button id="clearFilterInline" type="button" aria-label="Zrušit filtr">×</button></div>
           <div class="table-card">

@@ -227,9 +227,9 @@ SELECT
             REPLACE(
                 LTRIM(RTRIM(
                     COALESCE(
-                        NULLIF(stat_puvodu.PopisStatu, ''),
-                        NULLIF(v.ZemePuvodu, ''),
-                        v.ZemePuvoduKod,
+                        NULLIF(stat_puvodu.PopisStatu COLLATE DATABASE_DEFAULT, ''),
+                        NULLIF(v.ZemePuvodu COLLATE DATABASE_DEFAULT, ''),
+                        v.ZemePuvoduKod COLLATE DATABASE_DEFAULT,
                         ''
                     )
                 )),
@@ -244,9 +244,10 @@ SELECT
     ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Poznamky)), CHAR(13), ' '), CHAR(10), ' '), '|', '/'), '')
 FROM dbo.Vozidlo v
 OUTER APPLY (
-    SELECT TOP 1 LTRIM(RTRIM(s.PopisStatu)) AS PopisStatu
+    SELECT TOP 1 LTRIM(RTRIM(s.PopisStatu)) COLLATE DATABASE_DEFAULT AS PopisStatu
     FROM dbo.CL_StatPuvodu s
-    WHERE LTRIM(RTRIM(s.KodStatu)) = LTRIM(RTRIM(v.ZemePuvoduKod))
+    WHERE LTRIM(RTRIM(s.KodStatu)) COLLATE DATABASE_DEFAULT
+        = LTRIM(RTRIM(v.ZemePuvoduKod)) COLLATE DATABASE_DEFAULT
 ) stat_puvodu
 OUTER APPLY (
     SELECT MAX(vv.DatumVykupu) AS DatumVykupu

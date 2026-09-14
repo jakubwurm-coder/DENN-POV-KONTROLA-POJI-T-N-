@@ -20,6 +20,7 @@
         <button class="nav-item" type="button" data-filter="MISSING"><span class="nav-icon">!</span>Chybí pojištění</button>
         <button class="nav-item" type="button" data-filter="DEPOSIT"><span class="nav-icon">D</span>Depozit</button>
         <button class="nav-item" type="button" data-filter="SOLD_UNIQA"><span class="nav-icon">↗</span>Prodané v UNIQA</button>
+        <button id="navBreakdown" class="nav-item" type="button"><span class="nav-icon">◫</span>Pojišťovny a výjimky</button>
         <button id="navSources" class="nav-item" type="button"><span class="nav-icon">≡</span>Datové zdroje</button>
       </nav>
 
@@ -85,7 +86,7 @@
           </div>
         </section>
 
-        <section class="breakdown-section">
+        <section id="breakdownSection" class="breakdown-section" hidden>
           <div class="section-heading compact-heading"><div><span class="section-kicker">Rozdělení výsledků</span><h2>Pojišťovny a výjimky</h2></div></div>
           <div class="metric-grid">
             <button class="metric-card" type="button" data-filter="OK_UNIQA"><span class="metric-label"><i class="metric-dot green"></i> OK · UNIQA</span><strong id="cOkUniqa">0</strong><small>nalezeno podle VIN</small></button>

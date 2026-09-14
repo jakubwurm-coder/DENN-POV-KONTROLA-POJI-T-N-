@@ -31,6 +31,7 @@ def _default_state() -> dict[str, Any]:
         "started_at": None,
         "finished_at": None,
         "error": None,
+        "progress": {"percent": 0, "phase": "Připraveno", "eta_seconds": 0},
         "sources": {
             "tirbazar": {"state": "idle", "status": "Čekám na synchronizaci", "detail": "Kancelářský agent / TIRBazar SQL"},
             "uniqa": {"state": "idle", "status": "Čekám na synchronizaci", "detail": "AIV / Denní POV / Aktivní"},
@@ -129,6 +130,7 @@ def _load_state() -> dict[str, Any]:
     if not isinstance(base.get("summary"), dict): base["summary"] = _default_state()["summary"]
     if not isinstance(base.get("results"), list): base["results"] = []
     if not isinstance(base.get("annotations"), dict): base["annotations"] = {}
+    if not isinstance(base.get("progress"), dict): base["progress"] = _default_state()["progress"]
     return base
 
 
@@ -161,7 +163,6 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         rows.append(row)
     public["results"] = rows
     summary = dict(data.get("summary") or {})
-    # Depozit není aktivní vozidlo ke kontrole.
     summary["active"] = max(0, int(summary.get("active") or 0) - int(summary.get("deposit") or 0))
     public["summary"] = summary
     public["csv_available"] = bool(rows)
@@ -190,20 +191,16 @@ def api_state():
 @app.post("/api/result-meta")
 def api_result_meta():
     payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return jsonify({"ok": False, "message": "Neplatná data."}), 400
+    if not isinstance(payload, dict): return jsonify({"ok": False, "message": "Neplatná data."}), 400
     key = str(payload.get("key") or "").strip().upper()
-    if not key:
-        return jsonify({"ok": False, "message": "Chybí identifikace vozidla."}), 400
+    if not key: return jsonify({"ok": False, "message": "Chybí identifikace vozidla."}), 400
     note = str(payload.get("note") or "").strip()[:2000]
     workflow_status = str(payload.get("workflow_status") or "").strip().upper()
-    allowed = {"", "VYŘEŠENO", "ŘEŠÍ SE", "KONTROLA"}
-    if workflow_status not in allowed:
+    if workflow_status not in {"", "VYŘEŠENO", "ŘEŠÍ SE", "KONTROLA"}:
         return jsonify({"ok": False, "message": "Nepovolený status."}), 400
     with _lock:
         data = _load_state()
-        annotations = data.setdefault("annotations", {})
-        annotations[key] = {"note": note, "workflow_status": workflow_status, "updated_at": _now()}
+        data.setdefault("annotations", {})[key] = {"note": note, "workflow_status": workflow_status, "updated_at": _now()}
         _save_state(data)
     return jsonify({"ok": True, "message": "Poznámka a status byly uloženy."})
 
@@ -212,13 +209,14 @@ def api_result_meta():
 def api_run():
     with _lock:
         data = _load_state()
-        if data.get("running") and data.get("_command"):
-            return jsonify({"ok": False, "message": "Kontrola už čeká na kancelářský agent."}), 409
+        if data.get("running"):
+            return jsonify({"ok": False, "message": "Kontrola už probíhá."}), 409
         command_id = uuid.uuid4().hex
         data["running"] = True
         data["started_at"] = _now()
         data["finished_at"] = None
         data["error"] = None
+        data["progress"] = {"percent": 3, "phase": "Čekám na kancelářský agent", "eta_seconds": 90}
         data["_command"] = {"id": command_id, "action": "run_check", "requested_at": _now()}
         data["sources"] = {
             "tirbazar": {"state": "loading", "status": "Čekám na kancelářský agent…", "detail": "TIRBazar SQL je dostupný pouze z interní sítě"},
@@ -251,10 +249,15 @@ def api_sync():
         previous = _load_state()
         data = _default_state()
         data["annotations"] = dict(previous.get("annotations") or {})
-        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results"):
+        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress"):
             if key in payload: data[key] = payload[key]
-        data["running"] = False
-        data["finished_at"] = payload.get("finished_at") or _now()
+        data["running"] = bool(payload.get("running"))
+        if data["running"]:
+            data["finished_at"] = None
+        else:
+            data["finished_at"] = payload.get("finished_at") or _now()
+            if not data.get("error"):
+                data["progress"] = {"percent": 100, "phase": "Hotovo", "eta_seconds": 0}
         data["synced_at"] = _now()
         data["csv_available"] = bool(data.get("results"))
         data["_command"] = None

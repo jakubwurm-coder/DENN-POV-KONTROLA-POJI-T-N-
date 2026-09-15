@@ -12,6 +12,7 @@ from flask import Flask, jsonify, render_template, send_file
 from allianz import load_allianz_vehicles
 from compare import compare_vehicles
 from config import load_config
+from models import ComparisonResult
 from report import prepare_output, write_comparison, write_duplicates, write_tirbazar_snapshot
 from tirbazar import _requires_pov_check, load_tirbazar_vehicles
 from uniqa import load_uniqa_vehicles
@@ -93,7 +94,10 @@ def _summary(results, active_count: int) -> dict[str, int]:
     ok_uniqa = sum(1 for r in results if getattr(r, "status", "") == "OK" and _insurance_company(r) == "UNIQA")
     ok_allianz = sum(1 for r in results if getattr(r, "status", "") == "OK" and _insurance_company(r) == "ALLIANZ")
     return {
-        "active": active_count,
+        # Cloud vrstva historicky odečítá summary.deposit od summary.active.
+        # Proto zde předáváme hrubý počet (kontrola + depozit); veřejný web
+        # zobrazí čistý počet ke kontrole. Samotné porovnání už depozit neobsahuje.
+        "active": active_count + counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0),
         "ok_total": ok_uniqa + ok_allianz,
         "ok_uniqa": ok_uniqa,
         "ok_allianz": ok_allianz,
@@ -102,6 +106,31 @@ def _summary(results, active_count: int) -> dict[str, int]:
         "sold_uniqa": counts.get("PRODANÉ, ALE V UNIQA", 0),
         "extra_uniqa": counts.get("NAVÍC V UNIQA", 0),
     }
+
+
+def _is_deposit_vehicle(vehicle) -> bool:
+    """Depozit je výjimka z POV kontroly bez ohledu na stav v pojišťovně."""
+    return "DEPOZIT" in str(getattr(vehicle, "poznamky", "") or "").strip().upper()
+
+
+def _deposit_result(vehicle) -> ComparisonResult:
+    note = " ".join(str(getattr(vehicle, "poznamky", "") or "").split())
+    if len(note) > 180:
+        note = note[:177] + "..."
+    return ComparisonResult(
+        oid=getattr(vehicle, "oid", None),
+        vin=getattr(vehicle, "vin", "") or "",
+        tir_spz=getattr(vehicle, "spz", "") or "",
+        uniqa_spz="",
+        status="NEPOJIŠTĚNO, ALE DEPOZIT",
+        detail=(
+            "Vozidlo je v TIRBazar označeno jako DEPOZIT a proto je vyřazeno "
+            "z kontroly povinného ručení."
+            + (f" Poznámka: {note}" if note else "")
+        ),
+        datum_vykupu=getattr(vehicle, "datum_vykupu", "") or "",
+        datum_prodeje=getattr(vehicle, "datum_prodeje", "") or "",
+    )
 
 
 def _snapshot() -> dict[str, Any]:
@@ -154,22 +183,29 @@ def _run_check_worker() -> None:
         _set_source("tirbazar", "loading", "Načítám…")
         vehicles, duplicates = load_tirbazar_vehicles(config)
 
-        # POV se kontroluje pouze u vozidel, která splní současně:
-        # - země původu kód A
-        # - VIN je vyplněný
-        # - Stav je Vykoupené nebo Rezervované
-        # - není vyplněno DatumProdeje
-        # SPZ není povinná: bez SPZ se vozidlo ověřuje podle VIN.
-        control_vehicles = [
+        # Nejprve vybereme vozidla, která obecně splňují podmínky POV kontroly.
+        eligible_vehicles = [
             vehicle for vehicle in vehicles if _requires_pov_check(vehicle)
         ]
+
+        # DEPOZIT je výjimka z povinného ručení. Musí se vyřadit ještě PŘED
+        # kontrolou UNIQA / Allianz. Jinak by depozitní auto, které je stále
+        # pojištěné, skončilo jako OK a chybně zvýšilo počet "ke kontrole".
+        deposit_vehicles = [
+            vehicle for vehicle in eligible_vehicles if _is_deposit_vehicle(vehicle)
+        ]
+        control_vehicles = [
+            vehicle for vehicle in eligible_vehicles if not _is_deposit_vehicle(vehicle)
+        ]
+
         ignored_vehicles = [
-            vehicle for vehicle in vehicles if not _requires_pov_check(vehicle)
+            vehicle
+            for vehicle in vehicles
+            if not _requires_pov_check(vehicle) or _is_deposit_vehicle(vehicle)
         ]
 
         # Pro status NAVÍC V UNIQA je rozhodující existence VIN KDEKOLI
-        # v TIRBazar. Proto odstraníme z UNIQA všechny známé VIN, které jsou
-        # v TIRBazar, ale nepatří do aktivní POV kontroly.
+        # v TIRBazar. Depozit proto také patří mezi známé/ignorované VIN.
         ignored_vins = {
             vehicle.vin
             for vehicle in ignored_vehicles
@@ -177,23 +213,22 @@ def _run_check_worker() -> None:
         }
 
         active_count = len(control_vehicles)
-        without_spz_count = sum(1 for vehicle in control_vehicles if not vehicle.spz)
+        deposit_count = len(deposit_vehicles)
 
         with _lock:
+            # Aktivní počet znamená opravdu jen vozidla, která se mají
+            # porovnávat s pojišťovnami. Depozit se sem nezapočítává.
             _state["active_count"] = active_count
 
         _set_source(
             "tirbazar",
             "ok",
             f"Načteno: {_now()}",
-            f"– • ke kontrole: {active_count}",
+            f"– • ke kontrole: {active_count} • depozit vyřazen: {deposit_count}",
         )
 
         _set_source("uniqa", "loading", "Načítám UNIQA…")
 
-        # Důležité: hromadný aktivní seznam UNIQA může některý VIN vynechat.
-        # Proto předáme všechny VIN určené ke kontrole. Chybějící VIN se v
-        # UNIQA následně ověří ještě jednotlivě přes formulářový filtr VIN.
         control_vins = [
             vehicle.vin
             for vehicle in control_vehicles
@@ -203,7 +238,6 @@ def _run_check_worker() -> None:
 
         if uniqa.available:
             duplicate_count = len(getattr(uniqa, "duplicates", []))
-            direct_count = int(getattr(uniqa, "direct_verified_count", 0) or 0)
             _set_source(
                 "uniqa",
                 "ok",
@@ -243,6 +277,10 @@ def _run_check_worker() -> None:
             allianz_available=allianz.available,
             allianz_error=allianz.error,
         )
+
+        # Depozit ponecháme v přehledu výjimek, ale NENÍ součástí aktivních
+        # vozidel ke kontrole ani OK/CHYBÍ výsledků.
+        results.extend(_deposit_result(vehicle) for vehicle in deposit_vehicles)
 
         base = prepare_output()
 

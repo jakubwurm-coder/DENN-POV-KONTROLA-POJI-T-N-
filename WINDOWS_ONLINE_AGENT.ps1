@@ -6,6 +6,7 @@ New-Item -ItemType Directory -Path $storeDir -Force | Out-Null
 $logPath = Join-Path $storeDir "online-agent.log"
 $sqlCredPath = Join-Path $storeDir "tirbazar.credential.xml"
 $uniqaCredPath = Join-Path $storeDir "uniqa.credential.xml"
+$smtpCredPath = Join-Path $storeDir "smtp.credential.xml"
 
 function Write-AgentLog([string]$message) {
     $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -33,6 +34,13 @@ if ($savedUniqa) {
     $env:UNIQA_PASSWORD = $net.Password
 }
 
+$savedSmtp = Load-SecureCredential $smtpCredPath
+if ($savedSmtp) {
+    $net = $savedSmtp.GetNetworkCredential()
+    $env:SMTP_USER = $net.UserName
+    $env:SMTP_PASSWORD = $net.Password
+}
+
 if (-not $env:TIRBAZAR_PASSWORD) {
     Write-AgentLog "CHYBA: chybi ulozene TIRBazar prihlaseni. Spust jednou instalator sluzby."
     exit 2
@@ -41,6 +49,10 @@ if (-not $env:TIRBAZAR_PASSWORD) {
 if (-not $env:UNIQA_USER -or -not $env:UNIQA_PASSWORD) {
     Write-AgentLog "CHYBA: chybi ulozene UNIQA prihlaseni. Spust jednou instalator sluzby."
     exit 3
+}
+
+if (-not $env:SMTP_PASSWORD) {
+    Write-AgentLog "VAROVANI: chybi smtp.credential.xml. Kontrola poběží, ale e-mail výsledku se neodešle."
 }
 
 $gitExe = $null
@@ -87,6 +99,12 @@ if (Test-Path $venvPython) {
 
 $env:DENNI_POV_CLOUD_URL = "https://denni-pov-kontrola.onrender.com"
 $env:DENNI_POV_SERVICE_MODE = "1"
+$env:SMTP_HOST = "smtp.websupport.cz"
+$env:SMTP_PORT = "465"
+if (-not $env:SMTP_USER) { $env:SMTP_USER = "kontrolapojisteni@vanscentre.com" }
+$env:ALERT_EMAIL_FROM = "kontrolapojisteni@vanscentre.com"
+$env:ALERT_EMAIL_TO = "jakubwurm@vanscentre.com"
+$env:SMTP_TLS = "0"
 $env:PYTHONUNBUFFERED = "1"
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"

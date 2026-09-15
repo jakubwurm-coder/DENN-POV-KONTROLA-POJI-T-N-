@@ -368,11 +368,15 @@ def api_result_meta():
     if workflow_status not in {"", "VYŘEŠENO", "ŘEŠÍ SE", "KONTROLA"}:
         return jsonify({"ok": False, "message": "Nepovolený status."}), 400
 
-    if not _annotation_save(key, note, workflow_status):
-        with _lock:
-            data = _load_state()
-            data.setdefault("annotations", {})[key] = {"note": note, "workflow_status": workflow_status, "updated_at": _now()}
-            _save_state(data)
+    _annotation_save(key, note, workflow_status)
+    with _lock:
+        data = _load_state()
+        data.setdefault("annotations", {})[key] = {
+            "note": note,
+            "workflow_status": workflow_status,
+            "updated_at": _now(),
+        }
+        _save_state(data)
 
     return jsonify({"ok": True, "message": "Poznámka a status byly uloženy."})
 
@@ -423,8 +427,9 @@ def api_sync():
 
     with _lock:
         previous = _load_state()
-        _annotations_load(previous.get("annotations"))
+        annotations = _annotations_load(previous.get("annotations"))
         data = _default_state()
+        data["annotations"] = annotations
         for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress"):
             if key in payload: data[key] = payload[key]
         data["running"] = bool(payload.get("running"))

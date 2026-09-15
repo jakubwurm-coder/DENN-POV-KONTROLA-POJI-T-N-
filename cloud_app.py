@@ -210,8 +210,9 @@ def _send_missing_email(data: dict[str, Any]) -> bool:
     msg.set_content("\n".join(lines))
 
     try:
-        with smtplib.SMTP(host, port, timeout=20) as smtp:
-            if use_tls:
+        smtp_class = smtplib.SMTP_SSL if port == 465 else smtplib.SMTP
+        with smtp_class(host, port, timeout=8) as smtp:
+            if use_tls and port != 465:
                 smtp.starttls()
             if user:
                 smtp.login(user, password)

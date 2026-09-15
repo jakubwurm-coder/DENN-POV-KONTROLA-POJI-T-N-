@@ -174,9 +174,6 @@ def _history_load(limit: int = 100) -> list[dict[str, Any]]:
 def _send_missing_email(data: dict[str, Any]) -> bool:
     summary = data.get("summary") or {}
     missing = int(summary.get("missing") or 0)
-    if missing <= 0:
-        return False
-
     to_addr = os.getenv("ALERT_EMAIL_TO", "").strip()
     host = os.getenv("SMTP_HOST", "").strip()
     port = int(os.getenv("SMTP_PORT", "587") or 587)
@@ -207,7 +204,7 @@ def _send_missing_email(data: dict[str, Any]) -> bool:
     lines += ["", "Web: https://denni-pov-kontrola.onrender.com"]
 
     msg = EmailMessage()
-    msg["Subject"] = f"DENNÍ POV: CHYBÍ POJIŠTĚNÍ ({missing})"
+    msg["Subject"] = (f"DENNÍ POV: CHYBÍ POJIŠTĚNÍ ({missing})" if missing > 0 else "DENNÍ POV: KONTROLA V POŘÁDKU")
     msg["From"] = from_addr
     msg["To"] = to_addr
     msg.set_content("\n".join(lines))

@@ -2,14 +2,20 @@ from __future__ import annotations
 
 import os
 
+from shared_notes import install_cloud_annotations, install_local_annotations
+
 ONLINE_MODE = os.getenv("ONLINE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 if ONLINE_MODE:
-    from cloud_app import app
+    import cloud_app as _cloud
+
+    app = _cloud.app
+    install_cloud_annotations(app, _cloud)
 else:
     import local_app as _local
 
     app = _local.app
+    install_local_annotations(app)
     _run_check_worker = _local._run_check_worker
     _snapshot = _local._snapshot
     _lock = _local._lock

@@ -285,7 +285,9 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         rows.append(row)
     public["results"] = rows
     summary = dict(data.get("summary") or {})
-    summary["active"] = max(0, int(summary.get("active") or 0) - int(summary.get("deposit") or 0))
+    deposit = int(summary.get("deposit") or 0)
+    summary["active"] = max(0, int(summary.get("active") or 0) - deposit)
+    summary["ok_total"] = max(0, int(summary.get("ok_total") or 0) - deposit)
     public["summary"] = summary
     public["csv_available"] = bool(rows)
     return public
@@ -380,8 +382,6 @@ def api_sync():
 
     final_run = not bool(payload.get("running"))
     alert_sent = False
-    if final_run and not payload.get("error"):
-        alert_sent = _send_missing_email(payload)
 
     with _lock:
         previous = _load_state()

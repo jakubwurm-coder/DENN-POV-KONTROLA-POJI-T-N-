@@ -3,11 +3,13 @@ from __future__ import annotations
 import argparse
 import os
 import platform
+import smtplib
 import subprocess
 import sys
 import threading
 import time
 from datetime import datetime
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Callable
 
@@ -122,6 +124,67 @@ def push_snapshot(snapshot: dict[str, Any]) -> None:
     response.raise_for_status()
 
 
+def _send_result_email(snapshot: dict[str, Any]) -> bool:
+    if snapshot.get("error"):
+        return False
+
+    host = os.getenv("SMTP_HOST", "smtp.websupport.cz").strip()
+    port = int(os.getenv("SMTP_PORT", "465") or 465)
+    user = os.getenv("SMTP_USER", "kontrolapojisteni@vanscentre.com").strip()
+    password = os.getenv("SMTP_PASSWORD", "")
+    from_addr = os.getenv("ALERT_EMAIL_FROM", user).strip()
+    to_addr = os.getenv("ALERT_EMAIL_TO", "jakubwurm@vanscentre.com").strip()
+    use_tls = os.getenv("SMTP_TLS", "0").strip().lower() not in {"0", "false", "no", "off"}
+
+    if not host or not user or not password or not from_addr or not to_addr:
+        print("E-mail výsledku nebyl odeslán: chybí SMTP nastavení nebo uložené heslo.")
+        return False
+
+    summary = snapshot.get("summary") or {}
+    missing = int(summary.get("missing") or 0)
+    active = max(0, int(summary.get("active") or 0) - int(summary.get("deposit") or 0))
+    ok_total = int(summary.get("ok_total") or 0)
+    subject = f"DENNÍ POV: CHYBÍ POJIŠTĚNÍ ({missing})" if missing > 0 else "DENNÍ POV: KONTROLA V POŘÁDKU"
+
+    lines = [
+        "DENNÍ POV – výsledek kontroly",
+        "",
+        f"Kontrola dokončena: {snapshot.get('finished_at') or datetime.now().strftime('%d.%m.%Y %H:%M:%S')}",
+        f"Aktivní vozidla ke kontrole: {active}",
+        f"Pojištění v pořádku: {ok_total}",
+        f"Chybí pojištění: {missing}",
+        "",
+    ]
+    if missing > 0:
+        lines.append("Vozidla s chybějícím pojištěním:")
+        for row in snapshot.get("results") or []:
+            status_raw = str(row.get("status_raw") or "").upper()
+            status = str(row.get("status") or "").upper()
+            if status_raw == "CHYBÍ V UNIQA" or status == "CHYBÍ POJIŠTĚNÍ":
+                lines.append(f"VIN: {row.get('vin') or '-'} | SPZ: {row.get('spz_tir') or '-'} | {row.get('detail') or ''}")
+        lines.append("")
+    lines.append(f"Web: {CLOUD_URL}")
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    msg.set_content("\n".join(lines))
+
+    try:
+        smtp_class = smtplib.SMTP_SSL if port == 465 else smtplib.SMTP
+        with smtp_class(host, port, timeout=12) as smtp:
+            if use_tls and port != 465:
+                smtp.starttls()
+            smtp.login(user, password)
+            smtp.send_message(msg)
+        print(f"E-mail s výsledkem kontroly byl odeslán na {to_addr}.")
+        return True
+    except Exception as exc:
+        print("E-mail výsledku se nepodařilo odeslat:", exc)
+        return False
+
+
 def run_local_check(progress_callback: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
     local_app = _load_local_app()
     _reset_for_run(local_app)
@@ -177,6 +240,8 @@ def run_and_sync(reason: str) -> None:
         push_snapshot(saving)
     push_snapshot(snapshot)
     print("Online web byl aktualizován:", CLOUD_URL)
+    if not snapshot.get("error"):
+        _send_result_email(snapshot)
 
 
 def main() -> int:

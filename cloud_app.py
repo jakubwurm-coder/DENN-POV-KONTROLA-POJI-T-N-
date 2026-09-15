@@ -5,11 +5,9 @@ import hmac
 import io
 import json
 import os
-import smtplib
 import threading
 import uuid
 from datetime import datetime
-from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +64,14 @@ def _db_init(cur) -> None:
             results JSONB NOT NULL,
             error TEXT,
             alert_sent BOOLEAN NOT NULL DEFAULT FALSE
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS denni_pov_annotations (
+            vehicle_key TEXT PRIMARY KEY,
+            note TEXT NOT NULL DEFAULT '',
+            workflow_status TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
         )
     """)
 
@@ -171,55 +177,84 @@ def _history_load(limit: int = 100) -> list[dict[str, Any]]:
         return []
 
 
-def _send_missing_email(data: dict[str, Any]) -> bool:
-    summary = data.get("summary") or {}
-    missing = int(summary.get("missing") or 0)
-    to_addr = os.getenv("ALERT_EMAIL_TO", "").strip()
-    host = os.getenv("SMTP_HOST", "").strip()
-    port = int(os.getenv("SMTP_PORT", "587") or 587)
-    user = os.getenv("SMTP_USER", "").strip()
-    password = os.getenv("SMTP_PASSWORD", "")
-    from_addr = os.getenv("ALERT_EMAIL_FROM", user).strip()
-    use_tls = os.getenv("SMTP_TLS", "1").strip().lower() not in {"0", "false", "no", "off"}
-
-    if not to_addr or not host or not from_addr:
-        print("Email alert skipped: chybí ALERT_EMAIL_TO / SMTP_HOST / ALERT_EMAIL_FROM.")
-        return False
-
-    missing_rows = [
-        row for row in (data.get("results") or [])
-        if str(row.get("status_raw") or "").upper() == "CHYBÍ V UNIQA"
-        or str(row.get("status") or "").upper() == "CHYBÍ POJIŠTĚNÍ"
-    ]
-
-    lines = [
-        "DENNÍ POV – upozornění",
-        "",
-        f"Kontrola: {data.get('finished_at') or _now()}",
-        f"Vozidel s chybějícím pojištěním: {missing}",
-        "",
-    ]
-    for row in missing_rows:
-        lines.append(f"VIN: {row.get('vin') or '-'} | SPZ: {row.get('spz_tir') or '-'} | {row.get('detail') or ''}")
-    lines += ["", "Web: https://denni-pov-kontrola.onrender.com"]
-
-    msg = EmailMessage()
-    msg["Subject"] = (f"DENNÍ POV: CHYBÍ POJIŠTĚNÍ ({missing})" if missing > 0 else "DENNÍ POV: KONTROLA V POŘÁDKU")
-    msg["From"] = from_addr
-    msg["To"] = to_addr
-    msg.set_content("\n".join(lines))
-
+def _annotations_load(legacy: dict[str, Any] | None = None) -> dict[str, dict[str, str]]:
+    legacy = legacy if isinstance(legacy, dict) else {}
+    if not _DATABASE_URL:
+        return {
+            str(key).strip().upper(): {
+                "note": str((value or {}).get("note") or ""),
+                "workflow_status": str((value or {}).get("workflow_status") or ""),
+                "updated_at": str((value or {}).get("updated_at") or ""),
+            }
+            for key, value in legacy.items()
+            if isinstance(value, dict)
+        }
     try:
-        smtp_class = smtplib.SMTP_SSL if port == 465 else smtplib.SMTP
-        with smtp_class(host, port, timeout=8) as smtp:
-            if use_tls and port != 465:
-                smtp.starttls()
-            if user:
-                smtp.login(user, password)
-            smtp.send_message(msg)
+        import psycopg
+        with psycopg.connect(_DATABASE_URL, connect_timeout=8) as conn:
+            with conn.cursor() as cur:
+                _db_init(cur)
+                for key, value in legacy.items():
+                    if not isinstance(value, dict):
+                        continue
+                    vehicle_key = str(key or "").strip().upper()
+                    if not vehicle_key:
+                        continue
+                    cur.execute("""
+                        INSERT INTO denni_pov_annotations (vehicle_key, note, workflow_status, updated_at)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (vehicle_key) DO NOTHING
+                    """, (
+                        vehicle_key,
+                        str(value.get("note") or "")[:2000],
+                        str(value.get("workflow_status") or "")[:50],
+                        str(value.get("updated_at") or _now()),
+                    ))
+                cur.execute("SELECT vehicle_key, note, workflow_status, updated_at FROM denni_pov_annotations")
+                rows = cur.fetchall()
+                conn.commit()
+        return {
+            str(row[0]).strip().upper(): {
+                "note": row[1] or "",
+                "workflow_status": row[2] or "",
+                "updated_at": row[3] or "",
+            }
+            for row in rows
+        }
+    except Exception as exc:
+        print(f"Annotations load fallback: {exc}")
+        return {
+            str(key).strip().upper(): {
+                "note": str((value or {}).get("note") or ""),
+                "workflow_status": str((value or {}).get("workflow_status") or ""),
+                "updated_at": str((value or {}).get("updated_at") or ""),
+            }
+            for key, value in legacy.items()
+            if isinstance(value, dict)
+        }
+
+
+def _annotation_save(vehicle_key: str, note: str, workflow_status: str) -> bool:
+    if not _DATABASE_URL:
+        return False
+    try:
+        import psycopg
+        with psycopg.connect(_DATABASE_URL, connect_timeout=8) as conn:
+            with conn.cursor() as cur:
+                _db_init(cur)
+                cur.execute("""
+                    INSERT INTO denni_pov_annotations (vehicle_key, note, workflow_status, updated_at)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (vehicle_key)
+                    DO UPDATE SET
+                        note = EXCLUDED.note,
+                        workflow_status = EXCLUDED.workflow_status,
+                        updated_at = EXCLUDED.updated_at
+                """, (vehicle_key, note, workflow_status, _now()))
+                conn.commit()
         return True
     except Exception as exc:
-        print(f"Email alert failed: {exc}")
+        print(f"Annotation save fallback: {exc}")
         return False
 
 
@@ -271,11 +306,11 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     public = dict(data)
     public.pop("_command", None)
     public.pop("annotations", None)
-    annotations = data.get("annotations") or {}
+    annotations = _annotations_load(data.get("annotations"))
     rows = []
     for original in data.get("results") or []:
         row = dict(original)
-        meta = annotations.get(_result_key(row), {}) if isinstance(annotations, dict) else {}
+        meta = annotations.get(_result_key(row), {})
         row["note"] = str(meta.get("note") or "")
         row["workflow_status"] = str(meta.get("workflow_status") or "")
         row["workflow_updated_at"] = str(meta.get("updated_at") or "")
@@ -332,10 +367,13 @@ def api_result_meta():
     workflow_status = str(payload.get("workflow_status") or "").strip().upper()
     if workflow_status not in {"", "VYŘEŠENO", "ŘEŠÍ SE", "KONTROLA"}:
         return jsonify({"ok": False, "message": "Nepovolený status."}), 400
-    with _lock:
-        data = _load_state()
-        data.setdefault("annotations", {})[key] = {"note": note, "workflow_status": workflow_status, "updated_at": _now()}
-        _save_state(data)
+
+    if not _annotation_save(key, note, workflow_status):
+        with _lock:
+            data = _load_state()
+            data.setdefault("annotations", {})[key] = {"note": note, "workflow_status": workflow_status, "updated_at": _now()}
+            _save_state(data)
+
     return jsonify({"ok": True, "message": "Poznámka a status byly uloženy."})
 
 
@@ -385,8 +423,8 @@ def api_sync():
 
     with _lock:
         previous = _load_state()
+        _annotations_load(previous.get("annotations"))
         data = _default_state()
-        data["annotations"] = dict(previous.get("annotations") or {})
         for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress"):
             if key in payload: data[key] = payload[key]
         data["running"] = bool(payload.get("running"))

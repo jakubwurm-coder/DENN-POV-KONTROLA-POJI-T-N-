@@ -212,6 +212,39 @@ apply_windows_compatibility()
 import app as web_app  # noqa: E402
 
 
+def _patch_cloud_agent_email_totals() -> None:
+    """Keep the result email totals aligned with the online dashboard.
+
+    cloud_agent receives the raw summary where deposit vehicles are still
+    included in ok_total. The online dashboard removes the same deposit count
+    from both active and ok_total. Patch only the email snapshot so both views
+    report identical totals without changing comparison logic or synced data.
+    """
+    try:
+        import __main__
+
+        original = getattr(__main__, "_send_result_email", None)
+        if not callable(original) or getattr(original, "_deposit_email_fix", False):
+            return
+
+        def _fixed_send_result_email(snapshot):
+            fixed_snapshot = dict(snapshot)
+            summary = dict(fixed_snapshot.get("summary") or {})
+            deposit = int(summary.get("deposit") or 0)
+            summary["ok_total"] = max(0, int(summary.get("ok_total") or 0) - deposit)
+            fixed_snapshot["summary"] = summary
+            return original(fixed_snapshot)
+
+        _fixed_send_result_email._deposit_email_fix = True
+        __main__._send_result_email = _fixed_send_result_email
+    except Exception:
+        # E-mail fix must never prevent the insurance check itself from running.
+        pass
+
+
+_patch_cloud_agent_email_totals()
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5001"))
     web_app.app.run(

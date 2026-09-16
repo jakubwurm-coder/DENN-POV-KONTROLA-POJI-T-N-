@@ -109,13 +109,17 @@ def _summary(results, active_count: int) -> dict[str, int]:
     counts = Counter(getattr(r, "status", "") for r in results)
     ok_uniqa = sum(1 for r in results if getattr(r, "status", "") == "OK" and _insurance_company(r) == "UNIQA")
     ok_allianz = sum(1 for r in results if getattr(r, "status", "") == "OK" and _insurance_company(r) == "ALLIANZ")
+    deposit = counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0)
     return {
-        "active": active_count,
-        "ok_total": ok_uniqa + ok_allianz,
+        # Cloud i e-mailová vrstva historicky odečítají depozit až při zobrazení.
+        # Proto transportní souhrn drží hrubé počty včetně depozitů, zatímco
+        # samotné porovnání pojištění depozitní vozidla vůbec nekontroluje.
+        "active": active_count + deposit,
+        "ok_total": ok_uniqa + ok_allianz + deposit,
         "ok_uniqa": ok_uniqa,
         "ok_allianz": ok_allianz,
         "missing": counts.get("CHYBÍ V UNIQA", 0),
-        "deposit": counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0),
+        "deposit": deposit,
         "sold_uniqa": counts.get("PRODANÉ, ALE V UNIQA", 0),
         "extra_uniqa": counts.get("NAVÍC V UNIQA", 0),
     }

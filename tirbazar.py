@@ -30,6 +30,7 @@ CONTROL_POV_STATE_VALUES = {
     "VYKOUPENE",
     "REZERVOVANÉ",
     "REZERVOVANE",
+    "V KOMISI",
 }
 
 EXCLUDED_POV_STATE_VALUES = {
@@ -47,7 +48,6 @@ EXCLUDED_POV_STATE_VALUES = {
     "PRODANE",
     "VRÁCENÉ Z KOMISE",
     "VRACENE Z KOMISE",
-    "V KOMISI",
 }
 
 # Krajské písmeno v běžné české registrační značce.
@@ -95,17 +95,31 @@ def _is_control_pov_state(value: str) -> bool:
 
 
 def _is_ignored_pov_state(value: str) -> bool:
-    # POV se kontroluje pouze u Vykoupené / Rezervované.
+    # POV se kontroluje podle stavu a u rezervace/komise také podle existence výkupu.
     return not _is_control_pov_state(value)
 
 
 def _requires_pov_check(vehicle: TirVehicle) -> bool:
-    return (
-        _is_czech_for_pov(vehicle)
-        and bool(vehicle.vin)
-        and _is_control_pov_state(vehicle.stav)
-        and not bool(vehicle.datum_prodeje)
-    )
+    if not _is_czech_for_pov(vehicle):
+        return False
+    if not vehicle.vin:
+        return False
+    if vehicle.datum_prodeje:
+        return False
+
+    state = _normalize_state(vehicle.stav)
+
+    # Vykoupené vozidlo má být pojištěné vždy.
+    if state in {"VYKOUPENÉ", "VYKOUPENE"}:
+        return True
+
+    # Samotná rezervace ani komise ještě neznamená povinnost POV.
+    # Do kontroly vstoupí až tehdy, když je v TIRBazar evidovaný výkup
+    # (běžný výkup nebo vykoupení z komise).
+    if state in {"REZERVOVANÉ", "REZERVOVANE", "V KOMISI"}:
+        return bool(vehicle.datum_vykupu)
+
+    return False
 
 
 def get_password() -> str:
@@ -307,11 +321,11 @@ def load_tirbazar_vehicles(
     print("Připojuji se READ-ONLY k TIRBazar...")
     print("Interně načítám všechna nesmazaná vozidla kvůli kontrole VIN v UNIQA.")
     print("Země původu: překlad přes CL_StatPuvodu (A -> CZ, B -> SK atd.).")
-    print("POV kontrola: pouze Vykoupené/Rezervované + VIN + pravidla země/SPZ.")
+    print("POV kontrola: Vykoupené vždy; Rezervované/V komisi pouze pokud mají evidovaný výkup.")
     print("CZ: kontrola i bez SPZ. Jiná země + SPZ: také kontrola.")
     print("Prázdná země + česká SPZ: také kontrola.")
     print("Pronajaté, Nepřítomné, Volné, Parkované, Parkování ukončeno,")
-    print("Prodané, Vrácené z komise, V komisi a všechny ostatní stavy se nekontrolují.")
+    print("Prodané, Vrácené z komise a ostatní stavy se nekontrolují; rezervace/komise bez výkupu také ne.")
     print()
 
     try:

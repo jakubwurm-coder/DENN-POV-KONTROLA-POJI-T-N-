@@ -20,7 +20,7 @@
         <button class="nav-item" type="button" data-filter="MISSING"><span class="nav-icon">!</span>Chybí pojištění</button>
         <button class="nav-item" type="button" data-filter="DEPOSIT"><span class="nav-icon">D</span>Depozit</button>
         <button class="nav-item" type="button" data-filter="SOLD_UNIQA"><span class="nav-icon">↗</span>Prodané v UNIQA</button>
-        <button id="navBreakdown" class="nav-item" type="button"><span class="nav-icon">◫</span>Pojišťovny a výjimky</button>
+        <button id="navBreakdown" class="nav-item" type="button"><span class="nav-icon">◫</span>UNIQA a výjimky</button>
         <button id="navSources" class="nav-item" type="button"><span class="nav-icon">≡</span>Datové zdroje</button>
       </nav>
 
@@ -36,7 +36,7 @@
         <div>
           <div class="breadcrumb">VANS CENTRE <span>/</span> DENNÍ POV</div>
           <h1>Kontrola pojištění vozidel</h1>
-          <p>SQL INTERNÍ DATABÁZE → UNIQA → ALLIANZ</p>
+          <p>SQL INTERNÍ DATABÁZE → UNIQA</p>
         </div>
         <div class="top-actions">
           <a id="csvBtn" class="btn btn-secondary disabled" href="/download/csv">Stáhnout CSV</a>
@@ -51,7 +51,7 @@
           <div class="showroom-copy">
             <span class="hero-eyebrow">VANS CENTRE · PRAHA ŠTĚRBOHOLY</span>
             <h2>Pojištění vozového parku pod kontrolou.</h2>
-            <p>Denní automatická kontrola aktivních vozidel proti evidenci UNIQA a Allianz.</p>
+            <p>Denní automatická kontrola aktivních vozidel proti evidenci UNIQA.</p>
           </div>
           <div class="showroom-chip"><span id="heroLiveDot" class="status-dot idle"></span><strong>DENNÍ POV</strong><small>interní kontrolní centrum</small></div>
         </section>
@@ -61,7 +61,7 @@
             <div class="hero-copy">
               <span class="section-kicker">Denní kontrola</span>
               <h2>Aktuální stav pojištění vozidel</h2>
-              <p>Porovnání aktivních vozidel interní evidence s aktuálními daty pojišťoven.</p>
+              <p>Porovnání aktivních vozidel interní evidence s aktuálními daty UNIQA.</p>
             </div>
             <div class="hero-number"><span>Aktivní vozidla</span><strong id="cActive">0</strong><small>ke kontrole</small></div>
           </article>
@@ -75,7 +75,7 @@
             <div class="progress-number"><strong id="progressPercent">0 %</strong><span id="progressEta">—</span></div>
           </div>
           <div class="progress-track"><div id="progressBar"></div></div>
-          <div class="progress-steps"><span>SQL</span><span>UNIQA</span><span>ALLIANZ</span><span>VÝSLEDKY</span></div>
+          <div class="progress-steps"><span>SQL</span><span>UNIQA</span><span>KONTROLA</span><span>VÝSLEDKY</span></div>
         </section>
 
         <section id="sourceSection" class="source-section" hidden>
@@ -83,15 +83,15 @@
           <div class="source-grid">
             <article class="source-card"><div class="source-head"><div class="source-logo source-logo-tir">TB</div><div><strong>TIRBazar SQL</strong><span>Interní evidence vozidel</span></div><span id="tirDot" class="status-dot idle"></span></div><div class="source-body"><strong id="tirStatus">Zatím nenačteno</strong><span id="tirDetail">• ke kontrole: 0</span></div></article>
             <article class="source-card"><div class="source-head"><div class="source-logo source-logo-uniqa">U</div><div><strong>UNIQA</strong><span>· Denní POV</span></div><span id="uniqaDot" class="status-dot idle"></span></div><div class="source-body"><strong id="uniqaStatus">Zatím nenačteno</strong><span id="uniqaDetail">Aktivních VIN: 0 • Duplicitních VIN: 0</span></div></article>
-            <article class="source-card"><div class="source-head"><div class="source-logo source-logo-allianz">A</div><div><strong>ALLIANZ</strong><span></span></div><span id="allianzDot" class="status-dot idle"></span></div><div class="source-body"><strong id="allianzStatus">Zatím nenačteno</strong><span id="allianzDetail"></span></div></article>
+            <article class="source-card"><div class="source-head"><div class="source-logo source-logo-allianz">U</div><div><strong>UNIQA</strong><span>· Doplňkové ověření</span></div><span id="allianzDot" class="status-dot idle"></span></div><div class="source-body"><strong id="allianzStatus">Zatím nenačteno</strong><span id="allianzDetail"></span></div></article>
           </div>
         </section>
 
         <section id="breakdownSection" class="breakdown-section" hidden>
-          <div class="section-heading compact-heading"><div><span class="section-kicker">Rozdělení výsledků</span><h2>Pojišťovny a výjimky</h2></div></div>
+          <div class="section-heading compact-heading"><div><span class="section-kicker">Rozdělení výsledků</span><h2>UNIQA a výjimky</h2></div></div>
           <div class="metric-grid">
             <button class="metric-card" type="button" data-filter="OK_UNIQA"><span class="metric-label"><i class="metric-dot green"></i> OK · UNIQA</span><strong id="cOkUniqa">0</strong><small>nalezeno podle VIN</small></button>
-            <button class="metric-card" type="button" data-filter="OK_ALLIANZ"><span class="metric-label"><i class="metric-dot blue"></i> OK · Allianz</span><strong id="cOkAllianz">0</strong><small>VIN nebo SPZ</small></button>
+            <button class="metric-card" type="button" data-filter="OK_ALLIANZ"><span class="metric-label"><i class="metric-dot blue"></i> OK · UNIQA</span><strong id="cOkAllianz">0</strong><small>doplňkové ověření</small></button>
             <button class="metric-card" type="button" data-filter="DEPOSIT"><span class="metric-label"><i class="metric-dot amber"></i> Depozit</span><strong id="cDeposit">0</strong><small>bez pojištění, ale evidováno</small></button>
             <button class="metric-card" type="button" data-filter="SOLD_UNIQA"><span class="metric-label"><i class="metric-dot purple"></i> Prodané v UNIQA</span><strong id="cSold">0</strong><small>po prodeji stále aktivní</small></button>
             <button class="metric-card" type="button" data-filter="EXTRA_UNIQA"><span class="metric-label"><i class="metric-dot cyan"></i> Navíc v UNIQA</span><strong id="cExtra">0</strong><small>nenalezeno v evidenci výkupů</small></button>

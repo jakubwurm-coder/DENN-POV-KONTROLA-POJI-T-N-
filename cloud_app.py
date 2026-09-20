@@ -364,6 +364,13 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     deposit = int(summary.get("deposit") or 0)
     summary["active"] = max(0, int(summary.get("active") or 0) - deposit)
     summary["ok_total"] = max(0, int(summary.get("ok_total") or 0) - deposit)
+    # "Navíc v UNIQA" má ukazovat jen nevyřešené případy.
+    summary["extra_uniqa"] = sum(
+        1
+        for row in rows
+        if str(row.get("status_raw") or "").upper() == "NAVÍC V UNIQA"
+        and str(row.get("workflow_status") or "").upper() != "VYŘEŠENO"
+    )
     public["summary"] = summary
     public["csv_available"] = bool(rows)
     return public

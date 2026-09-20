@@ -159,6 +159,16 @@ def install_local_annotations(app) -> None:
                 if row["workflow_status"]:
                     row["original_status"] = row.get("status", "")
                     row["status"] = row["workflow_status"]
+
+            summary = payload.get("summary")
+            if isinstance(summary, dict):
+                summary["extra_uniqa"] = sum(
+                    1
+                    for row in rows
+                    if isinstance(row, dict)
+                    and str(row.get("status_raw") or "").upper() == "NAVÍC V UNIQA"
+                    and str(row.get("workflow_status") or "").upper() != "VYŘEŠENO"
+                )
             response.set_data(app.json.dumps(payload))
             response.content_type = "application/json"
         except Exception as exc:

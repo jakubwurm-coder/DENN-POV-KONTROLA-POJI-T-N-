@@ -4,7 +4,7 @@ let activeFilter='VŠE';
 const $=id=>document.getElementById(id);
 
 const filterNames={
-  'VŠE':'Všechna vozidla','ACTIVE':'Aktivní ke kontrole','OK_TOTAL':'Pojištění v pořádku','OK_UNIQA':'OK · UNIQA','OK_ALLIANZ':'OK · Allianz','MISSING':'Chybí pojištění','DEPOSIT':'Nepojištěno, ale depozit','SOLD_UNIQA':'Prodané v UNIQA','EXTRA_UNIQA':'Navíc v UNIQA'
+  'VŠE':'Všechna vozidla','ACTIVE':'Aktivní ke kontrole','OK_TOTAL':'Pojištění v pořádku','OK_UNIQA':'OK · UNIQA','OK_ALLIANZ':'OK · UNIQA','MISSING':'Chybí pojištění','DEPOSIT':'Nepojištěno, ale depozit','SOLD_UNIQA':'Prodané v UNIQA','EXTRA_UNIQA':'Navíc v UNIQA'
 };
 
 function esc(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
@@ -15,12 +15,14 @@ function badgeClass(r){
   return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-deposit','PRODANÉ, ALE V UNIQA':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
 }
 function insurerClass(name){if(name==='UNIQA')return'insurer insurer-uniqa';if(name==='ALLIANZ')return'insurer insurer-allianz';return'insurer';}
+function visibleInsurerName(name){return name==='ALLIANZ'?'UNIQA':name;}
+function visibleSystemText(value){return String(value??'').replace(/ALLIANZ/gi,'UNIQA');}
 
 function source(name,prefix){
   const s=state.sources[name]||{};
   $(prefix+'Dot').className='status-dot '+(s.state||'idle');
-  const detail=s.detail?(' · '+s.detail):'';
-  $(prefix+'Status').textContent=(s.status||'Zatím nenačteno')+detail;
+  const detail=s.detail?(' · '+visibleSystemText(s.detail)):'';
+  $(prefix+'Status').textContent=visibleSystemText(s.status||'Zatím nenačteno')+detail;
   $(prefix+'Detail').textContent='';
 }
 
@@ -65,7 +67,7 @@ function renderRows(){
   const rows=state.results.filter(r=>matches(r)&&(!q||Object.values(r).join(' ').toUpperCase().includes(q)));
   $('footerRight').textContent='Zobrazeno: '+rows.length+' z '+state.results.length;renderActiveFilter();
   if(!rows.length){$('rows').innerHTML='<tr class="empty-row"><td colspan="8" class="empty">Žádné výsledky pro zvolený filtr.</td></tr>';return;}
-  $('rows').innerHTML=rows.map(r=>{const index=state.results.indexOf(r);const insurer=r.pojistovna?`<span class="${insurerClass(r.pojistovna)}">${esc(r.pojistovna)}</span>`:'—';const note=r.note?` · Pozn.: ${esc(r.note)}`:'';return `<tr data-index="${index}"><td><span class="status-badge ${badgeClass(r)}">${esc(r.status)}</span></td><td>${insurer}</td><td>${esc(r.vin||'—')}</td><td>${esc(r.spz_tir||'—')}</td><td>${esc(r.spz_uniqa||'—')}</td><td>${esc(r.vykup||'—')}</td><td>${esc(r.prodej||'—')}</td><td>${esc(r.detail||'—')}${note}</td></tr>`;}).join('');
+  $('rows').innerHTML=rows.map(r=>{const index=state.results.indexOf(r);const insurer=r.pojistovna?`<span class="${insurerClass(r.pojistovna)}">${esc(visibleInsurerName(r.pojistovna))}</span>`:'—';const note=r.note?` · Pozn.: ${esc(r.note)}`:'';return `<tr data-index="${index}"><td><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span></td><td>${insurer}</td><td>${esc(r.vin||'—')}</td><td>${esc(r.spz_tir||'—')}</td><td>${esc(r.spz_uniqa||'—')}</td><td>${esc(r.vykup||'—')}</td><td>${esc(r.prodej||'—')}</td><td>${esc(visibleSystemText(r.detail||'—'))}${note}</td></tr>`;}).join('');
   document.querySelectorAll('#rows tr[data-index]').forEach(tr=>tr.addEventListener('click',()=>showDetail(state.results[Number(tr.dataset.index)])));
 }
 
@@ -83,9 +85,9 @@ function progressLabel(percent,p){
   if(percent<=15)return 'Načítám vstupní data přehledu vozidel';
   if(percent<=50)return 'Kontroluji přehled pojištěných vozidel · UNIQA — načítám aktivní smlouvy';
   if(percent<82)return 'UNIQA — ověřuji chybějící VIN jednotlivě';
-  if(percent<=82)return 'Kontroluji přehled pojištěných vozidel · ALLIANZ — načítám aktivní smlouvy';
-  if(percent<94)return 'ALLIANZ — ověřuji chybějící VIN jednotlivě';
-  if(percent<=94)return 'Porovnávám TIRBazar × UNIQA × ALLIANZ';
+  if(percent<=82)return 'Kontroluji přehled pojištěných vozidel · UNIQA — doplňkové ověření';
+  if(percent<94)return 'UNIQA — ověřuji zbývající VIN jednotlivě';
+  if(percent<=94)return 'Porovnávám TIRBazar × UNIQA';
   if(percent<100)return 'Ukládám výsledky na web';
   return p.phase||'Hotovo';
 }
@@ -109,13 +111,13 @@ function render(){
   $('footerLeft').textContent=state.finished_at?'Dokončeno: '+state.finished_at:(state.started_at?'Spuštěno: '+state.started_at:'Připraveno');renderRows();
 }
 
-async function refresh(){try{const r=await fetch('/api/state',{cache:'no-store'});state=await r.json();render();if(state.error)toast(state.error,true);}catch(e){toast('Nepodařilo se načíst stav aplikace.',true);}}
+async function refresh(){try{const r=await fetch('/api/state',{cache:'no-store'});state=await r.json();render();if(state.error)toast(visibleSystemText(state.error),true);}catch(e){toast('Nepodařilo se načíst stav aplikace.',true);}}
 async function run(){try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
 
 function showDetail(r){
-  const insurer=r.pojistovna?`<span class="${insurerClass(r.pojistovna)}">${esc(r.pojistovna)}</span>`:'—';
-  const original=r.original_status?`<div style="margin-top:5px;color:#64748b;font-size:11px">Původní výsledek: ${esc(r.original_status)}</div>`:'';
-  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(r.status)}</span>${original}</dd><dt>Pojišťovna</dt><dd>${insurer}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ TIRBazar</dt><dd>${esc(r.spz_tir||'—')}</dd><dt>SPZ UNIQA</dt><dd>${esc(r.spz_uniqa||'—')}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(r.detail||'—')}</dd></dl><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option><option value="KONTROLA">Kontrola</option><option value="ŘEŠÍ SE">Řeší se</option><option value="VYŘEŠENO">Vyřešeno</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení v UNIQA zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
+  const insurer=r.pojistovna?`<span class="${insurerClass(r.pojistovna)}">${esc(visibleInsurerName(r.pojistovna))}</span>`:'—';
+  const original=r.original_status?`<div style="margin-top:5px;color:#64748b;font-size:11px">Původní výsledek: ${esc(visibleSystemText(r.original_status))}</div>`:'';
+  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span>${original}</dd><dt>Pojišťovna</dt><dd>${insurer}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ TIRBazar</dt><dd>${esc(r.spz_tir||'—')}</dd><dt>SPZ UNIQA</dt><dd>${esc(r.spz_uniqa||'—')}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.detail||'—'))}</dd></dl><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option><option value="KONTROLA">Kontrola</option><option value="ŘEŠÍ SE">Řeší se</option><option value="VYŘEŠENO">Vyřešeno</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení v UNIQA zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
   $('workflowStatus').value=r.workflow_status||'';
   $('saveMeta').addEventListener('click',()=>saveMeta(r));
   $('detailDialog').showModal();

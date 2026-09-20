@@ -13,6 +13,8 @@ class TirVehicle:
     datum_vykupu: str = ""
     datum_prodeje: str = ""
     poznamky: str = ""
+    znacka: str = ""
+    model: str = ""
 
 
 @dataclass
@@ -34,3 +36,5 @@ class ComparisonResult:
     detail: str
     datum_vykupu: str = ""
     datum_prodeje: str = ""
+    znacka: str = ""
+    model: str = ""

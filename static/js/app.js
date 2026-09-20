@@ -56,7 +56,7 @@ function matches(r){
   if(activeFilter==='MISSING')return r.status_raw==='CHYBÍ V UNIQA';
   if(activeFilter==='DEPOSIT')return r.status_raw==='NEPOJIŠTĚNO, ALE DEPOZIT';
   if(activeFilter==='SOLD_UNIQA')return r.status_raw==='PRODANÉ, ALE V UNIQA';
-  if(activeFilter==='EXTRA_UNIQA')return r.status_raw==='NAVÍC V UNIQA';
+  if(activeFilter==='EXTRA_UNIQA')return r.status_raw==='NAVÍC V UNIQA'&&r.workflow_status!=='VYŘEŠENO';
   return true;
 }
 

@@ -62,6 +62,61 @@ def _normalize_state(value: str) -> str:
     return " ".join(str(value or "").strip().upper().split())
 
 
+def _clean_vehicle_brand(value: str) -> str:
+    text = " ".join(str(value or "").strip().split())
+    if not text or text.isdigit():
+        return ""
+
+    aliases = {
+        "IVECO": "Iveco",
+        "RENAULT": "Renault",
+        "FORD": "Ford",
+        "FIAT": "Fiat",
+        "PEUGEOT": "Peugeot",
+        "CITROEN": "Citroën",
+        "CITROËN": "Citroën",
+        "MERCEDES": "Mercedes-Benz",
+        "MERCEDES-BENZ": "Mercedes-Benz",
+        "VOLKSWAGEN": "Volkswagen",
+        "VW": "Volkswagen",
+        "OPEL": "Opel",
+        "MAN": "MAN",
+        "DAF": "DAF",
+        "SKODA": "Škoda",
+        "ŠKODA": "Škoda",
+    }
+    return aliases.get(text.upper(), text.title())
+
+
+def _simple_vehicle_model(brand: str, value: str) -> str:
+    text = " ".join(str(value or "").strip().split())
+    if not text or text.isdigit():
+        return ""
+
+    if brand:
+        text = re.sub(
+            rf"^{re.escape(brand)}(?:[-\s_/]+|$)",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        ).strip()
+
+    tokens = [token.strip(".,;:()[]{}_/\\-") for token in text.split()]
+    tokens = [token for token in tokens if token]
+
+    for index, token in enumerate(tokens):
+        letters = sum(ch.isalpha() for ch in token)
+        digits = sum(ch.isdigit() for ch in token)
+        if letters >= 3 and letters >= digits:
+            first = token.title() if token.isupper() else token[0].upper() + token[1:]
+            if first.lower() == "transit" and index + 1 < len(tokens):
+                second = tokens[index + 1]
+                if second.upper() in {"CUSTOM", "CONNECT"}:
+                    return first + " " + second.title()
+            return first
+    return ""
+
+
 def _is_czech_country(value: str) -> bool:
     return _normalize_state(value) in {"CZ", "CZE", "ČR"}
 
@@ -289,6 +344,45 @@ WHERE
 ORDER BY v.OID;
 GO
 
+-- Základní značka a model vozidla pro detail na webu.
+-- Pole se hledají dynamicky, aby dotaz zůstal funkční mezi verzemi TIRBazar.
+DECLARE @brandExpr NVARCHAR(4000) = N'CONVERT(NVARCHAR(200), NULL)';
+DECLARE @modelExpr NVARCHAR(4000) = N'CONVERT(NVARCHAR(300), NULL)';
+
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'TovarniZnacka' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.TovarniZnacka)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Znacka' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.Znacka)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Vyrobce' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.Vyrobce)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'VyrobceVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.VyrobceVozidla)';
+
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'ObchodniOznaceni' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.ObchodniOznaceni)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Model' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.Model)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'ModelVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.ModelVozidla)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'TypVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.TypVozidla)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'NazevVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.NazevVozidla)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Nazev' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.Nazev)';
+
+DECLARE @metaSql NVARCHAR(MAX) = N'
+SELECT
+    ''__VEHICLE_META__|'' + CAST(v.OID AS VARCHAR(20)) + ''|'' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(' + @brandExpr + N')), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(' + @modelExpr + N')), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''')
+FROM dbo.Vozidlo v
+WHERE v.GCRecord IS NULL
+ORDER BY v.OID;';
+
+EXEC sp_executesql @metaSql;
+GO
+
 SELECT '__FINISHED__';
 GO
 
@@ -356,6 +450,7 @@ def load_tirbazar_vehicles(
     without_spz_sql = 0
     without_vin_sql = 0
     raw_rows: list[TirVehicle] = []
+    vehicle_meta: dict[int, tuple[str, str]] = {}
 
     for original in stdout.splitlines():
         line = original.strip()
@@ -383,6 +478,17 @@ def load_tirbazar_vehicles(
                 without_vin_sql = int(line[line.find("__WITHOUT_VIN__|"):].split("|", 1)[1].strip())
             except Exception:
                 pass
+
+        if "__VEHICLE_META__|" in line:
+            value = line[line.find("__VEHICLE_META__|"):]
+            parts = value.split("|", 3)
+            if len(parts) == 4:
+                try:
+                    meta_oid = int(parts[1].strip())
+                    vehicle_meta[meta_oid] = (parts[2].strip(), parts[3].strip())
+                except ValueError:
+                    pass
+            continue
 
         if "__ROW__|" not in line:
             continue
@@ -421,6 +527,11 @@ def load_tirbazar_vehicles(
 
     if not raw_rows:
         raise RuntimeError("Z TIRBazar nebyla načtena žádná vozidla.")
+
+    for vehicle in raw_rows:
+        raw_brand, raw_model = vehicle_meta.get(vehicle.oid, ("", ""))
+        vehicle.znacka = _clean_vehicle_brand(raw_brand)
+        vehicle.model = _simple_vehicle_model(vehicle.znacka, raw_model)
 
     without_vin = [v for v in raw_rows if not v.vin]
     comparable = [v for v in raw_rows if v.vin]

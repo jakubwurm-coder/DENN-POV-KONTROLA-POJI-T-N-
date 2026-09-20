@@ -20,6 +20,50 @@ _lock = threading.Lock()
 _STATE_FILE = Path(os.getenv("CLOUD_STATE_FILE", "/tmp/denni_pov_state.json"))
 _DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
+class PersistenceUnavailable(RuntimeError):
+    """Raised when durable annotation storage is not available."""
+
+
+def _safe_db_error(exc: Exception) -> str:
+    message = str(exc).strip() or exc.__class__.__name__
+    if _DATABASE_URL:
+        message = message.replace(_DATABASE_URL, "[DATABASE_URL]")
+    return message[:500]
+
+
+def _db_connect():
+    if not _DATABASE_URL:
+        raise PersistenceUnavailable("DATABASE_URL není na Renderu nastavená.")
+    try:
+        import psycopg
+        return psycopg.connect(_DATABASE_URL, connect_timeout=8)
+    except Exception as exc:
+        raise PersistenceUnavailable(_safe_db_error(exc)) from exc
+
+
+def _db_probe() -> tuple[bool, str]:
+    try:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        return True, ""
+    except PersistenceUnavailable as exc:
+        return False, str(exc)
+
+
+def _normalize_annotations(source: dict[str, Any] | None) -> dict[str, dict[str, str]]:
+    source = source if isinstance(source, dict) else {}
+    return {
+        str(key).strip().upper(): {
+            "note": str((value or {}).get("note") or ""),
+            "workflow_status": str((value or {}).get("workflow_status") or ""),
+            "updated_at": str((value or {}).get("updated_at") or ""),
+        }
+        for key, value in source.items()
+        if isinstance(value, dict) and str(key or "").strip()
+    }
+
 
 def _now() -> str:
     return datetime.now().strftime("%d.%m.%Y %H:%M:%S")
@@ -80,8 +124,7 @@ def _db_load() -> dict[str, Any] | None:
     if not _DATABASE_URL:
         return None
     try:
-        import psycopg
-        with psycopg.connect(_DATABASE_URL, connect_timeout=8) as conn:
+        with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
                 cur.execute("SELECT payload FROM denni_pov_state WHERE id = 1")
@@ -102,8 +145,7 @@ def _db_save(data: dict[str, Any]) -> bool:
     if not _DATABASE_URL:
         return False
     try:
-        import psycopg
-        with psycopg.connect(_DATABASE_URL, connect_timeout=8) as conn:
+        with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
                 cur.execute("""
@@ -123,8 +165,7 @@ def _history_save(data: dict[str, Any], alert_sent: bool) -> None:
     if not _DATABASE_URL:
         return
     try:
-        import psycopg
-        with psycopg.connect(_DATABASE_URL, connect_timeout=8) as conn:
+        with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
                 cur.execute("""
@@ -148,8 +189,7 @@ def _history_load(limit: int = 100) -> list[dict[str, Any]]:
     if not _DATABASE_URL:
         return []
     try:
-        import psycopg
-        with psycopg.connect(_DATABASE_URL, connect_timeout=8) as conn:
+        with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
                 cur.execute("""
@@ -177,42 +217,33 @@ def _history_load(limit: int = 100) -> list[dict[str, Any]]:
         return []
 
 
-def _annotations_load(legacy: dict[str, Any] | None = None) -> dict[str, dict[str, str]]:
-    legacy = legacy if isinstance(legacy, dict) else {}
-    if not _DATABASE_URL:
-        return {
-            str(key).strip().upper(): {
-                "note": str((value or {}).get("note") or ""),
-                "workflow_status": str((value or {}).get("workflow_status") or ""),
-                "updated_at": str((value or {}).get("updated_at") or ""),
-            }
-            for key, value in legacy.items()
-            if isinstance(value, dict)
-        }
+def _annotations_load_strict(legacy: dict[str, Any] | None = None) -> dict[str, dict[str, str]]:
+    legacy_clean = _normalize_annotations(legacy)
     try:
-        import psycopg
-        with psycopg.connect(_DATABASE_URL, connect_timeout=8) as conn:
+        with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
-                for key, value in legacy.items():
-                    if not isinstance(value, dict):
-                        continue
-                    vehicle_key = str(key or "").strip().upper()
-                    if not vehicle_key:
-                        continue
+
+                # One-time / safety migration of any legacy in-state annotations.
+                for vehicle_key, value in legacy_clean.items():
                     cur.execute("""
                         INSERT INTO denni_pov_annotations (vehicle_key, note, workflow_status, updated_at)
                         VALUES (%s, %s, %s, %s)
                         ON CONFLICT (vehicle_key) DO NOTHING
                     """, (
                         vehicle_key,
-                        str(value.get("note") or "")[:2000],
-                        str(value.get("workflow_status") or "")[:50],
-                        str(value.get("updated_at") or _now()),
+                        value.get("note", "")[:2000],
+                        value.get("workflow_status", "")[:50],
+                        value.get("updated_at") or _now(),
                     ))
-                cur.execute("SELECT vehicle_key, note, workflow_status, updated_at FROM denni_pov_annotations")
+
+                cur.execute("""
+                    SELECT vehicle_key, note, workflow_status, updated_at
+                    FROM denni_pov_annotations
+                """)
                 rows = cur.fetchall()
                 conn.commit()
+
         return {
             str(row[0]).strip().upper(): {
                 "note": row[1] or "",
@@ -221,42 +252,49 @@ def _annotations_load(legacy: dict[str, Any] | None = None) -> dict[str, dict[st
             }
             for row in rows
         }
+    except PersistenceUnavailable:
+        raise
     except Exception as exc:
-        print(f"Annotations load fallback: {exc}")
-        return {
-            str(key).strip().upper(): {
-                "note": str((value or {}).get("note") or ""),
-                "workflow_status": str((value or {}).get("workflow_status") or ""),
-                "updated_at": str((value or {}).get("updated_at") or ""),
-            }
-            for key, value in legacy.items()
-            if isinstance(value, dict)
-        }
+        raise PersistenceUnavailable(_safe_db_error(exc)) from exc
 
 
-def _annotation_save(vehicle_key: str, note: str, workflow_status: str) -> bool:
-    if not _DATABASE_URL:
-        return False
+def _annotations_load(legacy: dict[str, Any] | None = None) -> dict[str, dict[str, str]]:
+    """Best-effort read for rendering; durable writes never use this fallback."""
     try:
-        import psycopg
-        with psycopg.connect(_DATABASE_URL, connect_timeout=8) as conn:
+        return _annotations_load_strict(legacy)
+    except PersistenceUnavailable as exc:
+        print(f"Annotations read fallback: {exc}")
+        return _normalize_annotations(legacy)
+
+
+def _annotation_save(vehicle_key: str, note: str, workflow_status: str) -> None:
+    """Persist one vehicle annotation. Raises if the durable write did not commit."""
+    try:
+        with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
-                cur.execute("""
-                    INSERT INTO denni_pov_annotations (vehicle_key, note, workflow_status, updated_at)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (vehicle_key)
-                    DO UPDATE SET
-                        note = EXCLUDED.note,
-                        workflow_status = EXCLUDED.workflow_status,
-                        updated_at = EXCLUDED.updated_at
-                """, (vehicle_key, note, workflow_status, _now()))
-                conn.commit()
-        return True
-    except Exception as exc:
-        print(f"Annotation save fallback: {exc}")
-        return False
 
+                # Empty status + empty note means return to the original state.
+                if not note and not workflow_status:
+                    cur.execute(
+                        "DELETE FROM denni_pov_annotations WHERE vehicle_key = %s",
+                        (vehicle_key,),
+                    )
+                else:
+                    cur.execute("""
+                        INSERT INTO denni_pov_annotations (vehicle_key, note, workflow_status, updated_at)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (vehicle_key)
+                        DO UPDATE SET
+                            note = EXCLUDED.note,
+                            workflow_status = EXCLUDED.workflow_status,
+                            updated_at = EXCLUDED.updated_at
+                    """, (vehicle_key, note, workflow_status, _now()))
+                conn.commit()
+    except PersistenceUnavailable:
+        raise
+    except Exception as exc:
+        raise PersistenceUnavailable(_safe_db_error(exc)) from exc
 
 def _file_load() -> dict[str, Any] | None:
     try:
@@ -360,26 +398,51 @@ def api_history():
 @app.post("/api/result-meta")
 def api_result_meta():
     payload = request.get_json(silent=True)
-    if not isinstance(payload, dict): return jsonify({"ok": False, "message": "Neplatná data."}), 400
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "persisted": False, "message": "Neplatná data."}), 400
+
     key = str(payload.get("key") or "").strip().upper()
-    if not key: return jsonify({"ok": False, "message": "Chybí identifikace vozidla."}), 400
+    if not key:
+        return jsonify({"ok": False, "persisted": False, "message": "Chybí identifikace vozidla."}), 400
+
     note = str(payload.get("note") or "").strip()[:2000]
     workflow_status = str(payload.get("workflow_status") or "").strip().upper()
     if workflow_status not in {"", "VYŘEŠENO", "ŘEŠÍ SE", "KONTROLA"}:
-        return jsonify({"ok": False, "message": "Nepovolený status."}), 400
+        return jsonify({"ok": False, "persisted": False, "message": "Nepovolený status."}), 400
 
-    _annotation_save(key, note, workflow_status)
+    # PostgreSQL is authoritative. Never claim success if this write fails.
+    try:
+        _annotation_save(key, note, workflow_status)
+    except PersistenceUnavailable as exc:
+        print(f"Annotation durable save failed for {key}: {exc}")
+        return jsonify({
+            "ok": False,
+            "persisted": False,
+            "storage": "postgres",
+            "message": "Status ani poznámka NEBYLY uloženy. Trvalé úložiště PostgreSQL není dostupné.",
+            "detail": str(exc),
+        }), 503
+
+    # Keep an in-state copy only as a migration/cache aid. It is not the source of truth.
     with _lock:
         data = _load_state()
-        data.setdefault("annotations", {})[key] = {
-            "note": note,
-            "workflow_status": workflow_status,
-            "updated_at": _now(),
-        }
+        annotations = data.setdefault("annotations", {})
+        if note or workflow_status:
+            annotations[key] = {
+                "note": note,
+                "workflow_status": workflow_status,
+                "updated_at": _now(),
+            }
+        else:
+            annotations.pop(key, None)
         _save_state(data)
 
-    return jsonify({"ok": True, "message": "Poznámka a status byly uloženy."})
-
+    return jsonify({
+        "ok": True,
+        "persisted": True,
+        "storage": "postgres",
+        "message": "Status a poznámka byly trvale uloženy a jsou sdílené mezi počítači.",
+    })
 
 @app.post("/api/run")
 def api_run():
@@ -467,5 +530,21 @@ def download_csv():
 
 @app.get("/health")
 def health():
-    with _lock: data = _load_state()
-    return jsonify({"ok": True, "service": "DENNI POV - KONTROLA", "mode": "online", "storage": "postgres" if _DATABASE_URL else "file", "synced_at": data.get("synced_at"), "waiting_for_agent": bool(data.get("_command"))})
+    with _lock:
+        data = _load_state()
+
+    db_ready, db_error = _db_probe()
+    return jsonify({
+        "ok": True,
+        "service": "DENNI POV - KONTROLA",
+        "mode": "online",
+        "storage": "postgres" if db_ready else "file-fallback",
+        "persistence": {
+            "ready": db_ready,
+            "configured": bool(_DATABASE_URL),
+            "annotations": "postgres" if db_ready else "unavailable",
+            "error": db_error,
+        },
+        "synced_at": data.get("synced_at"),
+        "waiting_for_agent": bool(data.get("_command")),
+    })

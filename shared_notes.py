@@ -64,8 +64,23 @@ def install_cloud_annotations(app, cloud_module) -> None:
     def api_annotations():
         with cloud_module._lock:
             data = cloud_module._load_state()
-            annotations = data.get("annotations") or {}
-        return jsonify({"ok": True, "annotations": annotations})
+            legacy = data.get("annotations") or {}
+
+        try:
+            annotations = cloud_module._annotations_load_strict(legacy)
+        except cloud_module.PersistenceUnavailable as exc:
+            return jsonify({
+                "ok": False,
+                "storage": "postgres",
+                "message": "Centrální statusy a poznámky nejsou dostupné.",
+                "detail": str(exc),
+            }), 503
+
+        return jsonify({
+            "ok": True,
+            "storage": "postgres",
+            "annotations": annotations,
+        })
 
 
 def install_local_annotations(app) -> None:
@@ -95,9 +110,27 @@ def install_local_annotations(app) -> None:
             except Exception:
                 data = {"message": response.text[:300] or "Online server nevrátil JSON."}
             if not response.ok:
-                return jsonify({"ok": False, "message": data.get("message") or "Centrální uložení selhalo."}), response.status_code
+                return jsonify({
+                    "ok": False,
+                    "persisted": False,
+                    "message": data.get("message") or "Centrální uložení selhalo.",
+                    "detail": data.get("detail") or "",
+                }), response.status_code
+
+            if not bool(data.get("persisted")):
+                return jsonify({
+                    "ok": False,
+                    "persisted": False,
+                    "message": "Online server nepotvrdil trvalé uložení. Změna se nepovažuje za uloženou.",
+                }), 502
+
             _invalidate_cache()
-            return jsonify({"ok": True, "message": "Poznámka byla uložena centrálně a zobrazí se na ostatních počítačích."})
+            return jsonify({
+                "ok": True,
+                "persisted": True,
+                "storage": data.get("storage") or "postgres",
+                "message": "Status a poznámka byly trvale uloženy a zobrazí se na ostatních počítačích.",
+            })
         except Exception as exc:
             return jsonify({"ok": False, "message": f"Centrální uložení poznámky se nepodařilo: {exc}"}), 502
 

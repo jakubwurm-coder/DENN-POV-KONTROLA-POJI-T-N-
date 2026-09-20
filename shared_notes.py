@@ -153,6 +153,9 @@ def install_local_annotations(app) -> None:
                 row["note"] = str(meta.get("note") or "")
                 row["workflow_status"] = str(meta.get("workflow_status") or "")
                 row["workflow_updated_at"] = str(meta.get("updated_at") or "")
+                if row["note"]:
+                    row["original_detail"] = row.get("detail", "")
+                    row["detail"] = row["note"]
                 if row["workflow_status"]:
                     row["original_status"] = row.get("status", "")
                     row["status"] = row["workflow_status"]

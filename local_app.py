@@ -99,6 +99,15 @@ def _serialize_result(result) -> dict[str, str]:
         "vin": getattr(result, "vin", "") or "",
         "spz_tir": getattr(result, "tir_spz", "") or "",
         "spz_uniqa": getattr(result, "uniqa_spz", "") or "",
+        "znacka": getattr(result, "znacka", "") or "",
+        "model": getattr(result, "model", "") or "",
+        "vozidlo": " ".join(
+            part for part in (
+                getattr(result, "znacka", "") or "",
+                getattr(result, "model", "") or "",
+            )
+            if part
+        ),
         "vykup": _format_date(getattr(result, "datum_vykupu", "")),
         "prodej": _format_date(getattr(result, "datum_prodeje", "")),
         "detail": getattr(result, "detail", "") or "",
@@ -288,6 +297,16 @@ def _run_check_worker() -> None:
         )
 
         results.extend(_deposit_result(vehicle) for vehicle in deposit_vehicles)
+
+        vehicle_by_oid = {
+            vehicle.oid: vehicle
+            for vehicle in [*control_vehicles, *deposit_vehicles]
+        }
+        for result in results:
+            source_vehicle = vehicle_by_oid.get(getattr(result, "oid", None))
+            if source_vehicle is not None:
+                result.znacka = getattr(source_vehicle, "znacka", "") or ""
+                result.model = getattr(source_vehicle, "model", "") or ""
 
         base = prepare_output()
 

@@ -1199,3 +1199,20 @@ button{cursor:pointer}
   .last-check{white-space:normal}
   .progress-stage-grid{grid-template-columns:1fr}
 }
+
+
+/* 2026-09-21 · logo blend fix for dark sidebar */
+.brand-logo-wrap{
+  width:178px;
+  height:128px;
+  overflow:visible;
+}
+.brand-logo{
+  width:172px;
+  height:auto;
+  max-width:none;
+  max-height:none;
+  mix-blend-mode:screen;
+  background:transparent!important;
+  display:block;
+}

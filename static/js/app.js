@@ -80,27 +80,105 @@ function formatEta(seconds){
 
 function progressLabel(percent,p){
   if(state.error)return 'Kontrola skončila chybou';
-  if(!state.running&&state.finished_at)return 'Hotovo';
-  if(percent<=8)return 'Připravuji kontrolu';
-  if(percent<=15)return 'Načítám vstupní data přehledu vozidel';
-  if(percent<=50)return 'Kontroluji přehled pojištěných vozidel · UNIQA — načítám aktivní smlouvy';
-  if(percent<82)return 'UNIQA — ověřuji chybějící VIN jednotlivě';
-  if(percent<=82)return 'Kontroluji přehled pojištěných vozidel · UNIQA — doplňkové ověření';
-  if(percent<94)return 'UNIQA — ověřuji zbývající VIN jednotlivě';
-  if(percent<=94)return 'Porovnávám TIRBazar × UNIQA';
-  if(percent<100)return 'Ukládám výsledky na web';
+  if(!state.running&&state.finished_at)return 'Kontrola je dokončená a přehled je aktuální';
+  if(percent<=8)return 'Ověřuji dostupnost systémů a připojení';
+  if(percent<=20)return 'Načítám aktivní vozidla z interní databáze';
+  if(percent<=50)return 'Aktualizuji aktivní smlouvy v UNIQA';
+  if(percent<82)return 'Ověřuji chybějící VIN a aktualizuji data pojišťoven';
+  if(percent<=94)return 'Porovnávám interní evidenci s UNIQA a Allianz';
+  if(percent<100)return 'Připravuji a ukládám výsledný přehled';
   return p.phase||'Hotovo';
+}
+
+function setStageState(id,textId,status,text){
+  const el=$(id);
+  if(!el)return;
+  el.classList.remove('waiting','active','done','error');
+  el.classList.add(status||'waiting');
+  const target=$(textId);
+  if(target)target.textContent=text||'';
 }
 
 function renderProgress(){
   const p=state.progress||{};
+  const sources=state.sources||{};
+  const tir=sources.tirbazar||{};
+  const uniqa=sources.uniqa||{};
+  const allianz=sources.allianz||{};
   let percent=Math.max(0,Math.min(100,Number(p.percent)||0));
   if(!state.running&&state.finished_at&&!state.error)percent=100;
+
   $('progressPercent').textContent=Math.round(percent)+' %';
   $('progressPhase').textContent=progressLabel(percent,p);
   $('progressEta').textContent=state.error?'Kontrola skončila chybou':formatEta(p.eta_seconds);
   $('progressBar').style.width=percent+'%';
-  $('progressBar').style.background=state.error?'#dc2626':(percent===100?'#16a34a':'#2563eb');
+  $('progressBar').style.background=state.error?'#dc2626':(percent===100?'#16a34a':'#e3072f');
+
+  let headline='Kontrolní systém připraven';
+  let detail='Po spuštění ověřím připojení, načtu interní databázi, data pojišťoven a připravím výsledky.';
+  if(state.error){
+    headline='Kontrola vyžaduje pozornost';
+    detail=visibleSystemText(state.error);
+  }else if(!state.running&&state.finished_at){
+    headline='Kontrola dokončena';
+    detail='Připojení ověřeno, data aktualizována a výsledný přehled je připraven.';
+  }else if(state.running&&percent<=8){
+    headline='Kontroluji připojení';
+    detail='Ověřuji dostupnost interní sítě, databáze a kancelářského agenta.';
+  }else if(state.running&&percent<=20){
+    headline='Načítám interní databázi';
+    detail='Aktualizuji seznam aktivních vozidel a připravuji VIN ke kontrole.';
+  }else if(state.running&&percent<=82){
+    headline='Načítám data z pojišťoven';
+    detail='Aktualizuji aktivní smlouvy a ověřuji vozidla v UNIQA a Allianz.';
+  }else if(state.running){
+    headline='Vyhodnocuji výsledky';
+    detail='Porovnávám VIN, stav pojištění, depozit a výjimky a sestavuji výsledný přehled.';
+  }
+  if($('progressHeadline'))$('progressHeadline').textContent=headline;
+  if($('progressDetail'))$('progressDetail').textContent=detail;
+
+  const finished=!state.running&&!!state.finished_at&&!state.error;
+  const connStatus=state.error&&percent<=8?'error':(finished||percent>8?'done':(state.running?'active':'waiting'));
+  setStageState('stageConnection','stageConnectionText',connStatus,
+    finished||percent>8?'Připojeno a ověřeno':(state.running?'Ověřuji spojení…':'Čeká na spuštění'));
+
+  let dbStatus='waiting';
+  if(tir.state==='error')dbStatus='error';
+  else if(finished||tir.state==='ok'||percent>20)dbStatus='done';
+  else if(state.running&&percent>=8)dbStatus='active';
+  setStageState('stageDatabase','stageDatabaseText',dbStatus,
+    dbStatus==='error'?'Databáze není dostupná':
+    dbStatus==='done'?'Aktivní vozidla načtena':
+    dbStatus==='active'?'Načítám a aktualizuji data…':'Načtení aktivních vozidel');
+
+  let insurerStatus='waiting';
+  const insurerError=uniqa.state==='error'||allianz.state==='error';
+  const insurersDone=(uniqa.state==='ok'&&allianz.state==='ok')||finished||percent>82;
+  if(insurerError)insurerStatus='error';
+  else if(insurersDone)insurerStatus='done';
+  else if(state.running&&percent>=20)insurerStatus='active';
+  let insurerText='UNIQA + Allianz';
+  if(insurerStatus==='error')insurerText='Některý zdroj vyžaduje kontrolu';
+  else if(insurerStatus==='done')insurerText='UNIQA + Allianz načteno';
+  else if(insurerStatus==='active')insurerText='Načítám a ověřuji smlouvy…';
+  setStageState('stageInsurers','stageInsurersText',insurerStatus,insurerText);
+
+  let resultStatus='waiting';
+  if(state.error&&percent>=82)resultStatus='error';
+  else if(finished)resultStatus='done';
+  else if(state.running&&percent>=82)resultStatus='active';
+  setStageState('stageResults','stageResultsText',resultStatus,
+    resultStatus==='error'?'Vyhodnocení nebylo dokončeno':
+    resultStatus==='done'?'Výsledky připraveny':
+    resultStatus==='active'?'Vyhodnocuji VIN a výjimky…':'Vyhodnocení podle VIN');
+}
+
+function shortDateTime(value){
+  if(!value)return 'zatím neproběhla';
+  const text=String(value).trim();
+  const match=text.match(/^(\d{2}\.\d{2}\.\d{4})\s+(\d{2}:\d{2})/);
+  return match?(match[1]+' · '+match[2]):text;
 }
 
 function render(){
@@ -108,6 +186,7 @@ function render(){
   source('tirbazar','tir');source('uniqa','uniqa');source('allianz','allianz');renderProgress();
   $('runBtn').disabled=state.running;$('runBtn').innerHTML=state.running?'Kontrola probíhá…':'<span class="play">▶</span> Spustit kontrolu';$('csvBtn').classList.toggle('disabled',!state.csv_available);
   const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}
+  const lastCheck=$('lastCheck');if(lastCheck){lastCheck.textContent=state.running?'Kontrola právě probíhá':('Poslední kontrola: '+shortDateTime(state.finished_at));}
   $('footerLeft').textContent=state.finished_at?'Dokončeno: '+state.finished_at:(state.started_at?'Spuštěno: '+state.started_at:'Připraveno');renderRows();
 }
 

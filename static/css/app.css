@@ -1019,3 +1019,183 @@ button{cursor:pointer}
 @supports not (height:100dvh){
   .detail-dialog{max-height:calc(100vh - 32px)}
 }
+
+/* 2026-09-21 · dashboard refinement */
+.brand-logo-wrap{
+  width:184px;
+  height:126px;
+  align-items:flex-start;
+  justify-content:flex-start;
+  margin-bottom:5px;
+}
+.brand-logo{
+  width:164px;
+  height:auto;
+  max-width:none;
+  max-height:none;
+  object-fit:contain;
+  object-position:left top;
+}
+.run-control{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:6px;
+}
+.run-control .btn{min-width:190px}
+.last-check{
+  display:block;
+  min-height:14px;
+  color:#72879a;
+  font-size:9px;
+  line-height:1.25;
+  text-align:center;
+  white-space:nowrap;
+}
+.insurer{gap:0}
+.insurer::before,
+.insurer-uniqa::before,
+.insurer-allianz::before{display:none!important;content:none!important}
+
+#progressPanel{
+  padding:18px 20px 16px;
+}
+.progress-head{margin-bottom:13px}
+.progress-title{align-items:flex-start}
+.pulse-icon{
+  width:38px;
+  height:38px;
+  flex:0 0 38px;
+  display:grid;
+  place-items:center;
+  border-radius:10px;
+  background:#e9f5ff;
+  color:#087fd9;
+  font-size:22px;
+  transform:none;
+}
+.progress-eyebrow{
+  display:block!important;
+  margin:0 0 2px!important;
+  color:#8296a8!important;
+  font-size:8px!important;
+  font-weight:900!important;
+  letter-spacing:.12em!important;
+}
+#progressHeadline{
+  display:block;
+  color:#122d47;
+  font-size:14px;
+  line-height:1.25;
+}
+#progressPhase{
+  display:block;
+  margin-top:2px;
+  color:#71899e;
+  font-size:10px;
+}
+.progress-track{height:7px}
+.progress-stage-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin-top:13px;
+}
+.progress-stage{
+  min-width:0;
+  min-height:66px;
+  padding:10px 11px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  border:1px solid #e1e9f0;
+  border-radius:9px;
+  background:#fafcfd;
+  transition:.2s ease;
+}
+.stage-number{
+  width:28px;
+  height:28px;
+  flex:0 0 28px;
+  display:grid;
+  place-items:center;
+  border-radius:8px;
+  background:#edf3f7;
+  color:#8396a6;
+  font-size:8px;
+  font-weight:900;
+}
+.progress-stage strong{
+  display:block;
+  color:#263f56;
+  font-size:10px;
+  line-height:1.2;
+}
+.progress-stage small{
+  display:block;
+  margin-top:3px;
+  color:#879aaa;
+  font-size:8px;
+  line-height:1.25;
+}
+.progress-stage.active{
+  border-color:#f2bdc8;
+  background:#fff7f9;
+  box-shadow:0 5px 14px rgba(210,19,57,.06);
+}
+.progress-stage.active .stage-number{
+  color:#fff;
+  background:#e20a34;
+}
+.progress-stage.active strong{color:#a91734}
+.progress-stage.done{
+  border-color:#cfe7dc;
+  background:#f6fbf8;
+}
+.progress-stage.done .stage-number{
+  color:#167b55;
+  background:#e2f4eb;
+}
+.progress-stage.error{
+  border-color:#efbcc6;
+  background:#fff3f5;
+}
+.progress-stage.error .stage-number{
+  color:#fff;
+  background:#d91539;
+}
+.progress-live-detail{
+  margin-top:9px;
+  padding:8px 11px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  border:1px solid #e4ecf2;
+  border-radius:8px;
+  background:#f7fafc;
+}
+.progress-live-detail>span{
+  flex:0 0 auto;
+  color:#8094a6;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.12em;
+}
+.progress-live-detail strong{
+  min-width:0;
+  color:#405b72;
+  font-size:9px;
+  font-weight:750;
+}
+.metric-card[data-filter="OK_UNIQA"] .metric-dot,
+.metric-card[data-filter="OK_ALLIANZ"] .metric-dot{display:none}
+
+@media(max-width:1100px){
+  .progress-stage-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:680px){
+  .run-control{flex:1}
+  .run-control .btn{width:100%;min-width:0}
+  .last-check{white-space:normal}
+  .progress-stage-grid{grid-template-columns:1fr}
+}

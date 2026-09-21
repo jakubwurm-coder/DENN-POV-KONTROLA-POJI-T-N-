@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
@@ -10,37 +11,78 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-logo-wrap"><img src="data:image/png;base64,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" class="brand-logo" alt="Vans Centre"></div>
-        <div><strong>Denní POV</strong><span>Vans Centre · interní systém</span></div>
+        <div class="brand-logo-wrap">
+          <img src="data:image/png;base64,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" class="brand-logo" alt="Vans Centre">
+        </div>
+        <div class="brand-copy">
+          <strong>Denní POV</strong>
+          <span>Vans Centre · interní systém</span>
+        </div>
       </div>
 
       <nav class="nav" aria-label="Filtry vozidel">
-        <button id="navAllVehicles" class="nav-item" type="button"><span class="nav-icon">▦</span>Všechna vozidla</button>
-        <button class="nav-item" type="button" data-filter="ACTIVE"><span class="nav-icon">●</span>Aktivní ke kontrole</button>
-        <button class="nav-item" type="button" data-filter="MISSING"><span class="nav-icon">!</span>Chybí pojištění</button>
-        <button class="nav-item" type="button" data-filter="DEPOSIT"><span class="nav-icon">D</span>Depozit</button>
-        <button class="nav-item" type="button" data-filter="SOLD_UNIQA"><span class="nav-icon">↗</span>Prodané v UNIQA</button>
-        <button id="navBreakdown" class="nav-item" type="button"><span class="nav-icon">◫</span>UNIQA a výjimky</button>
-        <button id="navSources" class="nav-item" type="button"><span class="nav-icon">≡</span>Datové zdroje</button>
+        <button id="navAllVehicles" class="nav-item active" type="button">
+          <span class="nav-icon">▦</span><span>Všechna vozidla</span>
+        </button>
+        <button class="nav-item" type="button" data-filter="ACTIVE">
+          <span class="nav-icon">▰</span><span>Aktivní ke kontrole</span>
+        </button>
+        <button class="nav-item" type="button" data-filter="MISSING">
+          <span class="nav-icon">!</span><span>Chybí pojištění</span>
+        </button>
+        <button class="nav-item" type="button" data-filter="DEPOSIT">
+          <span class="nav-icon">●</span><span>Depozit</span>
+        </button>
+        <button class="nav-item" type="button" data-filter="SOLD_UNIQA">
+          <span class="nav-icon">↗</span><span>Prodané v UNIQA</span>
+        </button>
+        <button id="navBreakdown" class="nav-item" type="button">
+          <span class="nav-icon">▤</span><span>Pojišťovny a výjimky</span>
+        </button>
+        <button id="navSources" class="nav-item" type="button">
+          <span class="nav-icon">⚙</span><span>Datové zdroje</span>
+        </button>
       </nav>
 
       <div class="sidebar-spacer"></div>
+
+      <div class="sidebar-company">
+        <div class="sidebar-company-icon">VC</div>
+        <div>
+          <strong>Vans Centre</strong>
+          <span>Spolehlivé řešení<br>pro vaše podnikání</span>
+        </div>
+      </div>
+
       <div class="sidebar-status">
         <span id="liveDot" class="status-dot idle"></span>
-        <div><small>STAV SYSTÉMU</small><strong id="liveStatus">Připraveno</strong></div>
+        <div>
+          <small>STAV SYSTÉMU</small>
+          <strong id="liveStatus">Připraveno</strong>
+        </div>
       </div>
     </aside>
 
     <div class="main-shell">
       <header class="topbar">
-        <div>
+        <div class="topbar-copy">
           <div class="breadcrumb">VANS CENTRE <span>/</span> DENNÍ POV</div>
           <h1>Kontrola pojištění vozidel</h1>
-          <p>SQL INTERNÍ DATABÁZE → UNIQA</p>
+          <p>SQL interní databáze <b>→</b> UNIQA <b>→</b> Allianz</p>
         </div>
+
         <div class="top-actions">
-          <a id="csvBtn" class="btn btn-secondary disabled" href="/download/csv">Stáhnout CSV</a>
-          <button id="runBtn" class="btn btn-primary" type="button"><span class="play">▶</span> Spustit kontrolu</button>
+          <a id="csvBtn" class="btn btn-secondary disabled" href="/download/csv">
+            <span class="btn-icon">⇩</span> Stáhnout CSV
+          </a>
+          <button id="runBtn" class="btn btn-primary" type="button">
+            <span class="play">▶</span> Spustit kontrolu
+          </button>
+          <div class="account-card" aria-label="Přihlášený uživatel">
+            <span class="account-avatar">VC</span>
+            <span class="account-copy"><strong>Vans Centre</strong><small>Administrátor</small></span>
+            <span class="account-chevron">⌄</span>
+          </div>
         </div>
       </header>
 
@@ -48,50 +90,131 @@
         <section class="showroom-hero">
           <img src="https://www.vanscentre.com/public/galleries/92/91866/_thbs_/1440X393__kontakty_new_2.jpg" alt="Vans Centre Praha Štěrboholy">
           <div class="showroom-shade"></div>
+
           <div class="showroom-copy">
             <span class="hero-eyebrow">VANS CENTRE · PRAHA ŠTĚRBOHOLY</span>
-            <h2>Pojištění vozového parku pod kontrolou.</h2>
-            <p>Denní automatická kontrola aktivních vozidel proti evidenci UNIQA.</p>
+            <h2>Kontrola pojištění<br>vozového parku</h2>
+            <p>Denní automatická kontrola aktivních vozidel proti evidenci pojišťoven.</p>
+            <button class="hero-run" type="button" onclick="document.getElementById('runBtn').click()">
+              <span>▶</span> Spustit kontrolu
+            </button>
           </div>
-          <div class="showroom-chip"><span id="heroLiveDot" class="status-dot idle"></span><strong>DENNÍ POV</strong><small>interní kontrolní centrum</small></div>
+
+          <div class="location-chip">
+            <span class="location-pin">●</span>
+            <span><strong>Vans Centre</strong><small>Praha Štěrboholy</small></span>
+          </div>
+
+          <div class="hero-signature">Více než dodávky</div>
         </section>
 
-        <section class="overview-grid">
-          <article class="hero-card" data-filter="ACTIVE">
-            <div class="hero-copy">
-              <span class="section-kicker">Denní kontrola</span>
-              <h2>Aktuální stav pojištění vozidel</h2>
-              <p>Porovnání aktivních vozidel interní evidence s aktuálními daty UNIQA.</p>
+        <section class="overview-grid" aria-label="Souhrn kontroly">
+          <article class="summary-card active-card" data-filter="ACTIVE">
+            <div class="summary-icon vehicle-icon">▰</div>
+            <div class="summary-copy">
+              <span>Aktivní vozidla</span>
+              <strong id="cActive">0</strong>
+              <small>vozidel v evidenci</small>
             </div>
-            <div class="hero-number"><span>Aktivní vozidla</span><strong id="cActive">0</strong><small>ke kontrole</small></div>
+            <span class="summary-arrow">›</span>
           </article>
-          <article class="summary-card success" data-filter="OK_TOTAL"><div class="summary-icon">✓</div><div><span>POJIŠTĚNÍ V POŘÁDKU</span><strong id="cOkTotal">0</strong><small>ověřená vozidla</small></div></article>
-          <article class="summary-card danger" data-filter="MISSING"><div class="summary-icon">!</div><div><span>CHYBÍ POJIŠTĚNÍ</span><strong id="cMissing">0</strong><small>vyžaduje kontrolu</small></div></article>
+
+          <article class="summary-card success" data-filter="OK_TOTAL">
+            <div class="summary-icon">✓</div>
+            <div class="summary-copy">
+              <span>Pojištění v pořádku</span>
+              <strong id="cOkTotal">0</strong>
+              <small>ověřených vozidel</small>
+            </div>
+            <span class="summary-arrow">›</span>
+          </article>
+
+          <article class="summary-card danger" data-filter="MISSING">
+            <div class="summary-icon">!</div>
+            <div class="summary-copy">
+              <span>Chybí pojištění</span>
+              <strong id="cMissing">0</strong>
+              <small>vozidel vyžaduje kontrolu</small>
+            </div>
+            <span class="summary-arrow">›</span>
+          </article>
         </section>
 
         <section id="progressPanel">
           <div class="progress-head">
-            <div><span class="section-kicker">LIVE PRŮBĚH</span><strong id="progressPhase">Připraveno</strong></div>
-            <div class="progress-number"><strong id="progressPercent">0 %</strong><span id="progressEta">—</span></div>
+            <div class="progress-title">
+              <span class="pulse-icon">⌁</span>
+              <div>
+                <strong>Live průběh</strong>
+                <span id="progressPhase">Připraveno</span>
+              </div>
+            </div>
+            <div class="progress-number">
+              <strong id="progressPercent">0 %</strong>
+              <span id="progressEta">—</span>
+            </div>
           </div>
           <div class="progress-track"><div id="progressBar"></div></div>
-          <div class="progress-steps"><span>SQL</span><span>UNIQA</span><span>KONTROLA</span><span>VÝSLEDKY</span></div>
+          <div class="progress-steps"><span>SQL</span><span>UNIQA</span><span>ALLIANZ</span><span>VÝSLEDKY</span></div>
+        </section>
+
+        <section class="quick-grid" aria-label="Rychlý přehled">
+          <article class="quick-card fleet-card">
+            <div class="quick-photo">
+              <img src="https://www.vanscentre.com/public/galleries/92/91866/_thbs_/1440X393__kontakty_new_2.jpg" alt="">
+            </div>
+            <div class="quick-copy">
+              <span class="section-kicker">NAŠE VOZIDLA</span>
+              <h3>Prověřený vozový park</h3>
+              <p>Rychlý přístup k výsledkům aktivních užitkových vozidel.</p>
+              <button type="button" class="quick-link" onclick="document.getElementById('navAllVehicles').click()">Zobrazit všechna vozidla <span>→</span></button>
+            </div>
+          </article>
+
+          <article class="quick-card source-preview">
+            <div class="source-preview-visual">
+              <span class="source-orbit one">SQL</span>
+              <span class="source-orbit two">U</span>
+              <span class="source-orbit three">A</span>
+              <span class="source-core">VC</span>
+            </div>
+            <div class="quick-copy">
+              <span class="section-kicker">DATOVÉ ZDROJE</span>
+              <h3>UNIQA, Allianz a interní SQL</h3>
+              <p>Stav napojení zdrojů a průběh načítání dat na jednom místě.</p>
+              <button type="button" class="quick-link" onclick="document.getElementById('navSources').click()">Spravovat datové zdroje <span>→</span></button>
+            </div>
+          </article>
         </section>
 
         <section id="sourceSection" class="source-section" hidden>
-          <div class="section-heading"><div><span class="section-kicker">Datové zdroje</span><h2>SQL Interní databáze vozidel</h2></div><div class="section-note"></div></div>
+          <div class="section-heading">
+            <div><span class="section-kicker">Datové zdroje</span><h2>Stav napojení systémů</h2></div>
+            <div class="section-note">Aktuální stav datových zdrojů kontroly</div>
+          </div>
           <div class="source-grid">
-            <article class="source-card"><div class="source-head"><div class="source-logo source-logo-tir">TB</div><div><strong>TIRBazar SQL</strong><span>Interní evidence vozidel</span></div><span id="tirDot" class="status-dot idle"></span></div><div class="source-body"><strong id="tirStatus">Zatím nenačteno</strong><span id="tirDetail">• ke kontrole: 0</span></div></article>
-            <article class="source-card"><div class="source-head"><div class="source-logo source-logo-uniqa">U</div><div><strong>UNIQA</strong><span>· Denní POV</span></div><span id="uniqaDot" class="status-dot idle"></span></div><div class="source-body"><strong id="uniqaStatus">Zatím nenačteno</strong><span id="uniqaDetail">Aktivních VIN: 0 • Duplicitních VIN: 0</span></div></article>
-            <article class="source-card"><div class="source-head"><div class="source-logo source-logo-allianz">U</div><div><strong>UNIQA</strong><span>· Doplňkové ověření</span></div><span id="allianzDot" class="status-dot idle"></span></div><div class="source-body"><strong id="allianzStatus">Zatím nenačteno</strong><span id="allianzDetail"></span></div></article>
+            <article class="source-card">
+              <div class="source-head"><div class="source-logo source-logo-tir">SQL</div><div><strong>TIRBazar SQL</strong><span>Interní evidence vozidel</span></div><span id="tirDot" class="status-dot idle"></span></div>
+              <div class="source-body"><strong id="tirStatus">Zatím nenačteno</strong><span id="tirDetail">• ke kontrole: 0</span></div>
+            </article>
+            <article class="source-card">
+              <div class="source-head"><div class="source-logo source-logo-uniqa">U</div><div><strong>UNIQA</strong><span>Denní POV</span></div><span id="uniqaDot" class="status-dot idle"></span></div>
+              <div class="source-body"><strong id="uniqaStatus">Zatím nenačteno</strong><span id="uniqaDetail">Aktivních VIN: 0 • Duplicitních VIN: 0</span></div>
+            </article>
+            <article class="source-card">
+              <div class="source-head"><div class="source-logo source-logo-allianz">A</div><div><strong>Allianz</strong><span>Doplňkové ověření</span></div><span id="allianzDot" class="status-dot idle"></span></div>
+              <div class="source-body"><strong id="allianzStatus">Zatím nenačteno</strong><span id="allianzDetail"></span></div>
+            </article>
           </div>
         </section>
 
         <section id="breakdownSection" class="breakdown-section" hidden>
-          <div class="section-heading compact-heading"><div><span class="section-kicker">Rozdělení výsledků</span><h2>UNIQA a výjimky</h2></div></div>
+          <div class="section-heading compact-heading">
+            <div><span class="section-kicker">Rozdělení výsledků</span><h2>Pojišťovny a výjimky</h2></div>
+          </div>
           <div class="metric-grid">
             <button class="metric-card" type="button" data-filter="OK_UNIQA"><span class="metric-label"><i class="metric-dot green"></i> OK · UNIQA</span><strong id="cOkUniqa">0</strong><small>nalezeno podle VIN</small></button>
-            <button class="metric-card" type="button" data-filter="OK_ALLIANZ"><span class="metric-label"><i class="metric-dot blue"></i> OK · UNIQA</span><strong id="cOkAllianz">0</strong><small>doplňkové ověření</small></button>
+            <button class="metric-card" type="button" data-filter="OK_ALLIANZ"><span class="metric-label"><i class="metric-dot blue"></i> OK · Allianz</span><strong id="cOkAllianz">0</strong><small>doplňkové ověření</small></button>
             <button class="metric-card" type="button" data-filter="DEPOSIT"><span class="metric-label"><i class="metric-dot amber"></i> Depozit</span><strong id="cDeposit">0</strong><small>bez pojištění, ale evidováno</small></button>
             <button class="metric-card" type="button" data-filter="SOLD_UNIQA"><span class="metric-label"><i class="metric-dot purple"></i> Prodané v UNIQA</span><strong id="cSold">0</strong><small>po prodeji stále aktivní</small></button>
             <button class="metric-card" type="button" data-filter="EXTRA_UNIQA"><span class="metric-label"><i class="metric-dot cyan"></i> Navíc v UNIQA</span><strong id="cExtra">0</strong><small>nenalezeno v evidenci výkupů</small></button>
@@ -99,10 +222,21 @@
         </section>
 
         <section id="dataSection" class="data-section" hidden>
-          <div class="data-toolbar"><div><span class="section-kicker">Výsledky</span><h2>Vozidla ke kontrole</h2></div><div class="data-tools"><div class="search-control"><span class="search-icon">⌕</span><input id="search" autocomplete="off" placeholder="Hledat VIN nebo SPZ…"></div><button id="clearBtn" class="btn btn-secondary btn-small" type="button">Vše</button></div></div>
+          <div class="data-toolbar">
+            <div><span class="section-kicker">Výsledky</span><h2>Vozidla ke kontrole</h2></div>
+            <div class="data-tools">
+              <div class="search-control"><span class="search-icon">⌕</span><input id="search" autocomplete="off" placeholder="Hledat VIN nebo SPZ…"></div>
+              <button id="clearBtn" class="btn btn-secondary btn-small" type="button">Vše</button>
+            </div>
+          </div>
           <div id="activeFilter" class="active-filter" hidden>Aktivní filtr: <strong id="activeFilterLabel"></strong><button id="clearFilterInline" type="button" aria-label="Zrušit filtr">×</button></div>
           <div class="table-card">
-            <div class="table-scroll"><table><thead><tr><th>Stav</th><th>Pojišťovna</th><th>VIN</th><th>SPZ TIRBazar</th><th>SPZ UNIQA</th><th>Datum výkupu</th><th>Datum prodeje</th><th>Výsledek</th></tr></thead><tbody id="rows"><tr class="empty-row"><td colspan="8" class="empty">Zatím nejsou načtené žádné výsledky.</td></tr></tbody></table></div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Stav</th><th>Pojišťovna</th><th>VIN</th><th>SPZ TIRBazar</th><th>SPZ UNIQA</th><th>Datum výkupu</th><th>Datum prodeje</th><th>Výsledek</th></tr></thead>
+                <tbody id="rows"><tr class="empty-row"><td colspan="8" class="empty">Zatím nejsou načtené žádné výsledky.</td></tr></tbody>
+              </table>
+            </div>
             <div class="table-footer"><span id="footerLeft">Připraveno</span><strong id="footerRight">Zobrazeno: 0</strong></div>
           </div>
         </section>
@@ -110,7 +244,14 @@
     </div>
   </div>
 
-  <dialog id="detailDialog" class="detail-dialog"><div class="dialog-head"><div><span class="section-kicker">Detail</span><h2>Detail vozidla</h2></div><button id="closeDialog" class="dialog-close" type="button" aria-label="Zavřít">×</button></div><div id="detailBody"></div></dialog>
+  <dialog id="detailDialog" class="detail-dialog">
+    <div class="dialog-head">
+      <div><span class="section-kicker">Detail vozidla</span><h2>Kontrola pojištění</h2></div>
+      <button id="closeDialog" class="dialog-close" type="button" aria-label="Zavřít">×</button>
+    </div>
+    <div id="detailBody"></div>
+  </dialog>
+
   <div id="toast" class="toast" hidden></div>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

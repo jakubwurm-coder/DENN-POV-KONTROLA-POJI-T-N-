@@ -531,9 +531,9 @@ def download_csv():
     if not rows: return jsonify({"ok": False, "message": "CSV zatím není k dispozici."}), 404
     stream = io.StringIO()
     writer = csv.writer(stream, delimiter=";")
-    writer.writerow(["Stav", "Pojišťovna", "VIN", "SPZ TIRBazar", "SPZ UNIQA", "Datum výkupu", "Datum prodeje", "Výsledek", "Poznámka"])
+    writer.writerow(["Stav", "Pojišťovna", "VIN", "SPZ", "Datum výkupu", "Datum prodeje", "Výsledek", "Poznámka"])
     for row in rows:
-        writer.writerow([row.get("status", ""), row.get("pojistovna", ""), row.get("vin", ""), row.get("spz_tir", ""), row.get("spz_uniqa", ""), row.get("vykup", ""), row.get("prodej", ""), row.get("detail", ""), row.get("note", "")])
+        writer.writerow([row.get("status", ""), row.get("pojistovna", ""), row.get("vin", ""), row.get("spz_tir") or row.get("spz_uniqa") or "", row.get("vykup", ""), row.get("prodej", ""), row.get("detail", ""), row.get("note", "")])
     body = "\ufeff" + stream.getvalue()
     return Response(body, mimetype="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=denni_pov_online.csv"})
 

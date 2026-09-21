@@ -1298,3 +1298,135 @@ button{cursor:pointer}
 @media(max-width:680px){
   .progress-live-detail{align-items:flex-start;flex-direction:column;gap:7px}
 }
+
+
+/* 2026-09-21 · compact first-screen layout + true transparent logo */
+.brand-logo-wrap{
+  width:184px;
+  height:120px;
+  overflow:visible;
+  align-items:flex-start;
+}
+.brand-logo{
+  width:176px;
+  height:auto;
+  max-width:none;
+  max-height:none;
+  object-fit:contain;
+  object-position:left top;
+  mix-blend-mode:normal!important;
+  background:transparent!important;
+}
+
+.topbar{
+  min-height:112px;
+  padding:18px 30px 14px;
+}
+.topbar h1{
+  margin-top:5px;
+  font-size:32px;
+}
+.content{
+  padding-top:14px;
+}
+
+.showroom-hero{
+  min-height:248px;
+}
+.showroom-copy{
+  width:min(560px,62%);
+  padding:30px 40px 27px 64px;
+}
+.showroom-copy::before{
+  left:38px;
+  top:61px;
+  height:68px;
+}
+.showroom-copy h2{
+  font-size:34px;
+}
+.showroom-copy p{
+  margin-top:10px;
+  font-size:12px;
+}
+.hero-eyebrow{
+  margin-bottom:10px;
+}
+.location-chip{
+  top:16px;
+  right:18px;
+}
+.hero-signature{
+  bottom:14px;
+  right:28px;
+  font-size:21px;
+}
+
+.overview-grid{
+  margin:12px 0;
+  gap:14px;
+}
+.summary-card{
+  min-height:98px;
+  padding:14px 18px;
+}
+.summary-icon{
+  width:50px;
+  height:50px;
+  flex-basis:50px;
+  font-size:20px;
+  box-shadow:0 0 0 8px rgba(232,245,255,.52);
+}
+.success .summary-icon{box-shadow:0 0 0 8px rgba(229,247,239,.55)}
+.danger .summary-icon{box-shadow:0 0 0 8px rgba(255,233,237,.58)}
+.summary-copy strong{
+  font-size:33px;
+}
+.summary-copy>span{
+  font-size:11px;
+}
+.summary-copy small{
+  font-size:9px;
+}
+
+#progressPanel{
+  padding:17px 20px 16px;
+  margin-bottom:20px;
+}
+.progress-head{
+  margin-bottom:12px;
+}
+.progress-stage-grid{
+  margin-top:12px;
+  gap:9px;
+}
+.progress-stage{
+  min-height:70px;
+  padding:11px 12px;
+}
+.stage-number{
+  width:32px;
+  height:32px;
+  flex-basis:32px;
+}
+.progress-stage strong{
+  font-size:11px;
+}
+.progress-stage small{
+  font-size:9px;
+}
+.progress-live-detail{
+  margin-top:9px;
+  padding:9px 11px;
+}
+
+@media(max-width:1100px){
+  .topbar{min-height:108px}
+  .showroom-hero{min-height:235px}
+}
+@media(max-width:900px){
+  .showroom-hero{min-height:285px}
+}
+@media(max-width:680px){
+  .showroom-hero{min-height:315px}
+}

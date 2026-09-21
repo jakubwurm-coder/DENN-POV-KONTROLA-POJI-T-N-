@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260921m">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260921j">
 </head>
 <body>
   <div class="app-shell">
@@ -174,57 +174,6 @@
             <strong id="progressDetail">Systém je připraven ke kontrole.</strong>
           </div>
         </section>
-
-        <details class="help-card">
-          <summary>
-            <span class="help-icon">?</span>
-            <span>
-              <strong>Jak systém používat</strong>
-              <small>Stručný návod ke kontrole pojištění a práci s výsledky</small>
-            </span>
-            <span class="help-chevron">›</span>
-          </summary>
-          <div class="help-content">
-            <div class="help-intro">
-              <strong>Co systém dělá</strong>
-              <p>Denní POV porovnává aktivní vozidla z interní evidence Vans Centre s dostupnými daty pojišťoven podle VIN. Výsledkem je rychlý přehled vozidel, která mají pojištění v pořádku, chybí v evidenci pojišťovny nebo vyžadují další kontrolu.</p>
-            </div>
-
-            <div class="help-grid">
-              <div class="help-step">
-                <span class="help-number">1</span>
-                <div><strong>Spusťte kontrolu</strong><p>Klikněte na <b>Spustit kontrolu</b>. V části Live průběh uvidíte načtení interní databáze, dat pojišťoven a následné porovnání podle VIN.</p></div>
-              </div>
-              <div class="help-step">
-                <span class="help-number">2</span>
-                <div><strong>Vyberte skupinu vozidel</strong><p>Karty nahoře a nabídka vlevo fungují jako filtry. Můžete zobrazit všechna aktivní vozidla, vozidla s pojištěním v pořádku, chybějící pojištění, depozit nebo další výjimky.</p></div>
-              </div>
-              <div class="help-step">
-                <span class="help-number">3</span>
-                <div><strong>Najděte konkrétní vozidlo</strong><p>Ve výsledcích použijte pole <b>Hledat VIN nebo SPZ</b>. Vyhledávání funguje okamžitě nad načtenými výsledky.</p></div>
-              </div>
-              <div class="help-step">
-                <span class="help-number">4</span>
-                <div><strong>Otevřete detail vozidla</strong><p>Klikněte kamkoliv na <b>řádek konkrétního vozidla</b> v tabulce. Otevře se karta s podrobnými údaji a výsledkem kontroly. Detail zavřete křížkem vpravo nahoře.</p></div>
-              </div>
-            </div>
-
-            <div class="help-statuses">
-              <strong>Jak číst výsledky</strong>
-              <div class="help-status-grid">
-                <span><i class="help-dot ok"></i><b>Pojištění v pořádku</b> – VIN bylo nalezeno v datech pojišťovny.</span>
-                <span><i class="help-dot danger"></i><b>Chybí pojištění</b> – VIN nebylo nalezeno a vozidlo je potřeba prověřit.</span>
-                <span><i class="help-dot amber"></i><b>Depozit</b> – vozidlo je vedeno bez aktivního pojištění, ale je evidováno jako depozit.</span>
-                <span><i class="help-dot purple"></i><b>Prodané / výjimka</b> – stav neodpovídá běžnému aktivnímu vozidlu a je určen k ruční kontrole.</span>
-              </div>
-            </div>
-
-            <div class="help-footer">
-              <p><b>Datové zdroje</b> zobrazují stav napojení interní SQL evidence a pojišťoven. <b>Pojišťovny a výjimky</b> rozdělují výsledky podle typu nálezu. Tlačítkem <b>Stáhnout přehled</b> lze po dokončení kontroly exportovat výsledky do CSV.</p>
-              <p class="help-note">Systém slouží jako kontrolní nástroj. Pokud je vozidlo označeno jako chybějící nebo sporné, je vhodné stav před dalším postupem ověřit v primárním systému pojišťovny.</p>
-            </div>
-          </div>
-        </details>
 
         <section id="sourceSection" class="source-section" hidden>
           <div class="section-heading">

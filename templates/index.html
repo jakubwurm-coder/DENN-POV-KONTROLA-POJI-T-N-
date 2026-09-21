@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260921j">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260921n">
 </head>
 <body>
   <div class="app-shell">
@@ -85,22 +85,20 @@
       </header>
 
       <main class="content">
-        <section class="showroom-hero">
-          <img src="https://www.vanscentre.com/public/galleries/92/91866/_thbs_/1440X393__kontakty_new_2.jpg" alt="Vans Centre Praha Štěrboholy">
-          <div class="showroom-shade"></div>
-
-          <div class="showroom-copy">
-            <span class="hero-eyebrow">VANS CENTRE · PRAHA ŠTĚRBOHOLY</span>
-            <h2>Kontrola pojištění<br>vozového parku</h2>
-            <p>Denní automatická kontrola aktivních vozidel proti evidenci pojišťoven.</p>
+        <section class="hero-panel">
+          <div class="hero-panel-watermark" aria-hidden="true">
+            <img src="https://www.vanscentre.com/public/galleries/92/91866/_thbs_/1440X393__kontakty_new_2.jpg" alt="">
           </div>
-
-          <div class="location-chip">
-            <span class="location-pin">●</span>
-            <span><strong>Vans Centre</strong><small>Praha Štěrboholy</small></span>
+          <div class="hero-panel-content">
+            <span class="hero-panel-eyebrow">DENNÍ POV · VANS CENTRE</span>
+            <h2>Kontrola pojištění vozidel</h2>
+            <p>Denní automatická kontrola aktivních vozidel proti evidenci pojišťoven. Přehled slouží k rychlému odhalení vozidel bez nalezeného pojištění, výjimek a stavů vyžadujících ruční kontrolu.</p>
+            <div class="hero-panel-tags">
+              <span>Kontrola podle VIN</span>
+              <span>Interní evidence</span>
+              <span>UNIQA + Allianz</span>
+            </div>
           </div>
-
-          <div class="hero-signature">Více než dodávky</div>
         </section>
 
         <section class="overview-grid" aria-label="Souhrn kontroly">

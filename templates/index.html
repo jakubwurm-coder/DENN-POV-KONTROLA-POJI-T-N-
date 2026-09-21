@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260921h">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260921i">
 </head>
 <body>
   <div class="app-shell">
@@ -80,11 +80,6 @@
               <span class="play">▶</span> Spustit kontrolu
             </button>
             <span id="lastCheck" class="last-check">Poslední kontrola: načítám…</span>
-          </div>
-          <div class="account-card" aria-label="Přihlášený uživatel">
-            <span class="account-avatar">VC</span>
-            <span class="account-copy"><strong>Vans Centre</strong><small>Administrátor</small></span>
-            <span class="account-chevron">⌄</span>
           </div>
         </div>
       </header>
@@ -178,35 +173,6 @@
             <span>AKTUÁLNĚ</span>
             <strong id="progressDetail">Systém je připraven ke kontrole.</strong>
           </div>
-        </section>
-
-        <section class="quick-grid" aria-label="Rychlý přehled">
-          <article class="quick-card fleet-card">
-            <div class="quick-photo">
-              <img src="https://www.vanscentre.com/public/galleries/92/91866/_thbs_/1440X393__kontakty_new_2.jpg" alt="">
-            </div>
-            <div class="quick-copy">
-              <span class="section-kicker">NAŠE VOZIDLA</span>
-              <h3>Prověřený vozový park</h3>
-              <p>Rychlý přístup k výsledkům aktivních užitkových vozidel.</p>
-              <button type="button" class="quick-link" onclick="document.getElementById('navAllVehicles').click()">Zobrazit všechna vozidla <span>→</span></button>
-            </div>
-          </article>
-
-          <article class="quick-card source-preview">
-            <div class="source-preview-visual">
-              <span class="source-orbit one">SQL</span>
-              <span class="source-orbit two">U</span>
-              <span class="source-orbit three">A</span>
-              <span class="source-core">VC</span>
-            </div>
-            <div class="quick-copy">
-              <span class="section-kicker">DATOVÉ ZDROJE</span>
-              <h3>UNIQA, Allianz a interní SQL</h3>
-              <p>Stav napojení zdrojů a průběh načítání dat na jednom místě.</p>
-              <button type="button" class="quick-link" onclick="document.getElementById('navSources').click()">Spravovat datové zdroje <span>→</span></button>
-            </div>
-          </article>
         </section>
 
         <section id="sourceSection" class="source-section" hidden>

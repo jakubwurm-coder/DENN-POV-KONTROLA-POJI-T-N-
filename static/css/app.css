@@ -1430,3 +1430,26 @@ button{cursor:pointer}
 @media(max-width:680px){
   .showroom-hero{min-height:315px}
 }
+
+
+/* 2026-09-21 · official Vans Centre logo */
+.brand-logo-wrap{
+  width:184px;
+  height:82px;
+  padding:10px 12px;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border-radius:10px;
+  background:#fff;
+}
+.brand-logo{
+  width:100%;
+  height:100%;
+  max-width:160px;
+  max-height:62px;
+  object-fit:contain;
+  object-position:center;
+  mix-blend-mode:normal!important;
+  background:transparent!important;
+}

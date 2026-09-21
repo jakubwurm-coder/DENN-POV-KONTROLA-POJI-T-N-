@@ -812,7 +812,7 @@ button{cursor:pointer}
 .table-scroll{overflow:auto;max-height:58vh}
 .table-scroll table{
   width:100%;
-  min-width:1240px;
+  min-width:1120px;
   border-collapse:separate;
   border-spacing:0;
 }
@@ -844,12 +844,12 @@ button{cursor:pointer}
 .table-scroll tbody tr:nth-child(even){background:#fbfdfe}
 .table-scroll tbody tr:hover{background:#f2f8fc}
 .table-scroll tbody tr:last-child td{border-bottom:0}
-.table-scroll td:nth-child(3),.table-scroll td:nth-child(4),.table-scroll td:nth-child(5){
+.table-scroll td:nth-child(3),.table-scroll td:nth-child(4){
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   font-size:10px;
   color:#325676;
 }
-.table-scroll td:nth-child(8){min-width:390px;color:#617b92}
+.table-scroll td:nth-child(7){min-width:390px;color:#617b92}
 .status-badge{
   display:inline-flex;
   align-items:center;

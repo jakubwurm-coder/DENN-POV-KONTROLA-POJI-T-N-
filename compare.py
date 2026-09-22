@@ -202,11 +202,11 @@ def compare_vehicles(
                     vin=vin,
                     tir_spz=tir_spz,
                     uniqa_spz="",
-                    status="OK",
+                    status="NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ",
                     detail=(
                         "Vozidlo má evidovaný výkup a stav NEPŘÍTOMNÉ. "
-                        "Nebylo nalezeno v UNIQA ani Allianz, což je správně: "
-                        "vozidlo má být NEPOJIŠTĚNO."
+                        "Nebylo nalezeno v UNIQA ani Allianz. To je správně: "
+                        "nepřítomné vozidlo má být NEPOJIŠTĚNO."
                     ),
                     datum_vykupu=vehicle.datum_vykupu,
                     datum_prodeje="",
@@ -540,6 +540,7 @@ def compare_vehicles(
     order = {
         "CHYBÍ V UNIQA": 1,
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ": 2,
+        "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ": 9,
         "NEPOJIŠTĚNO, ALE DEPOZIT": 3,
         "PRODANÉ, ALE V UNIQA": 3,
         "SPZ NESOUHLASÍ": 4,

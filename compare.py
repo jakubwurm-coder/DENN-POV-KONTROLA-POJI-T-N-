@@ -55,6 +55,18 @@ def _short_note(text: str) -> str:
     return value[:177] + "..."
 
 
+def _normalize_state(value: str) -> str:
+    return " ".join(str(value or "").strip().upper().split())
+
+
+def _is_absent_purchased(vehicle: TirVehicle) -> bool:
+    return (
+        _normalize_state(getattr(vehicle, "stav", ""))
+        in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}
+        and bool(getattr(vehicle, "datum_vykupu", ""))
+    )
+
+
 def compare_vehicles(
     tir: list[TirVehicle],
     uniqa: list[UniqaVehicle],
@@ -99,6 +111,108 @@ def compare_vehicles(
             continue
 
         uniqa_vehicle = uniqa_by_vin.get(vin)
+
+        # ====================================================
+        # NEPŘÍTOMNÉ + VYKOUPENÉ
+        #
+        # Vozidlo zůstává v aktivním počtu, ale správný stav
+        # je NEPOJIŠTĚNO. Pokud je nalezené v UNIQA nebo Allianz,
+        # jde o stav vyžadující kontrolu.
+        # ====================================================
+
+        if _is_absent_purchased(vehicle):
+            allianz_vehicle = None
+            allianz_match = ""
+
+            if allianz_available:
+                allianz_vehicle = allianz_by_vin.get(vin)
+                if allianz_vehicle is not None:
+                    allianz_match = "VIN"
+                elif tir_spz:
+                    allianz_vehicle = allianz_by_spz.get(tir_spz)
+                    if allianz_vehicle is not None:
+                        allianz_match = "SPZ"
+
+            if uniqa_available and uniqa_vehicle:
+                results.append(
+                    ComparisonResult(
+                        oid=vehicle.oid,
+                        vin=vin,
+                        tir_spz=tir_spz,
+                        uniqa_spz=normalize_spz(uniqa_vehicle.spz),
+                        status="NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+                        detail=(
+                            "Vozidlo má evidovaný výkup a stav NEPŘÍTOMNÉ, "
+                            "ale VIN je stále veden mezi aktivními vozidly UNIQA. "
+                            "Správný stav je NEPOJIŠTĚNO."
+                        ),
+                        datum_vykupu=vehicle.datum_vykupu,
+                        datum_prodeje="",
+                    )
+                )
+                continue
+
+            if allianz_vehicle is not None:
+                results.append(
+                    ComparisonResult(
+                        oid=vehicle.oid,
+                        vin=vin,
+                        tir_spz=tir_spz,
+                        uniqa_spz="",
+                        status="NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+                        detail=(
+                            f"Vozidlo má evidovaný výkup a stav NEPŘÍTOMNÉ, "
+                            f"ale pojištění bylo nalezeno v ALLIANZ podle {allianz_match}. "
+                            "Správný stav je NEPOJIŠTĚNO."
+                        ),
+                        datum_vykupu=vehicle.datum_vykupu,
+                        datum_prodeje="",
+                    )
+                )
+                continue
+
+            if not uniqa_available or not allianz_available:
+                detail = (
+                    "Vozidlo má evidovaný výkup a stav NEPŘÍTOMNÉ. "
+                    "Správný stav je NEPOJIŠTĚNO, ale nelze bezpečně potvrdit, "
+                    "že není pojištěné, protože některý zdroj pojištění není dostupný."
+                )
+                if uniqa_error:
+                    detail += f" UNIQA chyba: {uniqa_error}"
+                if allianz_error:
+                    detail += f" Allianz chyba: {allianz_error}"
+
+                results.append(
+                    ComparisonResult(
+                        oid=vehicle.oid,
+                        vin=vin,
+                        tir_spz=tir_spz,
+                        uniqa_spz="",
+                        status="NELZE OVĚŘIT",
+                        detail=detail,
+                        datum_vykupu=vehicle.datum_vykupu,
+                        datum_prodeje="",
+                    )
+                )
+                continue
+
+            results.append(
+                ComparisonResult(
+                    oid=vehicle.oid,
+                    vin=vin,
+                    tir_spz=tir_spz,
+                    uniqa_spz="",
+                    status="OK",
+                    detail=(
+                        "Vozidlo má evidovaný výkup a stav NEPŘÍTOMNÉ. "
+                        "Nebylo nalezeno v UNIQA ani Allianz, což je správně: "
+                        "vozidlo má být NEPOJIŠTĚNO."
+                    ),
+                    datum_vykupu=vehicle.datum_vykupu,
+                    datum_prodeje="",
+                )
+            )
+            continue
 
         # ====================================================
         # PRODANÉ
@@ -425,7 +539,8 @@ def compare_vehicles(
 
     order = {
         "CHYBÍ V UNIQA": 1,
-        "NEPOJIŠTĚNO, ALE DEPOZIT": 2,
+        "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ": 2,
+        "NEPOJIŠTĚNO, ALE DEPOZIT": 3,
         "PRODANÉ, ALE V UNIQA": 3,
         "SPZ NESOUHLASÍ": 4,
         "NAVÍC V UNIQA": 5,

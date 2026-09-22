@@ -168,6 +168,12 @@ def _requires_pov_check(vehicle: TirVehicle) -> bool:
     if state in {"VYKOUPENÉ", "VYKOUPENE"}:
         return True
 
+    # Nepřítomné vozidlo s evidovaným výkupem zůstává aktivní pro kontrolu.
+    # Očekávaný správný stav je ale opačný než u běžného výkupu:
+    # NEPŘÍTOMNÉ má být nepojištěné a kontrola hlídá, zda pojištění nezůstalo aktivní.
+    if state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}:
+        return bool(vehicle.datum_vykupu)
+
     # Samotná rezervace ani komise ještě neznamená povinnost POV.
     # Do kontroly vstoupí až tehdy, když je v TIRBazar evidovaný výkup
     # (běžný výkup nebo vykoupení z komise).
@@ -415,11 +421,12 @@ def load_tirbazar_vehicles(
     print("Připojuji se READ-ONLY k TIRBazar...")
     print("Interně načítám všechna nesmazaná vozidla kvůli kontrole VIN v UNIQA.")
     print("Země původu: překlad přes CL_StatPuvodu (A -> CZ, B -> SK atd.).")
-    print("POV kontrola: Vykoupené vždy; Rezervované/V komisi pouze pokud mají evidovaný výkup.")
+    print("POV kontrola: Vykoupené vždy; Nepřítomné/Rezervované/V komisi pouze pokud mají evidovaný výkup.")
     print("CZ: kontrola i bez SPZ. Jiná země + SPZ: také kontrola.")
     print("Prázdná země + česká SPZ: také kontrola.")
-    print("Pronajaté, Nepřítomné, Volné, Parkované, Parkování ukončeno,")
-    print("Prodané, Vrácené z komise a ostatní stavy se nekontrolují; rezervace/komise bez výkupu také ne.")
+    print("Nepřítomné s výkupem se kontrolují s očekáváním NEPOJIŠTĚNO.")
+    print("Pronajaté, Volné, Parkované, Parkování ukončeno, Prodané, Vrácené z komise")
+    print("a ostatní stavy se nekontrolují; Nepřítomné/rezervace/komise bez výkupu také ne.")
     print()
 
     try:
@@ -556,6 +563,10 @@ def load_tirbazar_vehicles(
         v for v in control
         if _normalize_state(v.stav) in {"VYKOUPENÉ", "VYKOUPENE"}
     ]
+    absent = [
+        v for v in control
+        if _normalize_state(v.stav) in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}
+    ]
     reserved = [
         v for v in control
         if _normalize_state(v.stav) in {"REZERVOVANÉ", "REZERVOVANE"}
@@ -586,6 +597,7 @@ def load_tirbazar_vehicles(
     print("Unikátních známých VIN v TIRBazar:", len(vehicles))
     print("Duplicitních VIN skupin:", len(duplicates))
     print("Vykoupené ke kontrole:", len(purchased))
+    print("Nepřítomné vykoupené ke kontrole:", len(absent))
     print("Rezervované ke kontrole:", len(reserved))
     print("Prázdná země + česká SPZ ke kontrole:", len(blank_country_czech_spz))
     print("Jiná země + SPZ ke kontrole:", len(other_country_with_spz))

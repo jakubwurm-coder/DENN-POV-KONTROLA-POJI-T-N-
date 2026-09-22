@@ -77,12 +77,7 @@ def _display_status(result) -> str:
     if status == "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ":
         return "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNO"
     if status == "OK":
-        company = _insurance_company(result)
-        if company == "UNIQA":
-            return "OK – UNIQA"
-        if company == "ALLIANZ":
-            return "OK – ALLIANZ"
-        return "OK"
+        return "POJIŠTĚNÍ V POŘÁDKU"
     return status
 
 
@@ -99,7 +94,7 @@ def _serialize_result(result) -> dict[str, str]:
     return {
         "status_raw": getattr(result, "status", "") or "",
         "status": _display_status(result),
-        "pojistovna": _insurance_company(result),
+        "pojistovna": "",
         "vin": getattr(result, "vin", "") or "",
         "spz_tir": getattr(result, "tir_spz", "") or "",
         "spz_uniqa": getattr(result, "uniqa_spz", "") or "",

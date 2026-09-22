@@ -4,7 +4,7 @@ let activeFilter='VŠE';
 const $=id=>document.getElementById(id);
 
 const filterNames={
-  'VŠE':'Všechna vozidla','ACTIVE':'Aktivní ke kontrole','OK_TOTAL':'Pojištění v pořádku','OK_UNIQA':'OK · UNIQA','OK_ALLIANZ':'OK · UNIQA','MISSING':'Chybí pojištění','DEPOSIT':'Nepojištěno, ale depozit','SOLD_UNIQA':'Prodané v UNIQA','EXTRA_UNIQA':'Navíc v UNIQA'
+  'VŠE':'Všechna vozidla','ACTIVE':'Aktivní ke kontrole','OK_TOTAL':'Pojištění v pořádku','OK_UNIQA':'OK · UNIQA','OK_ALLIANZ':'OK · UNIQA','MISSING':'Chybí pojištění','ABSENT_INSURED':'Nepřítomné, ale pojištěno','ABSENT_UNINSURED':'Nepřítomné, ale nepojištěno','DEPOSIT':'Nepojištěno, ale depozit','SOLD_UNIQA':'Prodané v UNIQA','EXTRA_UNIQA':'Navíc v UNIQA'
 };
 
 function esc(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
@@ -13,7 +13,7 @@ function resultKey(r){const vin=(r.vin||'').trim().toUpperCase();const spz=displ
 function badgeClass(r){
   if(r.workflow_status==='VYŘEŠENO') return 'badge-ok';
   if(r.workflow_status==='ŘEŠÍ SE'||r.workflow_status==='KONTROLA') return 'badge-warning';
-  return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'badge-error','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-deposit','PRODANÉ, ALE V UNIQA':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
+  return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'badge-error','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'badge-ok','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-deposit','PRODANÉ, ALE V UNIQA':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
 }
 function insurerClass(name){if(name==='UNIQA')return'insurer insurer-uniqa';if(name==='ALLIANZ')return'insurer insurer-allianz';return'insurer';}
 function visibleInsurerName(name){return name==='ALLIANZ'?'UNIQA':name;}
@@ -51,10 +51,12 @@ function showBreakdown(){
 function matches(r){
   if(activeFilter==='VŠE')return true;
   if(activeFilter==='ACTIVE')return ['OK','CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','SPZ NESOUHLASÍ','NELZE OVĚŘIT'].includes(r.status_raw);
-  if(activeFilter==='OK_TOTAL')return r.status_raw==='OK';
+  if(activeFilter==='OK_TOTAL')return r.status_raw==='OK'||r.status_raw==='NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ';
   if(activeFilter==='OK_UNIQA')return r.status_raw==='OK'&&r.pojistovna==='UNIQA';
   if(activeFilter==='OK_ALLIANZ')return r.status_raw==='OK'&&r.pojistovna==='ALLIANZ';
   if(activeFilter==='MISSING')return r.status_raw==='CHYBÍ V UNIQA';
+  if(activeFilter==='ABSENT_INSURED')return r.status_raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
+  if(activeFilter==='ABSENT_UNINSURED')return r.status_raw==='NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ';
   if(activeFilter==='DEPOSIT')return r.status_raw==='NEPOJIŠTĚNO, ALE DEPOZIT';
   if(activeFilter==='SOLD_UNIQA')return r.status_raw==='PRODANÉ, ALE V UNIQA';
   if(activeFilter==='EXTRA_UNIQA')return r.status_raw==='NAVÍC V UNIQA'&&r.workflow_status!=='VYŘEŠENO';
@@ -183,7 +185,7 @@ function shortDateTime(value){
 }
 
 function render(){
-  const s=state.summary||{};$('cActive').textContent=s.active||0;$('cOkTotal').textContent=s.ok_total||0;$('cOkUniqa').textContent=s.ok_uniqa||0;$('cOkAllianz').textContent=s.ok_allianz||0;$('cMissing').textContent=s.missing||0;$('cDeposit').textContent=s.deposit||0;$('cSold').textContent=s.sold_uniqa||0;$('cExtra').textContent=s.extra_uniqa||0;
+  const s=state.summary||{};$('cActive').textContent=s.active||0;$('cOkTotal').textContent=s.ok_total||0;$('cOkUniqa').textContent=s.ok_uniqa||0;$('cOkAllianz').textContent=s.ok_allianz||0;$('cMissing').textContent=s.missing||0;if($('cAbsentInsured'))$('cAbsentInsured').textContent=s.absent_insured||0;if($('cAbsentUninsured'))$('cAbsentUninsured').textContent=s.absent_uninsured||0;$('cDeposit').textContent=s.deposit||0;$('cSold').textContent=s.sold_uniqa||0;$('cExtra').textContent=s.extra_uniqa||0;
   source('tirbazar','tir');source('uniqa','uniqa');source('allianz','allianz');renderProgress();
   $('runBtn').disabled=state.running;$('runBtn').innerHTML=state.running?'Kontrola probíhá…':'<span class="play">▶</span> Spustit kontrolu';$('csvBtn').classList.toggle('disabled',!state.csv_available);
   const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}

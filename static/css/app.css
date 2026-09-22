@@ -457,7 +457,7 @@ button{cursor:pointer}
 /* KPI */
 .overview-grid{
   display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
+  grid-template-columns:repeat(4,minmax(0,1fr));
   gap:16px;
   margin:16px 0;
 }
@@ -1552,4 +1552,20 @@ button{cursor:pointer}
   .hero-panel h2{font-size:27px}
   .hero-panel p{font-size:12px}
   .hero-panel-tags{margin-top:14px}
+}
+
+
+/* 2026-09-22 · hlavni souhrn se 4 kartami */
+.overview-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.absent-card .summary-icon{
+  background:#fff0f3;
+  color:#d9143b;
+  box-shadow:0 0 0 8px rgba(255,231,236,.58);
+}
+@media(max-width:1320px){
+  .overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .summary-card:first-child{grid-column:auto}
+}
+@media(max-width:680px){
+  .overview-grid{grid-template-columns:1fr}
 }

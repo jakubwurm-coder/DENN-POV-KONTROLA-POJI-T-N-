@@ -81,7 +81,7 @@ def _default_state() -> dict[str, Any]:
             "uniqa": {"state": "idle", "status": "Čekám na synchronizaci", "detail": "AIV / Denní POV / Aktivní"},
             "allianz": {"state": "idle", "status": "Čekám na synchronizaci", "detail": "Flotilové PDF"},
         },
-        "summary": {"active": 0, "ok_total": 0, "ok_uniqa": 0, "ok_allianz": 0, "missing": 0, "deposit": 0, "sold_uniqa": 0, "extra_uniqa": 0},
+        "summary": {"active": 0, "ok_total": 0, "ok_uniqa": 0, "ok_allianz": 0, "missing": 0, "absent_insured": 0, "absent_uninsured": 0, "deposit": 0, "sold_uniqa": 0, "extra_uniqa": 0},
         "results": [],
         "annotations": {},
         "csv_available": False,

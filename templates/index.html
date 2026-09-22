@@ -40,10 +40,10 @@
           <span class="nav-icon">●</span><span>Depozit</span>
         </button>
         <button class="nav-item" type="button" data-filter="SOLD_UNIQA">
-          <span class="nav-icon">↗</span><span>Prodané v UNIQA</span>
+          <span class="nav-icon">↗</span><span>Prodané, ale pojištěno</span>
         </button>
         <button id="navBreakdown" class="nav-item" type="button">
-          <span class="nav-icon">▤</span><span>Pojišťovny a výjimky</span>
+          <span class="nav-icon">▤</span><span>Pojištění a výjimky</span>
         </button>
         <button id="navSources" class="nav-item" type="button">
           <span class="nav-icon">⚙</span><span>Datové zdroje</span>
@@ -102,7 +102,7 @@
             <div class="hero-panel-tags">
               <span>Kontrola podle VIN</span>
               <span>Interní evidence</span>
-              <span>UNIQA + Allianz</span>
+              <span>Evidence pojištění</span>
             </div>
           </div>
         </section>
@@ -166,7 +166,7 @@
             </div>
             <div id="stageInsurers" class="progress-stage waiting">
               <span class="stage-number">03</span>
-              <div><strong>Data pojišťoven</strong><small id="stageInsurersText">UNIQA + Allianz</small></div>
+              <div><strong>Data pojištění</strong><small id="stageInsurersText">Evidence pojištění</small></div>
             </div>
             <div id="stageResults" class="progress-stage waiting">
               <span class="stage-number">04</span>
@@ -202,16 +202,16 @@
 
         <section id="breakdownSection" class="breakdown-section" hidden>
           <div class="section-heading compact-heading">
-            <div><span class="section-kicker">Rozdělení výsledků</span><h2>Pojišťovny a výjimky</h2></div>
+            <div><span class="section-kicker">Rozdělení výsledků</span><h2>Pojištění a výjimky</h2></div>
           </div>
           <div class="metric-grid">
-            <button class="metric-card" type="button" data-filter="OK_UNIQA"><span class="metric-label">OK · UNIQA</span><strong id="cOkUniqa">0</strong><small>nalezeno podle VIN</small></button>
-            <button class="metric-card" type="button" data-filter="OK_ALLIANZ"><span class="metric-label">OK · Allianz</span><strong id="cOkAllianz">0</strong><small>doplňkové ověření</small></button>
+            <button class="metric-card" type="button" data-filter="OK_TOTAL"><span class="metric-label">Pojištění nalezeno</span><strong id="cOkUniqa">0</strong><small>ověřeno v evidenci pojištění</small></button>
+            <span id="cOkAllianz" hidden>0</span>
             <button class="metric-card" type="button" data-filter="ABSENT_INSURED"><span class="metric-label"><i class="metric-dot purple"></i> Nepřítomné · pojištěno</span><strong id="cAbsentInsured">0</strong><small>špatně · pojištění má být ukončeno</small></button>
             <button class="metric-card" type="button" data-filter="ABSENT_UNINSURED"><span class="metric-label"><i class="metric-dot cyan"></i> Nepřítomné · nepojištěno</span><strong id="cAbsentUninsured">0</strong><small>správně · bez aktivního pojištění</small></button>
             <button class="metric-card" type="button" data-filter="DEPOSIT"><span class="metric-label"><i class="metric-dot amber"></i> Depozit</span><strong id="cDeposit">0</strong><small>bez pojištění, ale evidováno</small></button>
-            <button class="metric-card" type="button" data-filter="SOLD_UNIQA"><span class="metric-label"><i class="metric-dot purple"></i> Prodané v UNIQA</span><strong id="cSold">0</strong><small>po prodeji stále aktivní</small></button>
-            <button class="metric-card" type="button" data-filter="EXTRA_UNIQA"><span class="metric-label"><i class="metric-dot cyan"></i> Navíc v UNIQA</span><strong id="cExtra">0</strong><small>nenalezeno v evidenci výkupů</small></button>
+            <button class="metric-card" type="button" data-filter="SOLD_UNIQA"><span class="metric-label"><i class="metric-dot purple"></i> Prodané, ale pojištěno</span><strong id="cSold">0</strong><small>po prodeji stále aktivní pojištění</small></button>
+            <button class="metric-card" type="button" data-filter="EXTRA_UNIQA"><span class="metric-label"><i class="metric-dot cyan"></i> Pojištění navíc</span><strong id="cExtra">0</strong><small>nenalezeno v evidenci výkupů</small></button>
           </div>
         </section>
 
@@ -227,8 +227,8 @@
           <div class="table-card">
             <div class="table-scroll">
               <table>
-                <thead><tr><th>Stav</th><th>Pojišťovna</th><th>VIN</th><th>SPZ</th><th>Datum výkupu</th><th>Datum prodeje</th><th>Výsledek</th></tr></thead>
-                <tbody id="rows"><tr class="empty-row"><td colspan="7" class="empty">Zatím nejsou načtené žádné výsledky.</td></tr></tbody>
+                <thead><tr><th>Stav</th><th>VIN</th><th>SPZ</th><th>Datum výkupu</th><th>Datum prodeje</th><th>Výsledek</th></tr></thead>
+                <tbody id="rows"><tr class="empty-row"><td colspan="6" class="empty">Zatím nejsou načtené žádné výsledky.</td></tr></tbody>
               </table>
             </div>
             <div class="table-footer"><span id="footerLeft">Připraveno</span><strong id="footerRight">Zobrazeno: 0</strong></div>
@@ -247,6 +247,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260922b"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260922d"></script>
 </body>
 </html>

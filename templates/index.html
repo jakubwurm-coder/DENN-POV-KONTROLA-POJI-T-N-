@@ -30,6 +30,12 @@
         <button class="nav-item" type="button" data-filter="MISSING">
           <span class="nav-icon">!</span><span>Chybí pojištění</span>
         </button>
+        <button class="nav-item" type="button" data-filter="ABSENT_INSURED">
+          <span class="nav-icon">!</span><span>Nepřítomné · pojištěno</span>
+        </button>
+        <button class="nav-item" type="button" data-filter="ABSENT_UNINSURED">
+          <span class="nav-icon">✓</span><span>Nepřítomné · nepojištěno</span>
+        </button>
         <button class="nav-item" type="button" data-filter="DEPOSIT">
           <span class="nav-icon">●</span><span>Depozit</span>
         </button>
@@ -201,6 +207,8 @@
           <div class="metric-grid">
             <button class="metric-card" type="button" data-filter="OK_UNIQA"><span class="metric-label">OK · UNIQA</span><strong id="cOkUniqa">0</strong><small>nalezeno podle VIN</small></button>
             <button class="metric-card" type="button" data-filter="OK_ALLIANZ"><span class="metric-label">OK · Allianz</span><strong id="cOkAllianz">0</strong><small>doplňkové ověření</small></button>
+            <button class="metric-card" type="button" data-filter="ABSENT_INSURED"><span class="metric-label"><i class="metric-dot purple"></i> Nepřítomné · pojištěno</span><strong id="cAbsentInsured">0</strong><small>špatně · pojištění má být ukončeno</small></button>
+            <button class="metric-card" type="button" data-filter="ABSENT_UNINSURED"><span class="metric-label"><i class="metric-dot cyan"></i> Nepřítomné · nepojištěno</span><strong id="cAbsentUninsured">0</strong><small>správně · bez aktivního pojištění</small></button>
             <button class="metric-card" type="button" data-filter="DEPOSIT"><span class="metric-label"><i class="metric-dot amber"></i> Depozit</span><strong id="cDeposit">0</strong><small>bez pojištění, ale evidováno</small></button>
             <button class="metric-card" type="button" data-filter="SOLD_UNIQA"><span class="metric-label"><i class="metric-dot purple"></i> Prodané v UNIQA</span><strong id="cSold">0</strong><small>po prodeji stále aktivní</small></button>
             <button class="metric-card" type="button" data-filter="EXTRA_UNIQA"><span class="metric-label"><i class="metric-dot cyan"></i> Navíc v UNIQA</span><strong id="cExtra">0</strong><small>nenalezeno v evidenci výkupů</small></button>
@@ -239,6 +247,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260922a"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260922b"></script>
 </body>
 </html>

@@ -5,6 +5,7 @@ import hmac
 import io
 import json
 import os
+import re
 import threading
 import uuid
 from datetime import datetime
@@ -12,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
@@ -521,6 +524,178 @@ def api_sync():
         _history_save(data, alert_sent)
 
     return jsonify({"ok": True, "message": "Data byla synchronizována na Render.", "alert_sent": alert_sent})
+
+
+
+def _excel_text(value: Any) -> str:
+    text = str(value or "")
+    return re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", text)
+
+
+def _build_xlsx_report(data: dict[str, Any]) -> bytes:
+    rows = list(data.get("results") or [])
+    summary = dict(data.get("summary") or {})
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Přehled pojištění"
+    ws.sheet_view.showGridLines = False
+    ws.freeze_panes = "A11"
+
+    navy = "0D2740"
+    blue = "1684D6"
+    green = "169B63"
+    red = "D9143B"
+    red_soft = "FFF0F3"
+    green_soft = "E9F7F0"
+    blue_soft = "EAF5FD"
+    gray = "6C8195"
+    light = "F5F8FA"
+    border_color = "DCE6ED"
+    white = "FFFFFF"
+    dark = "17354E"
+
+    thin = Side(style="thin", color=border_color)
+
+    ws.merge_cells("A1:H2")
+    c = ws["A1"]
+    c.value = "DENNÍ POV  |  VANS CENTRE"
+    c.font = Font(name="Arial", size=22, bold=True, color=white)
+    c.fill = PatternFill(fill_type="solid", fgColor=navy)
+    c.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[1].height = 26
+    ws.row_dimensions[2].height = 26
+
+    ws.merge_cells("A3:H3")
+    c = ws["A3"]
+    c.value = f"Přehled kontroly pojištění vozidel  •  {data.get('finished_at') or data.get('synced_at') or _now()}"
+    c.font = Font(name="Arial", size=10, color=gray)
+    c.fill = PatternFill(fill_type="solid", fgColor="F8FBFD")
+    c.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[3].height = 22
+
+    cards = [
+        ("A5:B5", "A6:B7", "AKTIVNÍ VOZIDLA", int(summary.get("active") or 0), blue, blue_soft),
+        ("C5:D5", "C6:D7", "POJIŠTĚNÍ V POŘÁDKU", int(summary.get("ok_total") or 0), green, green_soft),
+        ("E5:F5", "E6:F7", "CHYBÍ POJIŠTĚNÍ", int(summary.get("missing") or 0), red, red_soft),
+        ("G5:H5", "G6:H7", "NEPŘÍTOMNÉ · POJIŠTĚNO", int(summary.get("absent_insured") or 0), red, red_soft),
+    ]
+    for label_rng, value_rng, label, value, accent, soft in cards:
+        ws.merge_cells(label_rng)
+        ws.merge_cells(value_rng)
+        lc = ws[label_rng.split(":")[0]]
+        vc = ws[value_rng.split(":")[0]]
+        lc.value = label
+        lc.font = Font(name="Arial", size=9, bold=True, color=gray)
+        lc.fill = PatternFill(fill_type="solid", fgColor=soft)
+        lc.alignment = Alignment(horizontal="center", vertical="center")
+        vc.value = value
+        vc.font = Font(name="Arial", size=24, bold=True, color=accent)
+        vc.fill = PatternFill(fill_type="solid", fgColor=soft)
+        vc.alignment = Alignment(horizontal="center", vertical="center")
+        for row in ws[label_rng]:
+            for cell in row:
+                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+        for row in ws[value_rng]:
+            for cell in row:
+                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+
+    ws.merge_cells("A9:H9")
+    ws["A9"] = "DETAILNÍ PŘEHLED VOZIDEL"
+    ws["A9"].font = Font(name="Arial", size=11, bold=True, color=dark)
+    ws["A9"].alignment = Alignment(vertical="center")
+    ws.row_dimensions[9].height = 24
+
+    headers = ["Stav", "VIN", "SPZ", "Datum výkupu", "Datum prodeje", "Výsledek", "Poznámka", "Řešení"]
+    for col, value in enumerate(headers, start=1):
+        cell = ws.cell(row=10, column=col, value=value)
+        cell.font = Font(name="Arial", size=9, bold=True, color=white)
+        cell.fill = PatternFill(fill_type="solid", fgColor=navy)
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+        cell.border = Border(bottom=thin)
+    ws.row_dimensions[10].height = 24
+
+    status_fills = {
+        "OK": ("E9F7F0", green),
+        "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ": ("E9F7F0", green),
+        "CHYBÍ V UNIQA": ("FFF0F3", red),
+        "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ": ("FFF0F3", red),
+        "PRODANÉ, ALE V UNIQA": ("F4F0FF", "7256B8"),
+        "NEPOJIŠTĚNO, ALE DEPOZIT": ("FFF7E7", "A87512"),
+        "NAVÍC V UNIQA": ("EAF7FA", "16849B"),
+        "SPZ NESOUHLASÍ": ("FFF7E7", "A87512"),
+        "NELZE OVĚŘIT": ("F1F4F6", "647789"),
+    }
+
+    start_row = 11
+    for idx, row in enumerate(rows, start=start_row):
+        values = [
+            row.get("status") or row.get("status_raw") or "",
+            row.get("vin") or "",
+            row.get("spz_tir") or row.get("spz_uniqa") or "",
+            row.get("vykup") or "",
+            row.get("prodej") or "",
+            row.get("detail") or "",
+            row.get("note") or "",
+            row.get("workflow_status") or "",
+        ]
+        for col, value in enumerate(values, start=1):
+            cell = ws.cell(row=idx, column=col, value=_excel_text(value))
+            cell.font = Font(name="Arial", size=9, color=dark)
+            cell.alignment = Alignment(vertical="top", wrap_text=(col in {6, 7}))
+            cell.border = Border(bottom=Side(style="hair", color="E5EDF2"))
+            if idx % 2 == 0:
+                cell.fill = PatternFill(fill_type="solid", fgColor="FBFDFE")
+
+        raw = str(row.get("status_raw") or "").upper()
+        fill_color, font_color = status_fills.get(raw, ("F1F4F6", "647789"))
+        ws.cell(row=idx, column=1).fill = PatternFill(fill_type="solid", fgColor=fill_color)
+        ws.cell(row=idx, column=1).font = Font(name="Arial", size=9, bold=True, color=font_color)
+        ws.row_dimensions[idx].height = 30 if any(values[5:7]) else 22
+
+    end_row = max(10, start_row + len(rows) - 1)
+    ws.auto_filter.ref = f"A10:H{end_row}"
+
+    widths = {"A": 28, "B": 22, "C": 14, "D": 15, "E": 15, "F": 56, "G": 38, "H": 16}
+    for col, width in widths.items():
+        ws.column_dimensions[col].width = width
+
+    footer_row = end_row + 2
+    ws.merge_cells(start_row=footer_row, start_column=1, end_row=footer_row, end_column=8)
+    fc = ws.cell(row=footer_row, column=1)
+    fc.value = f"Vygenerováno: {_now()}  •  Denní POV / Vans Centre"
+    fc.font = Font(name="Arial", size=8, color=gray)
+    fc.alignment = Alignment(horizontal="right")
+
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.page_margins.left = 0.25
+    ws.page_margins.right = 0.25
+    ws.page_margins.top = 0.35
+    ws.page_margins.bottom = 0.35
+    ws.print_title_rows = "1:10"
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+
+@app.get("/download/xlsx")
+def download_xlsx():
+    with _lock:
+        data = _public_state(_load_state())
+        rows = list(data.get("results") or [])
+    if not rows:
+        return jsonify({"ok": False, "message": "Přehled zatím není k dispozici."}), 404
+
+    body = _build_xlsx_report(data)
+    filename = f"denni_pov_prehled_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.xlsx"
+    return Response(
+        body,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/download/csv")

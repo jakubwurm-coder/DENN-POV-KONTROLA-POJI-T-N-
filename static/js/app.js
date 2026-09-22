@@ -4,7 +4,7 @@ let activeFilter='VŠE';
 const $=id=>document.getElementById(id);
 
 const filterNames={
-  'VŠE':'Všechna vozidla','ACTIVE':'Aktivní ke kontrole','OK_TOTAL':'Pojištění v pořádku','OK_UNIQA':'OK · UNIQA','OK_ALLIANZ':'OK · UNIQA','MISSING':'Chybí pojištění','ABSENT_INSURED':'Nepřítomné, ale pojištěno','ABSENT_UNINSURED':'Nepřítomné, ale nepojištěno','DEPOSIT':'Nepojištěno, ale depozit','SOLD_UNIQA':'Prodané v UNIQA','EXTRA_UNIQA':'Navíc v UNIQA'
+  'VŠE':'Všechna vozidla','ACTIVE':'Aktivní ke kontrole','OK_TOTAL':'Pojištění v pořádku','OK_UNIQA':'Pojištění nalezeno','OK_ALLIANZ':'Pojištění nalezeno','MISSING':'Chybí pojištění','ABSENT_INSURED':'Nepřítomné, ale pojištěno','ABSENT_UNINSURED':'Nepřítomné, ale nepojištěno','DEPOSIT':'Nepojištěno, ale depozit','SOLD_UNIQA':'Prodané, ale pojištěno','EXTRA_UNIQA':'Pojištění navíc'
 };
 
 function esc(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
@@ -15,9 +15,15 @@ function badgeClass(r){
   if(r.workflow_status==='ŘEŠÍ SE'||r.workflow_status==='KONTROLA') return 'badge-warning';
   return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'badge-error','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'badge-ok','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-deposit','PRODANÉ, ALE V UNIQA':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
 }
-function insurerClass(name){if(name==='UNIQA')return'insurer insurer-uniqa';if(name==='ALLIANZ')return'insurer insurer-allianz';return'insurer';}
-function visibleInsurerName(name){return name==='ALLIANZ'?'UNIQA':name;}
-function visibleSystemText(value){return String(value??'').replace(/ALLIANZ/gi,'UNIQA');}
+function visibleSystemText(value){
+  return String(value??'')
+    .replace(/v ALLIANZ podle SPZ/gi,'v evidenci pojištění')
+    .replace(/v ALLIANZ podle VIN/gi,'v evidenci pojištění')
+    .replace(/v ALLIANZ/gi,'v evidenci pojištění')
+    .replace(/v UNIQA/gi,'v evidenci pojištění')
+    .replace(/ALLIANZ/gi,'pojištění')
+    .replace(/UNIQA/gi,'pojištění');
+}
 
 function source(name,prefix){
   const s=state.sources[name]||{};
@@ -69,8 +75,8 @@ function renderRows(){
   const q=$('search').value.trim().toUpperCase();
   const rows=state.results.filter(r=>matches(r)&&(!q||Object.values(r).join(' ').toUpperCase().includes(q)));
   $('footerRight').textContent='Zobrazeno: '+rows.length+' z '+state.results.length;renderActiveFilter();
-  if(!rows.length){$('rows').innerHTML='<tr class="empty-row"><td colspan="7" class="empty">Žádné výsledky pro zvolený filtr.</td></tr>';return;}
-  $('rows').innerHTML=rows.map(r=>{const index=state.results.indexOf(r);const insurer=r.pojistovna?`<span class="${insurerClass(r.pojistovna)}">${esc(visibleInsurerName(r.pojistovna))}</span>`:'—';return `<tr data-index="${index}"><td><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span></td><td>${insurer}</td><td>${esc(r.vin||'—')}</td><td>${esc(displaySpz(r)||'—')}</td><td>${esc(r.vykup||'—')}</td><td>${esc(r.prodej||'—')}</td><td>${esc(visibleSystemText(r.detail||'—'))}</td></tr>`;}).join('');
+  if(!rows.length){$('rows').innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Žádné výsledky pro zvolený filtr.</td></tr>';return;}
+  $('rows').innerHTML=rows.map(r=>{const index=state.results.indexOf(r);return `<tr data-index="${index}"><td><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span></td><td>${esc(r.vin||'—')}</td><td>${esc(displaySpz(r)||'—')}</td><td>${esc(r.vykup||'—')}</td><td>${esc(r.prodej||'—')}</td><td>${esc(visibleSystemText(r.detail||'—'))}</td></tr>`;}).join('');
   document.querySelectorAll('#rows tr[data-index]').forEach(tr=>tr.addEventListener('click',()=>showDetail(state.results[Number(tr.dataset.index)])));
 }
 
@@ -86,9 +92,9 @@ function progressLabel(percent,p){
   if(!state.running&&state.finished_at)return 'Kontrola je dokončená a přehled je aktuální';
   if(percent<=8)return 'Ověřuji dostupnost systémů a připojení';
   if(percent<=20)return 'Načítám aktivní vozidla z interní databáze';
-  if(percent<=50)return 'Aktualizuji aktivní smlouvy v UNIQA';
+  if(percent<=50)return 'Aktualizuji aktivní smlouvy pojištění';
   if(percent<82)return 'Ověřuji chybějící VIN a aktualizuji data pojišťoven';
-  if(percent<=94)return 'Porovnávám interní evidenci s UNIQA a Allianz';
+  if(percent<=94)return 'Porovnávám interní evidenci s evidencí pojištění';
   if(percent<100)return 'Připravuji a ukládám výsledný přehled';
   return p.phase||'Hotovo';
 }
@@ -133,7 +139,7 @@ function renderProgress(){
     detail='Aktualizuji seznam aktivních vozidel a připravuji VIN ke kontrole.';
   }else if(state.running&&percent<=82){
     headline='Načítám data z pojišťoven';
-    detail='Aktualizuji aktivní smlouvy a ověřuji vozidla v UNIQA a Allianz.';
+    detail='Aktualizuji aktivní smlouvy a ověřuji vozidla v evidenci pojištění.';
   }else if(state.running){
     headline='Vyhodnocuji výsledky';
     detail='Porovnávám VIN, stav pojištění, depozit a výjimky a sestavuji výsledný přehled.';
@@ -161,9 +167,9 @@ function renderProgress(){
   if(insurerError)insurerStatus='error';
   else if(insurersDone)insurerStatus='done';
   else if(state.running&&percent>=20)insurerStatus='active';
-  let insurerText='UNIQA + Allianz';
+  let insurerText='Evidence pojištění';
   if(insurerStatus==='error')insurerText='Některý zdroj vyžaduje kontrolu';
-  else if(insurerStatus==='done')insurerText='UNIQA + Allianz načteno';
+  else if(insurerStatus==='done')insurerText='Evidence pojištění načtena';
   else if(insurerStatus==='active')insurerText='Načítám a ověřuji smlouvy…';
   setStageState('stageInsurers','stageInsurersText',insurerStatus,insurerText);
 
@@ -197,11 +203,10 @@ async function refresh(){try{const r=await fetch('/api/state',{cache:'no-store'}
 async function run(){try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
 
 function showDetail(r){
-  const insurer=r.pojistovna?`<span class="${insurerClass(r.pojistovna)}">${esc(visibleInsurerName(r.pojistovna))}</span>`:'—';
   const original=r.original_status?`<div style="margin-top:5px;color:#64748b;font-size:11px">Původní stav: ${esc(visibleSystemText(r.original_status))}</div>`:'';
   const vehicle=(r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ')).trim()||'—';
   const spzValue=displaySpz(r)||'—';
-  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span>${original}</dd><dt>Pojišťovna</dt><dd>${insurer}</dd><dt>Vozidlo</dt><dd>${esc(vehicle)}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ</dt><dd>${esc(spzValue)}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.detail||'—'))}</dd></dl><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option><option value="KONTROLA">Kontrola</option><option value="ŘEŠÍ SE">Řeší se</option><option value="VYŘEŠENO">Vyřešeno</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení v UNIQA zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
+  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span>${original}</dd><dt>Vozidlo</dt><dd>${esc(vehicle)}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ</dt><dd>${esc(spzValue)}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.detail||'—'))}</dd></dl><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option><option value="KONTROLA">Kontrola</option><option value="ŘEŠÍ SE">Řeší se</option><option value="VYŘEŠENO">Vyřešeno</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení pojištění zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
   $('workflowStatus').value=r.workflow_status||'';
   $('saveMeta').addEventListener('click',()=>saveMeta(r));
   $('detailDialog').showModal();

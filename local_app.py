@@ -72,6 +72,10 @@ def _display_status(result) -> str:
         return "CHYBÍ POJIŠTĚNÍ"
     if status == "NEPOJIŠTĚNO, ALE DEPOZIT":
         return "NEPOJIŠTĚNO, ALE DEPOZIT"
+    if status == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ":
+        return "NEPŘÍTOMNÉ, ALE POJIŠTĚNO"
+    if status == "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ":
+        return "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNO"
     if status == "OK":
         company = _insurance_company(result)
         if company == "UNIQA":
@@ -124,10 +128,12 @@ def _summary(results, active_count: int) -> dict[str, int]:
         # Proto transportní souhrn drží hrubé počty včetně depozitů, zatímco
         # samotné porovnání pojištění depozitní vozidla vůbec nekontroluje.
         "active": active_count + deposit,
-        "ok_total": ok_uniqa + ok_allianz + deposit,
+        "ok_total": ok_uniqa + ok_allianz + deposit + counts.get("NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ", 0),
         "ok_uniqa": ok_uniqa,
         "ok_allianz": ok_allianz,
         "missing": counts.get("CHYBÍ V UNIQA", 0),
+        "absent_insured": counts.get("NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", 0),
+        "absent_uninsured": counts.get("NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ", 0),
         "deposit": deposit,
         "sold_uniqa": counts.get("PRODANÉ, ALE V UNIQA", 0),
         "extra_uniqa": counts.get("NAVÍC V UNIQA", 0),
@@ -168,6 +174,8 @@ def _snapshot() -> dict[str, Any]:
             "PRODANÉ, ALE V UNIQA",
             "NAVÍC V UNIQA",
             "NEPOJIŠTĚNO, ALE DEPOZIT",
+            "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+            "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ",
         }
 
         visible_results = [

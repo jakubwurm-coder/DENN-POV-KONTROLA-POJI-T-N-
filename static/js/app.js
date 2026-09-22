@@ -13,7 +13,7 @@ function resultKey(r){const vin=(r.vin||'').trim().toUpperCase();const spz=displ
 function badgeClass(r){
   if(r.workflow_status==='VYŘEŠENO') return 'badge-ok';
   if(r.workflow_status==='ŘEŠÍ SE'||r.workflow_status==='KONTROLA') return 'badge-warning';
-  return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-deposit','PRODANÉ, ALE V UNIQA':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
+  return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'badge-error','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-deposit','PRODANÉ, ALE V UNIQA':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
 }
 function insurerClass(name){if(name==='UNIQA')return'insurer insurer-uniqa';if(name==='ALLIANZ')return'insurer insurer-allianz';return'insurer';}
 function visibleInsurerName(name){return name==='ALLIANZ'?'UNIQA':name;}
@@ -50,7 +50,7 @@ function showBreakdown(){
 
 function matches(r){
   if(activeFilter==='VŠE')return true;
-  if(activeFilter==='ACTIVE')return ['OK','CHYBÍ V UNIQA','SPZ NESOUHLASÍ','NELZE OVĚŘIT'].includes(r.status_raw);
+  if(activeFilter==='ACTIVE')return ['OK','CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','SPZ NESOUHLASÍ','NELZE OVĚŘIT'].includes(r.status_raw);
   if(activeFilter==='OK_TOTAL')return r.status_raw==='OK';
   if(activeFilter==='OK_UNIQA')return r.status_raw==='OK'&&r.pojistovna==='UNIQA';
   if(activeFilter==='OK_ALLIANZ')return r.status_raw==='OK'&&r.pojistovna==='ALLIANZ';

@@ -43,7 +43,7 @@
           <span class="nav-icon">↗</span><span>Prodané, ale pojištěno</span>
         </button>
         <button id="navChanges" class="nav-item" type="button">
-          <span class="nav-icon">↕</span><span>Změny od minulé kontroly</span>
+          <span class="nav-icon">↕</span><span>Dnešní změny</span>
         </button>
         <button id="navBreakdown" class="nav-item" type="button">
           <span class="nav-icon">▤</span><span>Pojištění a výjimky</span>
@@ -216,14 +216,14 @@
         <section id="changesSection" class="data-section" hidden>
           <div class="data-toolbar">
             <div>
-              <span class="section-kicker">Rozdíly mezi kontrolami</span>
-              <h2>Změny od poslední kontroly</h2>
+              <span class="section-kicker">Denní historie změn</span>
+              <h2>Změny zachycené dnes</h2>
               <p id="changesComparedTo" style="margin:6px 0 0;color:#64748b;font-size:13px"></p>
             </div>
             <div class="metric-card" style="min-width:150px">
               <span class="metric-label">Počet změn</span>
               <strong id="changesCount">0</strong>
-              <small>oproti předchozí kontrole</small>
+              <small>zachyceno během dne</small>
             </div>
           </div>
           <div class="table-card">
@@ -233,7 +233,7 @@
                 <tbody id="changeRows"><tr class="empty-row"><td colspan="5" class="empty">Zatím nejsou zaznamenané žádné změny.</td></tr></tbody>
               </table>
             </div>
-            <div class="table-footer"><span>Porovnání posledních dvou dokončených kontrol</span><strong id="changesFooter">Změny: 0</strong></div>
+            <div class="table-footer"><span>Všechny změny zachycené dnešními kontrolami</span><strong id="changesFooter">Změny: 0</strong></div>
           </div>
         </section>
 
@@ -269,6 +269,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923a"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923b"></script>
 </body>
 </html>

@@ -45,6 +45,9 @@
         <button id="navChanges" class="nav-item" type="button">
           <span class="nav-icon">↕</span><span>Dnešní změny</span>
         </button>
+        <button id="navManualHistory" class="nav-item" type="button">
+          <span class="nav-icon">✎</span><span>Ruční změny</span>
+        </button>
         <button id="navBreakdown" class="nav-item" type="button">
           <span class="nav-icon">▤</span><span>Pojištění a výjimky</span>
         </button>
@@ -258,6 +261,25 @@
           </div>
         </section>
 
+        <section id="manualHistorySection" class="data-section" hidden>
+          <div class="data-toolbar">
+            <div>
+              <span class="section-kicker">Historie zásahů</span>
+              <h2>Ruční změny statusů a poznámek</h2>
+              <p style="margin:6px 0 0;color:#64748b;font-size:13px">Zůstávají zde i vozidla, která už nejsou v aktuální kontrole.</p>
+            </div>
+          </div>
+          <div class="table-card">
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Datum</th><th>VIN</th><th>SPZ</th><th>Původní stav</th><th>Ruční status</th><th>Poznámka / změna</th></tr></thead>
+                <tbody id="manualHistoryRows"><tr class="empty-row"><td colspan="6" class="empty">Načítám historii…</td></tr></tbody>
+              </table>
+            </div>
+            <div class="table-footer"><span>Trvalá historie ručních zásahů</span><strong id="manualHistoryFooter">Záznamů: 0</strong></div>
+          </div>
+        </section>
+
         <section id="dataSection" class="data-section" hidden>
           <div class="data-toolbar">
             <div><span class="section-kicker">Výsledky</span><h2>Vozidla ke kontrole</h2></div>
@@ -290,6 +312,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923c"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923d"></script>
 </body>
 </html>

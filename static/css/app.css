@@ -2328,3 +2328,30 @@ body.check-running #csvBtn{
 .control-action-dock-compact .control-action-buttons{
   margin-left:auto;
 }
+
+
+/* 2026-09-24 · extra insurance moved to sidebar */
+.overview-sticky{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+}
+.nav-item .nav-count{
+  margin-left:auto;
+  min-width:24px;
+  height:20px;
+  padding:0 7px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  background:rgba(255,255,255,.10);
+  color:#d9ebf7;
+  font-size:10px;
+  font-weight:900;
+}
+.nav-item.active .nav-count{
+  background:#d9143b;
+  color:#fff;
+}
+@media(max-width:760px){
+  .overview-sticky{grid-template-columns:1fr!important}
+}

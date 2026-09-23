@@ -2496,3 +2496,55 @@ body.check-running #csvBtn{
 .overview-sticky #overallCard{
   width:100%;
 }
+
+
+/* 2026-09-24 · visible current counts in overall result card */
+.overall-counts{
+  margin-left:auto;
+  min-width:250px;
+  padding:14px 16px;
+  border-left:1px solid rgba(190,207,221,.85);
+}
+.overall-counts[hidden]{
+  display:none!important;
+}
+.overall-counts-label{
+  display:block;
+  margin-bottom:7px;
+  color:#8198ab;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.13em;
+}
+.overall-count-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:28px;
+  margin-top:5px;
+  color:#557188;
+  font-size:12px;
+}
+.overall-count-item strong{
+  min-height:0!important;
+  margin:0!important;
+  color:#16324d!important;
+  font-size:18px!important;
+  line-height:1!important;
+}
+.summary-card.status-problem .overall-count-item strong{
+  color:#c91235!important;
+}
+.summary-card.status-ok .overall-count-item strong{
+  color:#0b8b57!important;
+}
+@media(max-width:760px){
+  .overall-counts{
+    width:100%;
+    min-width:0;
+    margin:14px 0 0;
+    padding:12px 0 0;
+    border-left:0;
+    border-top:1px solid rgba(190,207,221,.85);
+  }
+}

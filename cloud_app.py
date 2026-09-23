@@ -86,6 +86,7 @@ def _default_state() -> dict[str, Any]:
         },
         "summary": {"active": 0, "ok_total": 0, "ok_uniqa": 0, "ok_allianz": 0, "missing": 0, "absent_insured": 0, "absent_uninsured": 0, "deposit": 0, "sold_uniqa": 0, "extra_uniqa": 0},
         "results": [],
+        "changes": {"count": 0, "items": [], "summary_delta": {}, "compared_to": None},
         "annotations": {},
         "csv_available": False,
         "synced_at": None,
@@ -110,9 +111,11 @@ def _db_init(cur) -> None:
             summary JSONB NOT NULL,
             results JSONB NOT NULL,
             error TEXT,
-            alert_sent BOOLEAN NOT NULL DEFAULT FALSE
+            alert_sent BOOLEAN NOT NULL DEFAULT FALSE,
+            changes JSONB NOT NULL DEFAULT '{}'::jsonb
         )
     """)
+    cur.execute("ALTER TABLE denni_pov_history ADD COLUMN IF NOT EXISTS changes JSONB NOT NULL DEFAULT '{}'::jsonb")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS denni_pov_annotations (
             vehicle_key TEXT PRIMARY KEY,
@@ -173,8 +176,8 @@ def _history_save(data: dict[str, Any], alert_sent: bool) -> None:
                 _db_init(cur)
                 cur.execute("""
                     INSERT INTO denni_pov_history
-                        (started_at, finished_at, summary, results, error, alert_sent)
-                    VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s)
+                        (started_at, finished_at, summary, results, error, alert_sent, changes)
+                    VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s, %s::jsonb)
                 """, (
                     data.get("started_at"),
                     data.get("finished_at"),
@@ -182,6 +185,7 @@ def _history_save(data: dict[str, Any], alert_sent: bool) -> None:
                     json.dumps(data.get("results") or [], ensure_ascii=False),
                     data.get("error"),
                     alert_sent,
+                    json.dumps(data.get("changes") or {}, ensure_ascii=False),
                 ))
                 conn.commit()
     except Exception as exc:
@@ -196,7 +200,7 @@ def _history_load(limit: int = 100) -> list[dict[str, Any]]:
             with conn.cursor() as cur:
                 _db_init(cur)
                 cur.execute("""
-                    SELECT id, checked_at, started_at, finished_at, summary, error, alert_sent
+                    SELECT id, checked_at, started_at, finished_at, summary, error, alert_sent, changes
                     FROM denni_pov_history
                     ORDER BY id DESC
                     LIMIT %s
@@ -212,6 +216,7 @@ def _history_load(limit: int = 100) -> list[dict[str, Any]]:
                 "summary": row[4] if isinstance(row[4], dict) else {},
                 "error": row[5] or "",
                 "alert_sent": bool(row[6]),
+                "changes": row[7] if isinstance(row[7], dict) else {},
             }
             for row in rows
         ]
@@ -327,6 +332,7 @@ def _load_state() -> dict[str, Any]:
     if not isinstance(base.get("sources"), dict): base["sources"] = _default_state()["sources"]
     if not isinstance(base.get("summary"), dict): base["summary"] = _default_state()["summary"]
     if not isinstance(base.get("results"), list): base["results"] = []
+    if not isinstance(base.get("changes"), dict): base["changes"] = _default_state()["changes"]
     if not isinstance(base.get("annotations"), dict): base["annotations"] = {}
     if not isinstance(base.get("progress"), dict): base["progress"] = _default_state()["progress"]
     return base
@@ -341,6 +347,67 @@ def _result_key(row: dict[str, Any]) -> str:
     vin = str(row.get("vin") or "").strip().upper()
     spz = str(row.get("spz_tir") or row.get("spz_uniqa") or "").strip().upper()
     return vin or f"SPZ:{spz}"
+
+
+def _compare_runs(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    prev_rows = {_result_key(r): r for r in (previous.get("results") or []) if _result_key(r)}
+    curr_rows = {_result_key(r): r for r in (current.get("results") or []) if _result_key(r)}
+    items: list[dict[str, Any]] = []
+
+    def vehicle_payload(row: dict[str, Any]) -> dict[str, str]:
+        return {
+            "vin": str(row.get("vin") or ""),
+            "spz": str(row.get("spz_tir") or row.get("spz_uniqa") or ""),
+            "vozidlo": str(row.get("vozidlo") or ""),
+        }
+
+    for key, row in curr_rows.items():
+        old = prev_rows.get(key)
+        if old is None:
+            items.append({"type": "NEW", "key": key, **vehicle_payload(row), "new_status": str(row.get("status_raw") or row.get("status") or "")})
+            continue
+
+        old_status = str(old.get("status_raw") or old.get("status") or "")
+        new_status = str(row.get("status_raw") or row.get("status") or "")
+        old_spz = str(old.get("spz_tir") or old.get("spz_uniqa") or "")
+        new_spz = str(row.get("spz_tir") or row.get("spz_uniqa") or "")
+
+        if old_status != new_status:
+            items.append({
+                "type": "STATUS",
+                "key": key,
+                **vehicle_payload(row),
+                "old_status": old_status,
+                "new_status": new_status,
+            })
+        if old_spz != new_spz:
+            items.append({
+                "type": "SPZ",
+                "key": key,
+                **vehicle_payload(row),
+                "old_spz": old_spz,
+                "new_spz": new_spz,
+            })
+
+    for key, row in prev_rows.items():
+        if key not in curr_rows:
+            items.append({"type": "REMOVED", "key": key, **vehicle_payload(row), "old_status": str(row.get("status_raw") or row.get("status") or "")})
+
+    prev_summary = previous.get("summary") or {}
+    curr_summary = current.get("summary") or {}
+    summary_delta = {}
+    for field in ("active", "ok_total", "missing", "absent_insured", "absent_uninsured", "deposit", "sold_uniqa", "extra_uniqa"):
+        old_value = int(prev_summary.get(field) or 0)
+        new_value = int(curr_summary.get(field) or 0)
+        if old_value != new_value:
+            summary_delta[field] = {"from": old_value, "to": new_value, "delta": new_value - old_value}
+
+    return {
+        "count": len(items),
+        "items": items,
+        "summary_delta": summary_delta,
+        "compared_to": previous.get("finished_at") or previous.get("synced_at"),
+    }
 
 
 def _public_state(data: dict[str, Any]) -> dict[str, Any]:
@@ -518,6 +585,12 @@ def api_sync():
         data["synced_at"] = _now()
         data["csv_available"] = bool(data.get("results"))
         data["_command"] = None
+        if final_run and previous.get("finished_at") and previous.get("results"):
+            data["changes"] = _compare_runs(previous, data)
+        elif final_run:
+            data["changes"] = {"count": 0, "items": [], "summary_delta": {}, "compared_to": previous.get("finished_at") or previous.get("synced_at")}
+        else:
+            data["changes"] = previous.get("changes") or _default_state()["changes"]
         _save_state(data)
 
     if final_run:

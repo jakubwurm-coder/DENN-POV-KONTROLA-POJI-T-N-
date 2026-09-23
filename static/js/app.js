@@ -198,10 +198,10 @@ function renderChanges(){
   const items=Array.isArray(changes.items)?changes.items:[];
   if($('changesCount'))$('changesCount').textContent=changes.count||items.length||0;
   if($('changesFooter'))$('changesFooter').textContent='Změny: '+(changes.count||items.length||0);
-  if($('changesComparedTo'))$('changesComparedTo').textContent=changes.compared_to?'Porovnáno s kontrolou: '+shortDateTime(changes.compared_to):'Předchozí kontrola zatím není k dispozici.';
+  if($('changesComparedTo'))$('changesComparedTo').textContent=changes.compared_to?'Denní historie navazuje na stav z: '+shortDateTime(changes.compared_to):'Pro dnešní den zatím není výchozí předchozí stav.';
   const body=$('changeRows');if(!body)return;
   if(!items.length){
-    body.innerHTML='<tr class="empty-row"><td colspan="5" class="empty">Od poslední kontroly nebyla zjištěna žádná změna.</td></tr>';
+    body.innerHTML='<tr class="empty-row"><td colspan="5" class="empty">Dnes zatím nebyla zachycena žádná změna.</td></tr>';
     return;
   }
   const typeLabel={NEW:'Nové vozidlo',REMOVED:'Vozidlo zmizelo',STATUS:'Změna stavu',SPZ:'Změna SPZ'};

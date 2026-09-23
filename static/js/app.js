@@ -172,6 +172,7 @@ const connectionSteps=[
 let connectionVisualIndex=0;
 let connectionVisualPercent=0;
 let connectionFinishAnimating=false;
+let connectionUseLocalProgress=false;
 
 function connectionStepIndex(percent){
   const byPercent=Math.floor((Math.max(0,Math.min(99,Number(percent)||0))/100)*connectionSteps.length);
@@ -206,12 +207,14 @@ function renderProgress(){
   if(state.running){
     if(connectionVisualPercent<=0){
       connectionVisualIndex=0;
-      connectionVisualPercent=Math.max(1,serverPercent);
+      connectionVisualPercent=connectionUseLocalProgress?1:Math.max(1,serverPercent);
       connectionFinishAnimating=false;
     }
-    // Jedna kontrola = jeden souvislý průběh. Backend může mezi dílčími
-    // fázemi poslat nižší procento, ale zobrazený průběh se nikdy nevrací.
-    connectionVisualPercent=Math.max(connectionVisualPercent,serverPercent);
+    // Po ručním spuštění v tomto prohlížeči používáme jeden plynulý lokální
+    // průběh. Backend může skočit třeba rovnou na 96 %, ale UI se nesmí přeskočit.
+    if(!connectionUseLocalProgress){
+      connectionVisualPercent=Math.max(connectionVisualPercent,serverPercent);
+    }
     percent=Math.min(96,connectionVisualPercent);
     const idx=connectionStepIndex(percent);
     const detail=connectionSteps[idx];
@@ -232,6 +235,7 @@ function renderProgress(){
   }
 
   if(state.error){
+    connectionUseLocalProgress=false;
     $('progressPercent').textContent='!';
     $('progressEta').textContent='Chyba';
     $('progressHeadline').textContent='Kontrola připojení';
@@ -247,6 +251,7 @@ function renderProgress(){
   }
 
   if(finished){
+    connectionUseLocalProgress=false;
     connectionFinishAnimating=connectionVisualPercent<100;
     if(connectionFinishAnimating){
       connectionVisualPercent=Math.min(100,connectionVisualPercent+5);
@@ -405,6 +410,7 @@ async function run(){
   connectionVisualIndex=0;
   connectionVisualPercent=1;
   connectionFinishAnimating=false;
+  connectionUseLocalProgress=true;
   render();
   try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
 

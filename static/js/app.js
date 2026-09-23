@@ -196,7 +196,20 @@ let connectionUseLocalProgress=false;
 
 function connectionStepIndex(percent){
   const byPercent=Math.floor((Math.max(0,Math.min(99,Number(percent)||0))/100)*connectionSteps.length);
-  return Math.max(0,Math.min(connectionSteps.length-1,Math.max(connectionVisualIndex,byPercent)));
+  return Math.max(0,Math.min(connectionSteps.length-1,byPercent));
+}
+
+function progressOkLabel(percent){
+  const p=Math.max(0,Math.min(100,Number(percent)||0));
+  if(p>=100)return 'Kontrola dokončena · OK';
+  if(p>=92)return 'Vyhodnocení hotovo · OK';
+  if(p>=82)return 'Porovnání dokončeno · OK';
+  if(p>=70)return 'Evidence pojištění načtena · OK';
+  if(p>=55)return 'VIN a SPZ ověřeny · OK';
+  if(p>=38)return 'Evidence vozidel načtena · OK';
+  if(p>=22)return 'SQL připojení · OK';
+  if(p>=10)return 'Interní síť · OK';
+  return '';
 }
 
 function ensureConnectionDots(percent,finished,error){
@@ -245,6 +258,12 @@ function renderProgress(){
     $('progressPhase').textContent='Probíhá kontrola SQL a evidence pojištění.';
     $('progressDetail').textContent=detail;
     $('progressBar').style.width=Math.max(3,percent)+'%';
+    const okState=$('progressOkState');
+    if(okState){
+      const okLabel=progressOkLabel(percent);
+      okState.textContent=okLabel;
+      okState.hidden=!okLabel;
+    }
 
     if(visual){visual.className='connection-visual running';}
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';
@@ -259,6 +278,7 @@ function renderProgress(){
     $('progressPercent').textContent='!';
     $('progressEta').textContent='Chyba';
     $('progressHeadline').textContent='Kontrola připojení';
+    if($('progressOkState'))$('progressOkState').hidden=true;
     $('progressPhase').textContent='Kontrolu se nepodařilo dokončit.';
     $('progressDetail').textContent=visibleSystemText(state.error);
     $('progressBar').style.width='100%';
@@ -282,7 +302,11 @@ function renderProgress(){
     $('progressPercent').textContent=Math.round(percent)+' %';
     $('progressEta').textContent=percent<100?'Dokončuji':'Dokončeno';
     $('progressHeadline').textContent='Kontrola připojení';
-    $('progressPhase').textContent=percent<100?'Dokončuji kontrolu a aktualizuji přehled.':'Kontrola byla úspěšně dokončena.';
+    if($('progressOkState')){
+      $('progressOkState').textContent=progressOkLabel(percent);
+      $('progressOkState').hidden=false;
+    }
+    $('progressPhase').textContent=percent<100?'Dokončuji kontrolu a připravuji výsledky.':'Kontrola byla úspěšně dokončena.';
     $('progressBar').style.width=percent+'%';
     if(visual)visual.className='connection-visual done';
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='✓';
@@ -312,6 +336,7 @@ function renderProgress(){
   $('progressPercent').textContent='0 %';
   $('progressEta').textContent='Připraveno';
   $('progressHeadline').textContent='Kontrola připojení';
+  if($('progressOkState'))$('progressOkState').hidden=true;
   $('progressPhase').textContent='Připraveno ke spuštění kontroly.';
   $('progressDetail').textContent='Po spuštění se ověří interní databáze SQL a evidence dat z pojišťovny.';
   $('progressBar').style.width='0%';
@@ -376,9 +401,11 @@ function render(){
 
   const navExtraCount=$('navExtraCount');
   if(navExtraCount){
-    const hideExtraIndicator=suppressFinalResults||extraProblemCount===0;
-    navExtraCount.classList.toggle('is-alert',!hideExtraIndicator);
-    navExtraCount.classList.toggle('is-hidden',hideExtraIndicator);
+    const showExtraIndicator=!state.running&&sessionCheckStarted&&!!state.finished_at&&!state.error&&extraProblemCount>0;
+    navExtraCount.textContent=showExtraIndicator?String(extraProblemCount):'0';
+    navExtraCount.classList.toggle('is-alert',showExtraIndicator);
+    navExtraCount.classList.toggle('is-hidden',!showExtraIndicator);
+    navExtraCount.hidden=!showExtraIndicator;
   }
 
   const setMetricProblemState=(filter,problemCount)=>{
@@ -497,7 +524,6 @@ let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return
 $('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 setInterval(()=>{
   if(state.running){
-    connectionVisualIndex=Math.min(connectionSteps.length-1,connectionVisualIndex+1);
     if(connectionVisualPercent<50) connectionVisualPercent+=1.8;
     else if(connectionVisualPercent<75) connectionVisualPercent+=1.0;
     else if(connectionVisualPercent<90) connectionVisualPercent+=0.55;

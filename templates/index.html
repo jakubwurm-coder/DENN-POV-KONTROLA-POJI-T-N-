@@ -27,6 +27,9 @@
         <button class="nav-item" type="button" data-filter="MISSING">
           <span class="nav-icon">!</span><span>Chybí pojištění</span>
         </button>
+        <button class="nav-item" type="button" data-filter="UNWANTED_INSURANCE">
+          <span class="nav-icon">+</span><span>Pojištění navíc</span><strong id="navExtraCount" class="nav-count">0</strong>
+        </button>
         <button id="navOthers" class="nav-item" type="button">
           <span class="nav-icon">▤</span><span>Ostatní přehledy</span>
         </button>
@@ -93,19 +96,6 @@
             <div class="summary-tooltip">
               <b>Aktuální počet</b>
               <span>Chybí pojištění: <strong id="cMissing">0</strong></span>
-            </div>
-          </article>
-
-          <article class="summary-card status-card" data-filter="UNWANTED_INSURANCE">
-            <div class="summary-icon">!</div>
-            <div class="summary-copy status-copy">
-              <span>Pojištění navíc</span>
-              <strong id="extraStatusText">Čeká na kontrolu</strong>
-            </div>
-            <span class="summary-arrow">›</span>
-            <div class="summary-tooltip">
-              <b>Aktuální počet</b>
-              <span>Pojištění navíc: <strong id="cExtraTop">0</strong></span>
             </div>
           </article>
 

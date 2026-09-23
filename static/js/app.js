@@ -117,9 +117,17 @@ function matches(r){
 function renderActiveFilter(){const box=$('activeFilter');if(activeFilter==='VŠE'){box.hidden=true;return;}$('activeFilterLabel').textContent=filterNames[activeFilter]||activeFilter;box.hidden=false;}
 
 function renderRows(){
+  renderActiveFilter();
+
+  if(!sessionCheckStarted&&!state.running){
+    $('footerRight').textContent='Zobrazeno: 0 z 0';
+    $('rows').innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Nejdříve spusťte aktuální kontrolu pojištění.</td></tr>';
+    return;
+  }
+
   const q=$('search').value.trim().toUpperCase();
   const rows=state.results.filter(r=>matches(r)&&(!q||Object.values(r).join(' ').toUpperCase().includes(q)));
-  $('footerRight').textContent='Zobrazeno: '+rows.length+' z '+state.results.length;renderActiveFilter();
+  $('footerRight').textContent='Zobrazeno: '+rows.length+' z '+state.results.length;
   if(!rows.length){$('rows').innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Žádné výsledky pro zvolený filtr.</td></tr>';return;}
   $('rows').innerHTML=rows.map(r=>{const index=state.results.indexOf(r);return `<tr data-index="${index}"><td><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span></td><td>${esc(r.vin||'—')}</td><td>${esc(displaySpz(r)||'—')}</td><td>${esc(r.vykup||'—')}</td><td>${esc(r.prodej||'—')}</td><td>${esc(visibleSystemText(r.detail||'—'))}</td></tr>`;}).join('');
   document.querySelectorAll('#rows tr[data-index]').forEach(tr=>tr.addEventListener('click',()=>showDetail(state.results[Number(tr.dataset.index)])));
@@ -388,6 +396,7 @@ async function run(){
   sessionCheckStarted=true;
   state.running=true;
   state.summary={};
+  state.results=[];
   state.changes={count:0,items:[]};
   render();
   try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}

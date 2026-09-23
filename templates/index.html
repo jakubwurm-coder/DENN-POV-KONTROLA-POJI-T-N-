@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260923a">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260923c">
 </head>
 <body>
   <div class="app-shell">
@@ -95,45 +95,66 @@
 
       <main class="content">
 
-        <section class="overview-grid" aria-label="Souhrn kontroly">
-          <article class="summary-card active-card" data-filter="ACTIVE">
-            <div class="summary-icon vehicle-icon">▰</div>
-            <div class="summary-copy">
-              <span>Aktivní vozidla</span>
-              <strong id="cActive">0</strong>
-              <small>vozidel v evidenci</small>
+        <section class="overview-grid overview-sticky" aria-label="Hlavní výsledek kontroly">
+          <article id="overallCard" class="summary-card status-primary">
+            <div id="overallIcon" class="summary-icon">✓</div>
+            <div class="summary-copy status-copy">
+              <span>Celkový výsledek</span>
+              <strong id="overallStatusText">Čeká na kontrolu</strong>
+              <small id="overallStatusSub">Stav databáze a pojištění</small>
             </div>
-            <span class="summary-arrow">›</span>
+            <div class="summary-tooltip" id="overallTooltip">
+              <b>Aktuální počty</b>
+              <span>Aktivní vozidla: <strong id="cActive">0</strong></span>
+              <span>Chybí pojištění: <strong id="tipMissingOverall">0</strong></span>
+              <span>Pojištění navíc: <strong id="tipExtraOverall">0</strong></span>
+            </div>
           </article>
 
-          <article class="summary-card success" data-filter="OK_TOTAL">
+          <article class="summary-card status-card" data-filter="MISSING">
             <div class="summary-icon">✓</div>
-            <div class="summary-copy">
-              <span>Pojištění v pořádku</span>
-              <strong id="cOkTotal">0</strong>
-              <small>ověřených vozidel</small>
+            <div class="summary-copy status-copy">
+              <span>Chybějící pojištění</span>
+              <strong id="missingStatusText">V pořádku</strong>
+              <small>vozidla, která mají být pojištěná</small>
             </div>
             <span class="summary-arrow">›</span>
+            <div class="summary-tooltip">
+              <b>Aktuální počet</b>
+              <span>Chybí pojištění: <strong id="cMissing">0</strong></span>
+            </div>
           </article>
 
-          <article class="summary-card danger" data-filter="MISSING">
-            <div class="summary-icon">!</div>
-            <div class="summary-copy">
-              <span>Chybí pojištění</span>
-              <strong id="cMissing">0</strong>
-              <small>vozidel vyžaduje kontrolu</small>
+          <article class="summary-card status-card" data-filter="UNWANTED_INSURANCE">
+            <div class="summary-icon">✓</div>
+            <div class="summary-copy status-copy">
+              <span>Pojištění navíc</span>
+              <strong id="extraStatusText">V pořádku</strong>
+              <small>vozidla, která už pojištěná být nemají</small>
             </div>
             <span class="summary-arrow">›</span>
+            <div class="summary-tooltip">
+              <b>Aktuální počet</b>
+              <span>Celkem navíc: <strong id="cExtraTop">0</strong></span>
+              <span>Nepřítomné · pojištěno: <strong id="cAbsentInsuredTop">0</strong></span>
+              <span>Prodané · pojištěno: <strong id="cSoldTop">0</strong></span>
+              <span>Ostatní pojištění navíc: <strong id="cExtraHover">0</strong></span>
+            </div>
           </article>
 
-          <article class="summary-card danger absent-card" data-filter="ABSENT_INSURED">
-            <div class="summary-icon">!</div>
-            <div class="summary-copy">
-              <span>Nepřítomné · pojištěno</span>
-              <strong id="cAbsentInsuredTop">0</strong>
-              <small>pojištění má být ukončeno</small>
+          <article class="summary-card status-card" data-filter="ACTIVE">
+            <div class="summary-icon vehicle-icon">▰</div>
+            <div class="summary-copy status-copy">
+              <span>Evidence vozidel</span>
+              <strong id="activeStatusText">Načtena</strong>
+              <small>interní databáze vozidel</small>
             </div>
             <span class="summary-arrow">›</span>
+            <div class="summary-tooltip">
+              <b>Aktuální počet</b>
+              <span>Aktivní vozidla: <strong id="cActiveHover">0</strong></span>
+              <span>Pojištění v pořádku: <strong id="cOkTotal">0</strong></span>
+            </div>
           </article>
         </section>
 
@@ -168,7 +189,7 @@
             </div>
             <div id="stageResults" class="progress-stage waiting">
               <span class="stage-number">04</span>
-              <div><strong>Porovnání a výsledky</strong><small id="stageResultsText">Vyhodnocení podle VIN</small></div>
+              <div><strong>Výsledek kontroly databáze s pojištěním</strong><small id="stageResultsText">Čekám na vyhodnocení</small></div>
             </div>
           </div>
           <div class="progress-live-detail">
@@ -269,6 +290,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923b"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923c"></script>
 </body>
 </html>

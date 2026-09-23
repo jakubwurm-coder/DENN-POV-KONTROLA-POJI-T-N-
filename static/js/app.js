@@ -129,6 +129,23 @@ function formatEta(seconds){
   return 'odhad cca '+Math.max(1,Math.round(s/60))+' min';
 }
 
+function primaryIssueCounts(){
+  const s=state.summary||{};
+  const missing=Number(s.missing)||0;
+  const absent=Number(s.absent_insured)||0;
+  const sold=Number(s.sold_uniqa)||0;
+  const extra=Number(s.extra_uniqa)||0;
+  return {missing,absent,sold,extra,unwanted:absent+sold+extra,total:missing+absent+sold+extra};
+}
+
+function setStatusCard(cardId,textId,ok,okText,badText){
+  const card=$(cardId), textEl=$(textId);
+  if(!card||!textEl)return;
+  card.classList.toggle('status-ok',ok);
+  card.classList.toggle('status-problem',!ok);
+  textEl.textContent=ok?okText:badText;
+}
+
 const connectionSteps=[
   'Navazuji spojení s kancelářským agentem',
   'Ověřuji dostupnost interní sítě',

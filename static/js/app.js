@@ -25,13 +25,7 @@ function badgeClass(r){
   return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'badge-error','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'badge-ok','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-deposit','PRODANÉ, ALE V UNIQA':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
 }
 function visibleSystemText(value){
-  return String(value??'')
-    .replace(/v ALLIANZ podle SPZ/gi,'v evidenci pojištění')
-    .replace(/v ALLIANZ podle VIN/gi,'v evidenci pojištění')
-    .replace(/v ALLIANZ/gi,'v evidenci pojištění')
-    .replace(/v UNIQA/gi,'v evidenci pojištění')
-    .replace(/ALLIANZ/gi,'pojištění')
-    .replace(/UNIQA/gi,'pojištění');
+  return String(value??'');
 }
 
 function source(name,prefix){

@@ -2278,3 +2278,44 @@ body.check-running #csvBtn{
 .metric-card.metric-danger small{
   color:#9a7880;
 }
+
+
+/* 2026-09-24 · three-card main dashboard + status indicator */
+.overview-sticky{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+}
+.summary-title-with-dot{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px;
+}
+.summary-status-dot{
+  width:9px;
+  height:9px;
+  flex:0 0 9px;
+  border-radius:50%;
+  background:#aab8c5;
+  box-shadow:0 0 0 4px rgba(170,184,197,.12);
+}
+.summary-status-dot.ok{
+  background:#12a164;
+  box-shadow:0 0 0 4px rgba(18,161,100,.13);
+}
+.summary-status-dot.problem{
+  background:#d9143b;
+  box-shadow:0 0 0 4px rgba(217,20,59,.12);
+}
+.summary-status-dot.loading{
+  background:#1d8fe1;
+  box-shadow:0 0 0 4px rgba(29,143,225,.12);
+  animation:pulse 1.15s infinite;
+}
+.overview-sticky .status-copy strong{
+  min-height:30px;
+}
+@media(max-width:1200px){
+  .overview-sticky{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(max-width:760px){
+  .overview-sticky{grid-template-columns:1fr!important}
+}

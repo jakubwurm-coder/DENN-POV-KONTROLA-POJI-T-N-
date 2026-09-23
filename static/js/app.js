@@ -4,7 +4,7 @@ let activeFilter='VŠE';
 const $=id=>document.getElementById(id);
 
 const filterNames={
-  'VŠE':'Všechna vozidla','ACTIVE':'Aktivní ke kontrole','OK_TOTAL':'Pojištění v pořádku','OK_UNIQA':'Pojištění nalezeno','OK_ALLIANZ':'Pojištění nalezeno','MISSING':'Chybí pojištění','ABSENT_INSURED':'Nepřítomné, ale pojištěno','ABSENT_UNINSURED':'Nepřítomné, ale nepojištěno','DEPOSIT':'Nepojištěno, ale depozit','SOLD_UNIQA':'Prodané, ale pojištěno','EXTRA_UNIQA':'Pojištění navíc'
+  'VŠE':'Všechna vozidla','ACTIVE':'Aktivní ke kontrole','OK_TOTAL':'Pojištění v pořádku','OK_UNIQA':'Pojištění nalezeno','OK_ALLIANZ':'Pojištění nalezeno','MISSING':'Chybí pojištění','ABSENT_INSURED':'Nepřítomné, ale pojištěno','ABSENT_UNINSURED':'Nepřítomné, ale nepojištěno','DEPOSIT':'Nepojištěno, ale depozit','SOLD_UNIQA':'Prodané, ale pojištěno','EXTRA_UNIQA':'Pojištění navíc','UNWANTED_INSURANCE':'Pojištění navíc'
 };
 
 function esc(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
@@ -76,6 +76,7 @@ function matches(r){
   if(activeFilter==='DEPOSIT')return r.status_raw==='NEPOJIŠTĚNO, ALE DEPOZIT';
   if(activeFilter==='SOLD_UNIQA')return r.status_raw==='PRODANÉ, ALE V UNIQA';
   if(activeFilter==='EXTRA_UNIQA')return r.status_raw==='NAVÍC V UNIQA'&&r.workflow_status!=='VYŘEŠENO';
+  if(activeFilter==='UNWANTED_INSURANCE')return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE V UNIQA'].includes(r.status_raw)&&r.workflow_status!=='VYŘEŠENO';
   return true;
 }
 
@@ -118,6 +119,23 @@ function setStageState(id,textId,status,text){
   if(target)target.textContent=text||'';
 }
 
+function primaryIssueCounts(){
+  const s=state.summary||{};
+  const missing=Number(s.missing)||0;
+  const absent=Number(s.absent_insured)||0;
+  const sold=Number(s.sold_uniqa)||0;
+  const extra=Number(s.extra_uniqa)||0;
+  return {missing,absent,sold,extra,unwanted:absent+sold+extra,total:missing+absent+sold+extra};
+}
+
+function setStatusCard(cardId,textId,ok,okText,badText){
+  const card=$(cardId), textEl=$(textId);
+  if(!card||!textEl)return;
+  card.classList.toggle('status-ok',ok);
+  card.classList.toggle('status-problem',!ok);
+  textEl.textContent=ok?okText:badText;
+}
+
 function renderProgress(){
   const p=state.progress||{};
   const sources=state.sources||{};
@@ -131,7 +149,8 @@ function renderProgress(){
   $('progressPhase').textContent=progressLabel(percent,p);
   $('progressEta').textContent=state.error?'Kontrola skončila chybou':formatEta(p.eta_seconds);
   $('progressBar').style.width=percent+'%';
-  $('progressBar').style.background=state.error?'#dc2626':(percent===100?'#16a34a':'#e3072f');
+  const issues=primaryIssueCounts();
+  $('progressBar').style.background=state.error?'#dc2626':(percent===100?(issues.total===0?'#16a34a':'#dc2626'):'#e3072f');
 
   let headline='Kontrolní systém připraven';
   let detail='Po spuštění ověřím připojení, načtu interní databázi, data pojišťoven a připravím výsledky.';
@@ -139,8 +158,13 @@ function renderProgress(){
     headline='Kontrola vyžaduje pozornost';
     detail=visibleSystemText(state.error);
   }else if(!state.running&&state.finished_at){
-    headline='Kontrola dokončena';
-    detail='Připojení ověřeno, data aktualizována a výsledný přehled je připraven.';
+    if(issues.total===0){
+      headline='Vše v pořádku';
+      detail='Databáze vozidel souhlasí s evidencí pojištění. Nechybí žádné pojištění a není evidované žádné pojištění navíc.';
+    }else{
+      headline='Kontrola vyžaduje pozornost';
+      detail='Zjištěno: chybějící pojištění '+issues.missing+' · pojištění navíc '+issues.unwanted+'.';
+    }
   }else if(state.running&&percent<=8){
     headline='Kontroluji připojení';
     detail='Ověřuji dostupnost interní sítě, databáze a kancelářského agenta.';
@@ -185,12 +209,12 @@ function renderProgress(){
 
   let resultStatus='waiting';
   if(state.error&&percent>=82)resultStatus='error';
-  else if(finished)resultStatus='done';
+  else if(finished)resultStatus=issues.total===0?'done':'error';
   else if(state.running&&percent>=82)resultStatus='active';
   setStageState('stageResults','stageResultsText',resultStatus,
-    resultStatus==='error'?'Vyhodnocení nebylo dokončeno':
-    resultStatus==='done'?'Výsledky připraveny':
-    resultStatus==='active'?'Vyhodnocuji VIN a výjimky…':'Vyhodnocení podle VIN');
+    resultStatus==='error'?(finished?'Nalezen rozdíl mezi databází a pojištěním':'Vyhodnocení nebylo dokončeno'):
+    resultStatus==='done'?'Databáze a pojištění jsou v pořádku':
+    resultStatus==='active'?'Porovnávám databázi s pojištěním…':'Čekám na vyhodnocení');
 }
 
 function renderChanges(){
@@ -220,7 +244,23 @@ function shortDateTime(value){
 }
 
 function render(){
-  const s=state.summary||{};$('cActive').textContent=s.active||0;$('cOkTotal').textContent=s.ok_total||0;$('cOkUniqa').textContent=s.ok_uniqa||0;$('cOkAllianz').textContent=s.ok_allianz||0;$('cMissing').textContent=s.missing||0;if($('cAbsentInsured'))$('cAbsentInsured').textContent=s.absent_insured||0;if($('cAbsentInsuredTop'))$('cAbsentInsuredTop').textContent=s.absent_insured||0;if($('cAbsentUninsured'))$('cAbsentUninsured').textContent=s.absent_uninsured||0;$('cDeposit').textContent=s.deposit||0;$('cSold').textContent=s.sold_uniqa||0;$('cExtra').textContent=s.extra_uniqa||0;
+  const s=state.summary||{};
+  const issues=primaryIssueCounts();
+  const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
+  setText('cActive',s.active||0);setText('cActiveHover',s.active||0);setText('cOkTotal',s.ok_total||0);
+  setText('cOkUniqa',s.ok_uniqa||0);setText('cOkAllianz',s.ok_allianz||0);setText('cMissing',issues.missing);
+  setText('tipMissingOverall',issues.missing);setText('tipExtraOverall',issues.unwanted);
+  setText('cAbsentInsured',s.absent_insured||0);setText('cAbsentInsuredTop',issues.absent);setText('cAbsentUninsured',s.absent_uninsured||0);
+  setText('cDeposit',s.deposit||0);setText('cSold',s.sold_uniqa||0);setText('cSoldTop',issues.sold);
+  setText('cExtra',s.extra_uniqa||0);setText('cExtraHover',issues.extra);setText('cExtraTop',issues.unwanted);
+  setStatusCard('overallCard','overallStatusText',issues.total===0&&!state.error,'Vše v pořádku','Vyžaduje kontrolu');
+  setStatusCard('overallCard','overallStatusText',!state.running&&!!state.finished_at&&!state.error&&issues.total===0,'Vše v pořádku',state.running?'Kontrola probíhá':(state.error?'Chyba kontroly':(state.finished_at?'Vyžaduje kontrolu':'Čeká na kontrolu')));
+  setStatusCard(document.querySelector('[data-filter="MISSING"]')?.id||'__none','missingStatusText',issues.missing===0,'V pořádku','Vyžaduje kontrolu');
+  const missingCard=document.querySelector('.summary-card[data-filter="MISSING"]');if(missingCard){missingCard.classList.toggle('status-ok',issues.missing===0);missingCard.classList.toggle('status-problem',issues.missing>0);}
+  const extraCard=document.querySelector('.summary-card[data-filter="UNWANTED_INSURANCE"]');if(extraCard){extraCard.classList.toggle('status-ok',issues.unwanted===0);extraCard.classList.toggle('status-problem',issues.unwanted>0);}
+  setText('missingStatusText',issues.missing===0?'V pořádku':'Vyžaduje kontrolu');
+  setText('extraStatusText',issues.unwanted===0?'V pořádku':'Vyžaduje kontrolu');
+  setText('activeStatusText',state.finished_at?'Evidence načtena':'Čeká na kontrolu');
   source('tirbazar','tir');source('uniqa','uniqa');source('allianz','allianz');renderProgress();
   $('runBtn').disabled=state.running;$('runBtn').innerHTML=state.running?'Kontrola probíhá…':'<span class="play">▶</span> Spustit kontrolu';$('csvBtn').classList.toggle('disabled',!state.csv_available);
   const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}

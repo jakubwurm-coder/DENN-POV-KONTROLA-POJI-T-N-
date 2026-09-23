@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260923g">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260924r">
 </head>
 <body>
   <div class="app-shell">
@@ -130,7 +130,10 @@
             </div>
             <div class="connection-check-copy">
               <span class="progress-eyebrow">LIVE KONTROLA SYSTÉMU</span>
-              <strong id="progressHeadline">Kontrola připojení</strong>
+              <div class="progress-headline-row">
+                <strong id="progressHeadline">Kontrola připojení</strong>
+                <span id="progressOkState" class="progress-ok-state" hidden></span>
+              </div>
               <span id="progressPhase">Připraveno ke spuštění kontroly.</span>
             </div>
             <div class="progress-number">
@@ -316,7 +319,7 @@
 
         <section id="dataSection" class="data-section" hidden>
           <div class="data-toolbar">
-            <div><span class="section-kicker">Výsledky</span><h2>Vozidla ke kontrole</h2></div>
+            <div><span class="section-kicker">Výsledky</span><h2>Celkový přehled vozidel</h2></div>
             <div class="data-tools">
               <div class="search-control"><span class="search-icon">⌕</span><input id="search" autocomplete="off" placeholder="Hledat VIN nebo SPZ…"></div>
               <button id="clearBtn" class="btn btn-secondary btn-small" type="button">Vše</button>
@@ -346,6 +349,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923g"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260924r"></script>
 </body>
 </html>

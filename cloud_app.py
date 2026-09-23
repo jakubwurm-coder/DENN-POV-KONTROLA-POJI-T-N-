@@ -10,6 +10,7 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request
@@ -68,8 +69,29 @@ def _normalize_annotations(source: dict[str, Any] | None) -> dict[str, dict[str,
     }
 
 
+_PRAGUE_TZ = ZoneInfo("Europe/Prague")
+
+
+def _now_dt() -> datetime:
+    return datetime.now(_PRAGUE_TZ)
+
+
 def _now() -> str:
-    return datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    return _now_dt().strftime("%d.%m.%Y %H:%M:%S")
+
+
+def _today_iso() -> str:
+    return _now_dt().date().isoformat()
+
+
+def _date_from_display(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        return datetime.strptime(text[:10], "%d.%m.%Y").date().isoformat()
+    except ValueError:
+        return ""
 
 
 def _default_state() -> dict[str, Any]:
@@ -112,10 +134,13 @@ def _db_init(cur) -> None:
             results JSONB NOT NULL,
             error TEXT,
             alert_sent BOOLEAN NOT NULL DEFAULT FALSE,
-            changes JSONB NOT NULL DEFAULT '{}'::jsonb
+            changes JSONB NOT NULL DEFAULT '{}'::jsonb,
+            daily_date DATE
         )
     """)
     cur.execute("ALTER TABLE denni_pov_history ADD COLUMN IF NOT EXISTS changes JSONB NOT NULL DEFAULT '{}'::jsonb")
+    cur.execute("ALTER TABLE denni_pov_history ADD COLUMN IF NOT EXISTS daily_date DATE")
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS denni_pov_history_daily_date_uidx ON denni_pov_history (daily_date) WHERE daily_date IS NOT NULL")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS denni_pov_annotations (
             vehicle_key TEXT PRIMARY KEY,
@@ -167,30 +192,109 @@ def _db_save(data: dict[str, Any]) -> bool:
         return False
 
 
-def _history_save(data: dict[str, Any], alert_sent: bool) -> None:
+def _merge_change_items(existing: list[dict[str, Any]], incoming: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged = list(existing or [])
+    seen = {
+        (
+            str(item.get("type") or ""),
+            str(item.get("key") or ""),
+            str(item.get("old_status") or item.get("old_spz") or ""),
+            str(item.get("new_status") or item.get("new_spz") or ""),
+        )
+        for item in merged
+    }
+    for item in incoming or []:
+        signature = (
+            str(item.get("type") or ""),
+            str(item.get("key") or ""),
+            str(item.get("old_status") or item.get("old_spz") or ""),
+            str(item.get("new_status") or item.get("new_spz") or ""),
+        )
+        if signature not in seen:
+            clean = dict(item)
+            clean["detected_at"] = clean.get("detected_at") or _now()
+            merged.append(clean)
+            seen.add(signature)
+    return merged
+
+
+def _daily_history_existing(day_iso: str) -> dict[str, Any] | None:
     if not _DATABASE_URL:
-        return
+        return None
+    try:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                _db_init(cur)
+                cur.execute("""
+                    SELECT id, changes, started_at, finished_at
+                    FROM denni_pov_history
+                    WHERE daily_date = %s
+                    LIMIT 1
+                """, (day_iso,))
+                row = cur.fetchone()
+                conn.commit()
+        if not row:
+            return None
+        return {
+            "id": row[0],
+            "changes": row[1] if isinstance(row[1], dict) else {},
+            "started_at": row[2] or "",
+            "finished_at": row[3] or "",
+        }
+    except Exception as exc:
+        print(f"Daily history load failed: {exc}")
+        return None
+
+
+def _history_save_daily(data: dict[str, Any], alert_sent: bool) -> dict[str, Any]:
+    day_iso = _today_iso()
+    existing = _daily_history_existing(day_iso) or {}
+    old_changes = existing.get("changes") if isinstance(existing.get("changes"), dict) else {}
+    new_changes = data.get("changes") if isinstance(data.get("changes"), dict) else {}
+    merged_items = _merge_change_items(old_changes.get("items") or [], new_changes.get("items") or [])
+    daily_changes = {
+        "count": len(merged_items),
+        "items": merged_items,
+        "summary_delta": new_changes.get("summary_delta") or old_changes.get("summary_delta") or {},
+        "compared_to": old_changes.get("compared_to") or new_changes.get("compared_to"),
+        "day": day_iso,
+    }
+    data["changes"] = daily_changes
+
+    if not _DATABASE_URL:
+        return daily_changes
     try:
         with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
                 cur.execute("""
                     INSERT INTO denni_pov_history
-                        (started_at, finished_at, summary, results, error, alert_sent, changes)
-                    VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s, %s::jsonb)
+                        (daily_date, started_at, finished_at, summary, results, error, alert_sent, changes)
+                    VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s::jsonb)
+                    ON CONFLICT (daily_date) WHERE daily_date IS NOT NULL
+                    DO UPDATE SET
+                        checked_at = NOW(),
+                        started_at = COALESCE(denni_pov_history.started_at, EXCLUDED.started_at),
+                        finished_at = EXCLUDED.finished_at,
+                        summary = EXCLUDED.summary,
+                        results = EXCLUDED.results,
+                        error = EXCLUDED.error,
+                        alert_sent = denni_pov_history.alert_sent OR EXCLUDED.alert_sent,
+                        changes = EXCLUDED.changes
                 """, (
-                    data.get("started_at"),
+                    day_iso,
+                    existing.get("started_at") or data.get("started_at"),
                     data.get("finished_at"),
                     json.dumps(data.get("summary") or {}, ensure_ascii=False),
                     json.dumps(data.get("results") or [], ensure_ascii=False),
                     data.get("error"),
                     alert_sent,
-                    json.dumps(data.get("changes") or {}, ensure_ascii=False),
+                    json.dumps(daily_changes, ensure_ascii=False),
                 ))
                 conn.commit()
     except Exception as exc:
-        print(f"History save failed: {exc}")
-
+        print(f"Daily history save failed: {exc}")
+    return daily_changes
 
 def _history_load(limit: int = 100) -> list[dict[str, Any]]:
     if not _DATABASE_URL:
@@ -200,9 +304,9 @@ def _history_load(limit: int = 100) -> list[dict[str, Any]]:
             with conn.cursor() as cur:
                 _db_init(cur)
                 cur.execute("""
-                    SELECT id, checked_at, started_at, finished_at, summary, error, alert_sent, changes
+                    SELECT id, checked_at, started_at, finished_at, summary, error, alert_sent, changes, daily_date
                     FROM denni_pov_history
-                    ORDER BY id DESC
+                    ORDER BY COALESCE(daily_date, checked_at::date) DESC, id DESC
                     LIMIT %s
                 """, (max(1, min(limit, 500)),))
                 rows = cur.fetchall()
@@ -217,6 +321,7 @@ def _history_load(limit: int = 100) -> list[dict[str, Any]]:
                 "error": row[5] or "",
                 "alert_sent": bool(row[6]),
                 "changes": row[7] if isinstance(row[7], dict) else {},
+                "day": row[8].isoformat() if row[8] else "",
             }
             for row in rows
         ]
@@ -410,6 +515,10 @@ def _compare_runs(previous: dict[str, Any], current: dict[str, Any]) -> dict[str
     }
 
 
+def _same_local_day(value: Any, day_iso: str) -> bool:
+    return _date_from_display(value) == day_iso
+
+
 def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     public = dict(data)
     public.pop("_command", None)
@@ -586,15 +695,28 @@ def api_sync():
         data["csv_available"] = bool(data.get("results"))
         data["_command"] = None
         if final_run and previous.get("finished_at") and previous.get("results"):
-            data["changes"] = _compare_runs(previous, data)
+            run_changes = _compare_runs(previous, data)
+            if _same_local_day(previous.get("finished_at"), _today_iso()):
+                prior_daily = previous.get("changes") if isinstance(previous.get("changes"), dict) else {}
+                merged_items = _merge_change_items(prior_daily.get("items") or [], run_changes.get("items") or [])
+                data["changes"] = {
+                    "count": len(merged_items),
+                    "items": merged_items,
+                    "summary_delta": run_changes.get("summary_delta") or prior_daily.get("summary_delta") or {},
+                    "compared_to": prior_daily.get("compared_to") or run_changes.get("compared_to"),
+                    "day": _today_iso(),
+                }
+            else:
+                run_changes["day"] = _today_iso()
+                data["changes"] = run_changes
         elif final_run:
-            data["changes"] = {"count": 0, "items": [], "summary_delta": {}, "compared_to": previous.get("finished_at") or previous.get("synced_at")}
+            data["changes"] = {"count": 0, "items": [], "summary_delta": {}, "compared_to": previous.get("finished_at") or previous.get("synced_at"), "day": _today_iso()}
         else:
             data["changes"] = previous.get("changes") or _default_state()["changes"]
-        _save_state(data)
 
-    if final_run:
-        _history_save(data, alert_sent)
+        if final_run:
+            data["changes"] = _history_save_daily(data, alert_sent)
+        _save_state(data)
 
     return jsonify({"ok": True, "message": "Data byla synchronizována na Render.", "alert_sent": alert_sent})
 

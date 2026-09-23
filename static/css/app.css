@@ -1859,7 +1859,7 @@ button{cursor:pointer}
 }
 .connection-step-dots{
   display:grid;
-  grid-template-columns:repeat(15,1fr);
+  grid-template-columns:repeat(18,1fr);
   gap:5px;
   margin-top:13px;
 }

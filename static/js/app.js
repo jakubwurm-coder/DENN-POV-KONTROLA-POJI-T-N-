@@ -175,10 +175,17 @@ function connectionStepIndex(percent){
   return Math.max(0,Math.min(connectionSteps.length-1,Math.max(connectionVisualIndex,byPercent)));
 }
 
-function ensureConnectionDots(activeIndex,finished,error){
+function ensureConnectionDots(percent,finished,error){
   const box=$('connectionStepDots');if(!box)return;
+  const total=connectionSteps.length;
+  const current=Math.max(0,Math.min(100,Number(percent)||0));
+  const filled=finished?total:Math.floor((current/100)*total);
+
   box.innerHTML=connectionSteps.map((_,i)=>{
-    const cls=error&&i===activeIndex?'error':(finished||i<activeIndex?'done':(i===activeIndex?'active':''));
+    let cls='';
+    if(error&&i===Math.max(0,filled-1)) cls='error';
+    else if(i<filled) cls='done';
+    else if(i===filled&&!finished&&current>0) cls='active';
     return '<span class="'+cls+'"></span>';
   }).join('');
 }
@@ -216,7 +223,7 @@ function renderProgress(){
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';
     if(finalBox)finalBox.hidden=true;
     if(runningBox)runningBox.hidden=false;
-    ensureConnectionDots(idx,false,false);
+    ensureConnectionDots(percent,false,false);
     return;
   }
 
@@ -231,7 +238,7 @@ function renderProgress(){
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='!';
     if(finalBox)finalBox.hidden=true;
     if(runningBox)runningBox.hidden=false;
-    ensureConnectionDots(connectionVisualIndex,false,true);
+    ensureConnectionDots(percent,false,true);
     return;
   }
 
@@ -255,7 +262,7 @@ function renderProgress(){
 
     if(percent<100){
       $('progressDetail').textContent='Dokončuji kontrolu a připravuji výsledný stav.';
-      ensureConnectionDots(connectionSteps.length-1,false,false);
+      ensureConnectionDots(percent,false,false);
       return;
     }
 
@@ -267,7 +274,7 @@ function renderProgress(){
     if($('connectionFinalSub'))$('connectionFinalSub').textContent=sourceError
       ?'Některý datový zdroj vyžaduje kontrolu.'
       :'SQL i evidence pojištění odpověděly a výsledky byly aktualizovány.';
-    ensureConnectionDots(connectionSteps.length-1,true,false);
+    ensureConnectionDots(100,true,false);
     return;
   }
 

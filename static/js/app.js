@@ -136,13 +136,6 @@ function renderRows(){
   document.querySelectorAll('#rows tr[data-index]').forEach(tr=>tr.addEventListener('click',()=>showDetail(state.results[Number(tr.dataset.index)])));
 }
 
-function formatEta(seconds){
-  const s=Math.max(0,Number(seconds)||0);
-  if(!state.running)return state.finished_at?'Dokončeno':'—';
-  if(s<60)return 'odhad cca '+Math.max(5,Math.round(s/5)*5)+' s';
-  return 'odhad cca '+Math.max(1,Math.round(s/60))+' min';
-}
-
 function primaryIssueCounts(){
   const s=state.summary||{};
   const missing=Number(s.missing)||0;
@@ -224,7 +217,7 @@ function renderProgress(){
     const detail=connectionSteps[idx];
 
     $('progressPercent').textContent=Math.round(percent)+' %';
-    $('progressEta').textContent=formatEta(p.eta_seconds);
+    $('progressEta').textContent='Probíhá';
     $('progressHeadline').textContent='Kontrola připojení';
     $('progressPhase').textContent='Probíhá kontrola SQL a evidence pojištění.';
     $('progressDetail').textContent=detail;
@@ -262,7 +255,7 @@ function renderProgress(){
     }
     percent=connectionVisualPercent;
     $('progressPercent').textContent=Math.round(percent)+' %';
-    $('progressEta').textContent=percent<100?'Dokončuji…':'Dokončeno';
+    $('progressEta').textContent=percent<100?'Dokončuji':'Dokončeno';
     $('progressHeadline').textContent='Kontrola připojení';
     $('progressPhase').textContent=percent<100?'Dokončuji kontrolu a aktualizuji přehled.':'Kontrola byla úspěšně dokončena.';
     $('progressBar').style.width=percent+'%';

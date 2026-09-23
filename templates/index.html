@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260921n">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260923a">
 </head>
 <body>
   <div class="app-shell">
@@ -41,6 +41,9 @@
         </button>
         <button class="nav-item" type="button" data-filter="SOLD_UNIQA">
           <span class="nav-icon">↗</span><span>Prodané, ale pojištěno</span>
+        </button>
+        <button id="navChanges" class="nav-item" type="button">
+          <span class="nav-icon">↕</span><span>Změny od minulé kontroly</span>
         </button>
         <button id="navBreakdown" class="nav-item" type="button">
           <span class="nav-icon">▤</span><span>Pojištění a výjimky</span>
@@ -210,6 +213,30 @@
           </div>
         </section>
 
+        <section id="changesSection" class="data-section" hidden>
+          <div class="data-toolbar">
+            <div>
+              <span class="section-kicker">Rozdíly mezi kontrolami</span>
+              <h2>Změny od poslední kontroly</h2>
+              <p id="changesComparedTo" style="margin:6px 0 0;color:#64748b;font-size:13px"></p>
+            </div>
+            <div class="metric-card" style="min-width:150px">
+              <span class="metric-label">Počet změn</span>
+              <strong id="changesCount">0</strong>
+              <small>oproti předchozí kontrole</small>
+            </div>
+          </div>
+          <div class="table-card">
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Typ změny</th><th>VIN</th><th>SPZ</th><th>Původní stav</th><th>Nový stav</th></tr></thead>
+                <tbody id="changeRows"><tr class="empty-row"><td colspan="5" class="empty">Zatím nejsou zaznamenané žádné změny.</td></tr></tbody>
+              </table>
+            </div>
+            <div class="table-footer"><span>Porovnání posledních dvou dokončených kontrol</span><strong id="changesFooter">Změny: 0</strong></div>
+          </div>
+        </section>
+
         <section id="dataSection" class="data-section" hidden>
           <div class="data-toolbar">
             <div><span class="section-kicker">Výsledky</span><h2>Vozidla ke kontrole</h2></div>
@@ -242,6 +269,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260922d"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923a"></script>
 </body>
 </html>

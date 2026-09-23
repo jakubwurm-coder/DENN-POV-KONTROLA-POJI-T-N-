@@ -357,7 +357,10 @@ function render(){
     return raw==='NAVÍC V UNIQA'||raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
   });
   const extraOverviewCount=extraOverviewRows.length;
-  const extraOriginalCount=extraOverviewRows.filter(r=>!String(r.workflow_status||'').trim()).length;
+  const extraProblemCount=extraOverviewRows.filter(r=>{
+    const workflow=String(r.workflow_status||'').trim().toUpperCase();
+    return !['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
+  }).length;
 
   const waitingFreshPage=!sessionCheckStarted&&!state.running;
   const suppressFinalResults=waitingFreshPage||state.running;
@@ -369,11 +372,11 @@ function render(){
   setText('tipMissingOverall',shown(issues.missing));setText('tipExtraOverall',shown(issues.unwanted));
   setText('cAbsentInsured',shown(s.absent_insured));setText('cAbsentInsuredTop',shown(issues.absent));setText('cAbsentUninsured',shown(s.absent_uninsured));
   setText('cDeposit',shown(s.deposit));setText('cSold',shown(s.sold_uniqa));setText('cSoldTop',shown(issues.sold));
-  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(extraOverviewCount));setText('navExtraCount',shown(extraOriginalCount));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
+  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(extraOverviewCount));setText('navExtraCount',shown(extraProblemCount));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
 
   const navExtraCount=$('navExtraCount');
   if(navExtraCount){
-    const hideExtraIndicator=suppressFinalResults||extraOriginalCount===0;
+    const hideExtraIndicator=suppressFinalResults||extraProblemCount===0;
     navExtraCount.classList.toggle('is-alert',!hideExtraIndicator);
     navExtraCount.classList.toggle('is-hidden',hideExtraIndicator);
   }

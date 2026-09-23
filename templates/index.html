@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260923e">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260923f">
 </head>
 <body>
   <div class="app-shell">
@@ -137,43 +137,43 @@
           </article>
         </section>
 
-        <section id="progressPanel">
-          <div class="progress-head">
-            <div class="progress-title">
-              <span class="pulse-icon">↻</span>
-              <div>
-                <span class="progress-eyebrow">LIVE PRŮBĚH KONTROLY</span>
-                <strong id="progressHeadline">Kontrolní systém připraven</strong>
-                <span id="progressPhase">Čekám na spuštění kontroly.</span>
-              </div>
+        <section id="progressPanel" class="connection-check-panel">
+          <div class="connection-check-main">
+            <div id="connectionVisual" class="connection-visual idle" aria-hidden="true">
+              <div class="connection-ring"></div>
+              <div id="connectionVisualIcon" class="connection-visual-icon">↻</div>
+            </div>
+            <div class="connection-check-copy">
+              <span class="progress-eyebrow">LIVE KONTROLA SYSTÉMU</span>
+              <strong id="progressHeadline">Kontrola připojení</strong>
+              <span id="progressPhase">Připraveno ke spuštění kontroly.</span>
             </div>
             <div class="progress-number">
               <strong id="progressPercent">0 %</strong>
-              <span id="progressEta">—</span>
+              <span id="progressEta">Připraveno</span>
             </div>
           </div>
-          <div class="progress-track"><div id="progressBar"></div></div>
-          <div class="progress-stage-grid">
-            <div id="stageConnection" class="progress-stage waiting">
-              <span class="stage-number">01</span>
-              <div><strong>Kontrola připojení</strong><small id="stageConnectionText">Čeká na spuštění</small></div>
+
+          <div class="connection-progress-track"><div id="progressBar"></div></div>
+
+          <div id="connectionRunningDetail" class="connection-running-detail">
+            <div class="running-status-line">
+              <span class="running-pulse"></span>
+              <div>
+                <small>PRÁVĚ PROBÍHÁ</small>
+                <strong id="progressDetail">Čekám na spuštění kontroly.</strong>
+              </div>
             </div>
-            <div id="stageDatabase" class="progress-stage waiting">
-              <span class="stage-number">02</span>
-              <div><strong>Interní databáze</strong><small id="stageDatabaseText">Načtení aktivních vozidel</small></div>
-            </div>
-            <div id="stageInsurers" class="progress-stage waiting">
-              <span class="stage-number">03</span>
-              <div><strong>Data pojištění</strong><small id="stageInsurersText">Evidence pojištění</small></div>
-            </div>
-            <div id="stageResults" class="progress-stage waiting">
-              <span class="stage-number">04</span>
-              <div><strong>Výsledek kontroly databáze s pojištěním</strong><small id="stageResultsText">Čekám na vyhodnocení</small></div>
-            </div>
+            <div id="connectionStepDots" class="connection-step-dots" aria-label="Průběh kontroly"></div>
           </div>
-          <div class="progress-live-detail">
-            <span>AKTUÁLNĚ</span>
-            <strong id="progressDetail">Systém je připraven ke kontrole.</strong>
+
+          <div id="connectionFinal" class="connection-final" hidden>
+            <span class="connection-final-icon">✓</span>
+            <div>
+              <small>VÝSLEDEK KONTROLY PŘIPOJENÍ</small>
+              <strong id="connectionFinalText">Kontrola připojení SQL a pojišťoven v pořádku</strong>
+              <span id="connectionFinalSub">Všechny potřebné zdroje odpověděly a data byla načtena.</span>
+            </div>
           </div>
         </section>
 
@@ -336,6 +336,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923e"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923f"></script>
 </body>
 </html>

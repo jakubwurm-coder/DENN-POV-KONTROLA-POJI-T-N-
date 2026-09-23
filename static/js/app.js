@@ -34,7 +34,7 @@ function source(name,prefix){
 }
 
 function hideSources(){const section=$('sourceSection');if(section)section.hidden=true;const btn=$('navSources');if(btn)btn.classList.remove('active');}
-function hideBreakdown(){const section=$('breakdownSection');if(section)section.hidden=true;const btn=$('navBreakdown');if(btn)btn.classList.remove('active');}
+function hideBreakdown(){const section=$('breakdownSection');if(section)section.hidden=true;}
 function hideData(){const section=$('dataSection');if(section)section.hidden=true;}
 function hideChanges(){const section=$('changesSection');if(section)section.hidden=true;const btn=$('navChanges');if(btn)btn.classList.remove('active');}
 function hideManualHistory(){const section=$('manualHistorySection');if(section)section.hidden=true;const btn=$('navManualHistory');if(btn)btn.classList.remove('active');}
@@ -44,7 +44,7 @@ function showChanges(){
   const section=$('changesSection');if(!section)return;
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  $('navChanges').classList.add('active');
+  const nav=$('navOthers');if(nav)nav.classList.add('active');
   renderChanges();
   section.scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -53,7 +53,7 @@ function showSources(){
   hideBreakdown();hideChanges();hideManualHistory();hideData();
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  $('navSources').classList.add('active');
+  const nav=$('navOthers');if(nav)nav.classList.add('active');
   section.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function showBreakdown(){
@@ -61,7 +61,7 @@ function showBreakdown(){
   hideSources();hideChanges();hideManualHistory();hideData();
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  $('navBreakdown').classList.add('active');
+  const nav=$('navOthers');if(nav)nav.classList.add('active');
   section.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
@@ -70,7 +70,7 @@ async function showManualHistory(){
   const section=$('manualHistorySection');if(!section)return;
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  $('navManualHistory').classList.add('active');
+  const nav=$('navOthers');if(nav)nav.classList.add('active');
   section.scrollIntoView({behavior:'smooth',block:'start'});
   const body=$('manualHistoryRows');
   if(body)body.innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Načítám historii…</td></tr>';
@@ -278,12 +278,12 @@ function render(){
   const s=state.summary||{};
   const issues=primaryIssueCounts();
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
-  setText('cActive',s.active||0);setText('cActiveHover',s.active||0);setText('cOkTotal',s.ok_total||0);
+  setText('cActive',s.active||0);setText('cActiveHover',s.active||0);setText('cActiveOverview',s.active||0);setText('cOkTotal',s.ok_total||0);
   setText('cOkUniqa',s.ok_uniqa||0);setText('cOkAllianz',s.ok_allianz||0);setText('cMissing',issues.missing);
   setText('tipMissingOverall',issues.missing);setText('tipExtraOverall',issues.unwanted);
   setText('cAbsentInsured',s.absent_insured||0);setText('cAbsentInsuredTop',issues.absent);setText('cAbsentUninsured',s.absent_uninsured||0);
   setText('cDeposit',s.deposit||0);setText('cSold',s.sold_uniqa||0);setText('cSoldTop',issues.sold);
-  setText('cExtra',s.extra_uniqa||0);setText('cExtraHover',issues.extra);setText('cExtraTop',issues.unwanted);
+  setText('cExtra',s.extra_uniqa||0);setText('cExtraHover',issues.extra);setText('cExtraTop',issues.unwanted);setText('cTodayChanges',(state.changes&&state.changes.count)||0);
   setStatusCard('overallCard','overallStatusText',issues.total===0&&!state.error,'Vše v pořádku','Vyžaduje kontrolu');
   setStatusCard('overallCard','overallStatusText',!state.running&&!!state.finished_at&&!state.error&&issues.total===0,'Vše v pořádku',state.running?'Kontrola probíhá':(state.error?'Chyba kontroly':(state.finished_at?'Vyžaduje kontrolu':'Čeká na kontrolu')));
   setStatusCard(document.querySelector('[data-filter="MISSING"]')?.id||'__none','missingStatusText',issues.missing===0,'V pořádku','Vyžaduje kontrolu');
@@ -317,9 +317,21 @@ async function saveMeta(r){
   try{const res=await fetch('/api/result-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:resultKey(r),note:$('vehicleNote').value,workflow_status:$('workflowStatus').value})});const d=await res.json();if(!res.ok)throw new Error(d.message||'Uložení selhalo.');toast('Poznámka a status uloženy.');$('detailDialog').close();await refresh();}catch(e){toast(e.message||'Uložení selhalo.',true);}finally{btn.disabled=false;}
 }
 
-function setFilter(filter){hideSources();hideBreakdown();showData();activeFilter=filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x.dataset.filter===filter));document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));const side=document.querySelector(`.nav-item[data-filter="${filter}"]`);if(side)side.classList.add('active');renderRows();}
-function clearFilter(){hideSources();hideBreakdown();showData();activeFilter='VŠE';$('search').value='';document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('selected'));document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));$('navAllVehicles').classList.add('active');renderRows();}
+function setFilter(filter){
+  hideSources();hideBreakdown();showData();activeFilter=filter;
+  document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x.dataset.filter===filter));
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  const side=document.querySelector(`.nav-item[data-filter="${filter}"]`);
+  if(side)side.classList.add('active');else if(filter!=='VŠE'&&$('navOthers'))$('navOthers').classList.add('active');
+  renderRows();
+}
+function clearFilter(){
+  hideSources();hideBreakdown();showData();activeFilter='VŠE';$('search').value='';
+  document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('selected'));
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  $('navAllVehicles').classList.add('active');renderRows();
+}
 let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return;lastToast=msg;const t=$('toast');t.textContent=msg;t.className='toast'+(error?' error':'');t.hidden=false;setTimeout(()=>{t.hidden=true;lastToast='';},5000);}
 
-$('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navSources').addEventListener('click',showSources);$('navChanges').addEventListener('click',showChanges);$('navManualHistory').addEventListener('click',showManualHistory);$('navBreakdown').addEventListener('click',showBreakdown);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
+$('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 setInterval(refresh,2000);refresh();

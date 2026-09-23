@@ -170,7 +170,6 @@ const connectionSteps=[
   'Ukládám výsledky a aktualizuji přehled'
 ];
 let connectionVisualIndex=0;
-let connectionRunStamp='';
 let connectionVisualPercent=0;
 let connectionFinishAnimating=false;
 
@@ -205,12 +204,13 @@ function renderProgress(){
   const runningBox=$('connectionRunningDetail');
 
   if(state.running){
-    if(connectionRunStamp!==String(state.started_at||'')){
-      connectionRunStamp=String(state.started_at||'');
+    if(connectionVisualPercent<=0){
       connectionVisualIndex=0;
       connectionVisualPercent=Math.max(1,serverPercent);
       connectionFinishAnimating=false;
     }
+    // Jedna kontrola = jeden souvislý průběh. Backend může mezi dílčími
+    // fázemi poslat nižší procento, ale zobrazený průběh se nikdy nevrací.
     connectionVisualPercent=Math.max(connectionVisualPercent,serverPercent);
     percent=Math.min(96,connectionVisualPercent);
     const idx=connectionStepIndex(percent);
@@ -396,6 +396,9 @@ async function run(){
   state.summary={};
   state.results=[];
   state.changes={count:0,items:[]};
+  connectionVisualIndex=0;
+  connectionVisualPercent=1;
+  connectionFinishAnimating=false;
   render();
   try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
 

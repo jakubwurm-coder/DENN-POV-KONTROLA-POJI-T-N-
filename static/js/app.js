@@ -109,7 +109,10 @@ function matches(r){
   if(activeFilter==='ABSENT_UNINSURED')return r.status_raw==='NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ';
   if(activeFilter==='DEPOSIT')return r.status_raw==='NEPOJIŠTĚNO, ALE DEPOZIT';
   if(activeFilter==='SOLD_UNIQA')return r.status_raw==='PRODANÉ, ALE V UNIQA'&&!resolved;
-  if(activeFilter==='EXTRA_UNIQA')return r.status_raw==='NAVÍC V UNIQA'&&!resolved;
+  if(activeFilter==='EXTRA_UNIQA'){
+    return (r.status_raw==='NAVÍC V UNIQA'&&!resolved)
+      || r.status_raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
+  }
   if(activeFilter==='UNWANTED_INSURANCE')return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE V UNIQA'].includes(r.status_raw)&&!resolved;
   return true;
 }
@@ -331,6 +334,8 @@ function shortDateTime(value){
 function render(){
   const s=state.summary||{};
   const issues=primaryIssueCounts();
+  const absentInsuredAll=(state.results||[]).filter(r=>String(r.status_raw||'').toUpperCase()==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ').length;
+  const extraOverviewCount=(Number(s.extra_uniqa)||0)+absentInsuredAll;
   const waitingFreshPage=!sessionCheckStarted&&!state.running;
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
   const shown=(value)=>waitingFreshPage?0:(Number(value)||0);
@@ -340,7 +345,7 @@ function render(){
   setText('tipMissingOverall',shown(issues.missing));setText('tipExtraOverall',shown(issues.unwanted));
   setText('cAbsentInsured',shown(s.absent_insured));setText('cAbsentInsuredTop',shown(issues.absent));setText('cAbsentUninsured',shown(s.absent_uninsured));
   setText('cDeposit',shown(s.deposit));setText('cSold',shown(s.sold_uniqa));setText('cSoldTop',shown(issues.sold));
-  setText('cExtra',shown(s.extra_uniqa));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(issues.unwanted));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
+  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(issues.unwanted));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
   const summaryCards=document.querySelectorAll('.overview-sticky .summary-card');
   summaryCards.forEach(card=>card.classList.toggle('status-running',!!state.running));
 

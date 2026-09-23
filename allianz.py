@@ -14,6 +14,46 @@ BASE_DIR = Path(__file__).resolve().parent
 ALLIANZ_PDF = BASE_DIR / "Pojisteni_898405561_210928898.pdf"
 
 
+# Vozidla/SPZ, která mají být z aktuálního Allianz přehledu ignorována.
+# Udržujeme je zde explicitně, aby se nemohla vracet do výsledků ani při nové kontrole.
+ALLIANZ_EXCLUDED_IDENTIFIERS = {
+    "EL54CK",
+    "1AAA171",
+    "1AAV611",
+    "1AAV624",
+    "1AAV634",
+    "1ABC583",
+    "1ABC731",
+    "1ABN178",
+    "1ABX149",
+    "1ACB067",
+    "1ACB077",
+    "1ACB097",
+    "1ACC968",
+    "1ACC975",
+    "1ACH506",
+    "1ACN655",
+    "1ACY822",
+    "1ACY839",
+    "1ADA390",
+    "1ADK176",
+    "1AEA880",
+    "1AER006",
+    "1AE8662",
+    "2AX6991",
+    "2A42993",
+    "1AY2893",
+    "3AN8311",
+    "4A5511",
+    "5AX9822",
+    "5J45710",
+    "7AU1423",
+    "7J54833",
+    "8S43133",
+    "WBA21EY0709Z45236",
+}
+
+
 @dataclass
 class AllianzVehicle:
     identifier: str
@@ -207,6 +247,13 @@ def load_allianz_vehicles() -> AllianzLoadResult:
                 )
 
                 if key in seen_rows:
+                    continue
+
+                if (
+                    vehicle.identifier in ALLIANZ_EXCLUDED_IDENTIFIERS
+                    or vehicle.vin in ALLIANZ_EXCLUDED_IDENTIFIERS
+                    or vehicle.spz in ALLIANZ_EXCLUDED_IDENTIFIERS
+                ):
                     continue
 
                 seen_rows.add(

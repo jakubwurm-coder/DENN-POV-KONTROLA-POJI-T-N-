@@ -2,6 +2,8 @@ let state={results:[],summary:{},sources:{},running:false,progress:{percent:0,ph
 let activeFilter='VŠE';
 let sessionCheckStarted=false;
 let initialStateLoaded=false;
+let extraNavIndicatorDismissed=false;
+let lastExtraOriginalCount=0;
 
 const $=id=>document.getElementById(id);
 
@@ -338,6 +340,13 @@ function render(){
     return raw==='NAVÍC V UNIQA'||raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
   });
   const extraOverviewCount=extraOverviewRows.length;
+  const extraOriginalCount=extraOverviewRows.filter(r=>!String(r.workflow_status||'').trim()).length;
+
+  if(extraOriginalCount!==lastExtraOriginalCount){
+    if(lastExtraOriginalCount!==0||extraOriginalCount>0) extraNavIndicatorDismissed=false;
+    lastExtraOriginalCount=extraOriginalCount;
+  }
+
   const waitingFreshPage=!sessionCheckStarted&&!state.running;
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
   const shown=(value)=>waitingFreshPage?0:(Number(value)||0);
@@ -347,7 +356,14 @@ function render(){
   setText('tipMissingOverall',shown(issues.missing));setText('tipExtraOverall',shown(issues.unwanted));
   setText('cAbsentInsured',shown(s.absent_insured));setText('cAbsentInsuredTop',shown(issues.absent));setText('cAbsentUninsured',shown(s.absent_uninsured));
   setText('cDeposit',shown(s.deposit));setText('cSold',shown(s.sold_uniqa));setText('cSoldTop',shown(issues.sold));
-  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(extraOverviewCount));setText('navExtraCount',shown(extraOverviewCount));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
+  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(extraOverviewCount));setText('navExtraCount',shown(extraOriginalCount));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
+
+  const navExtraCount=$('navExtraCount');
+  if(navExtraCount){
+    const hideExtraIndicator=waitingFreshPage||extraOriginalCount===0||extraNavIndicatorDismissed;
+    navExtraCount.classList.toggle('is-alert',!hideExtraIndicator);
+    navExtraCount.classList.toggle('is-hidden',hideExtraIndicator);
+  }
   const summaryCards=document.querySelectorAll('.overview-sticky .summary-card');
   summaryCards.forEach(card=>card.classList.toggle('status-running',!!state.running));
   const missingDot=$('missingStatusDot');
@@ -407,6 +423,8 @@ async function refresh(){try{
 }catch(e){toast('Nepodařilo se načíst stav aplikace.',true);}}
 async function run(){
   sessionCheckStarted=true;
+  extraNavIndicatorDismissed=false;
+  lastExtraOriginalCount=0;
   state.running=true;
   state.summary={};
   state.results=[];
@@ -448,6 +466,18 @@ function clearFilter(){
   $('navAllVehicles').classList.add('active');renderRows();
 }
 let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return;lastToast=msg;const t=$('toast');t.textContent=msg;t.className='toast'+(error?' error':'');t.hidden=false;setTimeout(()=>{t.hidden=true;lastToast='';},5000);}
+
+const extraNavItem=document.querySelector('.nav-item[data-filter="UNWANTED_INSURANCE"]');
+if(extraNavItem){
+  const dismissExtraIndicator=()=>{
+    if(!extraNavIndicatorDismissed){
+      extraNavIndicatorDismissed=true;
+      render();
+    }
+  };
+  extraNavItem.addEventListener('mouseenter',dismissExtraIndicator);
+  extraNavItem.addEventListener('click',dismissExtraIndicator);
+}
 
 $('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 setInterval(()=>{

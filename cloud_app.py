@@ -659,7 +659,20 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         if str(row.get("status_raw") or "").upper() in issue_statuses
         and str(row.get("workflow_status") or "").upper() in resolved_statuses
     ]
-    summary["ok_total"] += len(resolved_issue_rows)
+    # Do počtu "Pojištění v pořádku" patří jen vyřešené problémy vozidel,
+    # která jsou součástí aktivní kontroly. Záznamy "NAVÍC V UNIQA"
+    # a prodaná vozidla nejsou aktivní flotila a nesmí zvyšovat ok_total.
+    resolved_active_rows = [
+        row for row in resolved_issue_rows
+        if str(row.get("status_raw") or "").upper() in {
+            "CHYBÍ V UNIQA",
+            "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+        }
+    ]
+    summary["ok_total"] = min(
+        int(summary.get("active") or 0),
+        int(summary.get("ok_total") or 0) + len(resolved_active_rows),
+    )
     summary["missing"] = sum(
         1 for row in rows
         if str(row.get("status_raw") or "").upper() == "CHYBÍ V UNIQA"

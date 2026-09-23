@@ -78,11 +78,17 @@
             <div class="summary-copy status-copy">
               <span>Celkový výsledek</span>
               <strong id="overallStatusText">Čeká na kontrolu</strong>
-                          </div>
-            <div class="summary-tooltip" id="overallTooltip">
-              <b>Aktuální počty</b>
-              <span>Chybí pojištění: <strong id="tipMissingOverall">0</strong></span>
-              <span>Pojištění navíc: <strong id="tipExtraOverall">0</strong></span>
+            </div>
+            <div id="overallCounts" class="overall-counts" hidden>
+              <span class="overall-counts-label">AKTUÁLNÍ POČTY</span>
+              <div class="overall-count-item">
+                <span>Chybí pojištění</span>
+                <strong id="tipMissingOverall">0</strong>
+              </div>
+              <div class="overall-count-item">
+                <span>Pojištění navíc</span>
+                <strong id="tipExtraOverall">0</strong>
+              </div>
             </div>
           </article>
 

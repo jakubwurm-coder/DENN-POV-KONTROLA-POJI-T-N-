@@ -255,8 +255,8 @@ function renderProgress(){
     $('progressPercent').textContent=Math.round(percent)+' %';
     $('progressEta').textContent='Probíhá';
     $('progressHeadline').textContent='Kontrola připojení';
-    $('progressPhase').textContent='Probíhá kontrola SQL a evidence pojištění.';
-    $('progressDetail').textContent=detail;
+    $('progressPhase').textContent=detail;
+    $('progressDetail').textContent='Průběh jednotlivých kroků kontroly.';
     $('progressBar').style.width=Math.max(3,percent)+'%';
     const okState=$('progressOkState');
     if(okState){

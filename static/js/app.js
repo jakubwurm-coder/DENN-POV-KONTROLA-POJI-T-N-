@@ -36,10 +36,20 @@ function source(name,prefix){
 function hideSources(){const section=$('sourceSection');if(section)section.hidden=true;const btn=$('navSources');if(btn)btn.classList.remove('active');}
 function hideBreakdown(){const section=$('breakdownSection');if(section)section.hidden=true;const btn=$('navBreakdown');if(btn)btn.classList.remove('active');}
 function hideData(){const section=$('dataSection');if(section)section.hidden=true;}
-function showData(){const section=$('dataSection');if(!section)return;section.hidden=false;section.scrollIntoView({behavior:'smooth',block:'start'});}
+function hideChanges(){const section=$('changesSection');if(section)section.hidden=true;const btn=$('navChanges');if(btn)btn.classList.remove('active');}
+function showData(){hideChanges();const section=$('dataSection');if(!section)return;section.hidden=false;section.scrollIntoView({behavior:'smooth',block:'start'});}
+function showChanges(){
+  hideSources();hideBreakdown();hideData();
+  const section=$('changesSection');if(!section)return;
+  section.hidden=false;
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  $('navChanges').classList.add('active');
+  renderChanges();
+  section.scrollIntoView({behavior:'smooth',block:'start'});
+}
 function showSources(){
   const section=$('sourceSection');if(!section)return;
-  hideBreakdown();hideData();
+  hideBreakdown();hideChanges();hideData();
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   $('navSources').classList.add('active');
@@ -47,7 +57,7 @@ function showSources(){
 }
 function showBreakdown(){
   const section=$('breakdownSection');if(!section)return;
-  hideSources();hideData();
+  hideSources();hideChanges();hideData();
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   $('navBreakdown').classList.add('active');
@@ -183,6 +193,25 @@ function renderProgress(){
     resultStatus==='active'?'Vyhodnocuji VIN a výjimky…':'Vyhodnocení podle VIN');
 }
 
+function renderChanges(){
+  const changes=state.changes||{};
+  const items=Array.isArray(changes.items)?changes.items:[];
+  if($('changesCount'))$('changesCount').textContent=changes.count||items.length||0;
+  if($('changesFooter'))$('changesFooter').textContent='Změny: '+(changes.count||items.length||0);
+  if($('changesComparedTo'))$('changesComparedTo').textContent=changes.compared_to?'Porovnáno s kontrolou: '+shortDateTime(changes.compared_to):'Předchozí kontrola zatím není k dispozici.';
+  const body=$('changeRows');if(!body)return;
+  if(!items.length){
+    body.innerHTML='<tr class="empty-row"><td colspan="5" class="empty">Od poslední kontroly nebyla zjištěna žádná změna.</td></tr>';
+    return;
+  }
+  const typeLabel={NEW:'Nové vozidlo',REMOVED:'Vozidlo zmizelo',STATUS:'Změna stavu',SPZ:'Změna SPZ'};
+  body.innerHTML=items.map(x=>{
+    const oldValue=x.old_status||x.old_spz||'—';
+    const newValue=x.new_status||x.new_spz||'—';
+    return '<tr><td><span class="status-badge badge-warning">'+esc(typeLabel[x.type]||x.type||'Změna')+'</span></td><td>'+esc(x.vin||'—')+'</td><td>'+esc(x.spz||'—')+'</td><td>'+esc(visibleSystemText(oldValue))+'</td><td>'+esc(visibleSystemText(newValue))+'</td></tr>';
+  }).join('');
+}
+
 function shortDateTime(value){
   if(!value)return 'zatím neproběhla';
   const text=String(value).trim();
@@ -196,7 +225,7 @@ function render(){
   $('runBtn').disabled=state.running;$('runBtn').innerHTML=state.running?'Kontrola probíhá…':'<span class="play">▶</span> Spustit kontrolu';$('csvBtn').classList.toggle('disabled',!state.csv_available);
   const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}
   const lastCheck=$('lastCheck');if(lastCheck){lastCheck.textContent=state.running?'Kontrola právě probíhá':('Poslední kontrola: '+shortDateTime(state.finished_at));}
-  $('footerLeft').textContent=state.finished_at?'Dokončeno: '+state.finished_at:(state.started_at?'Spuštěno: '+state.started_at:'Připraveno');renderRows();
+  $('footerLeft').textContent=state.finished_at?'Dokončeno: '+state.finished_at:(state.started_at?'Spuštěno: '+state.started_at:'Připraveno');renderRows();renderChanges();
 }
 
 async function refresh(){try{const r=await fetch('/api/state',{cache:'no-store'});state=await r.json();render();if(state.error)toast(visibleSystemText(state.error),true);}catch(e){toast('Nepodařilo se načíst stav aplikace.',true);}}
@@ -221,5 +250,5 @@ function setFilter(filter){hideSources();hideBreakdown();showData();activeFilter
 function clearFilter(){hideSources();hideBreakdown();showData();activeFilter='VŠE';$('search').value='';document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('selected'));document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));$('navAllVehicles').classList.add('active');renderRows();}
 let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return;lastToast=msg;const t=$('toast');t.textContent=msg;t.className='toast'+(error?' error':'');t.hidden=false;setTimeout(()=>{t.hidden=true;lastToast='';},5000);}
 
-$('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navSources').addEventListener('click',showSources);$('navBreakdown').addEventListener('click',showBreakdown);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
+$('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navSources').addEventListener('click',showSources);$('navChanges').addEventListener('click',showChanges);$('navBreakdown').addEventListener('click',showBreakdown);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 setInterval(refresh,2000);refresh();

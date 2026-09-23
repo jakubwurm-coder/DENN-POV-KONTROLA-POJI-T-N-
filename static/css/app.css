@@ -2319,3 +2319,12 @@ body.check-running #csvBtn{
 @media(max-width:760px){
   .overview-sticky{grid-template-columns:1fr!important}
 }
+
+
+/* 2026-09-24 · compact action dock without helper copy */
+.control-action-dock-compact{
+  justify-content:flex-end;
+}
+.control-action-dock-compact .control-action-buttons{
+  margin-left:auto;
+}

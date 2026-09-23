@@ -138,8 +138,10 @@ function renderRows(){
   $('rows').innerHTML=rows.map(r=>{
     const index=state.results.indexOf(r);
     const raw=String(r.status_raw||'').toUpperCase();
+    const workflow=String(r.workflow_status||'').toUpperCase();
     const forceExtraRed=(activeFilter==='EXTRA_UNIQA'||activeFilter==='UNWANTED_INSURANCE')
-      && (raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'||raw==='NAVÍC V UNIQA');
+      && (raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'||raw==='NAVÍC V UNIQA')
+      && !['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
     const badge=forceExtraRed?'badge-missing':badgeClass(r);
     return `<tr data-index="${index}"><td><span class="status-badge ${badge}">${esc(visibleSystemText(r.status))}</span></td><td>${esc(r.vin||'—')}</td><td>${esc(displaySpz(r)||'—')}</td><td>${esc(r.vykup||'—')}</td><td>${esc(r.prodej||'—')}</td><td>${esc(visibleSystemText(r.detail||'—'))}</td></tr>`;
   }).join('');

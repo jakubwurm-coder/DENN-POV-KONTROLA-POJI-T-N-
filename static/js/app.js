@@ -360,9 +360,17 @@ function render(){
     setText('activeStatusText','Evidence načtena');
   }
   source('tirbazar','tir');source('uniqa','uniqa');source('allianz','allianz');renderProgress();
-  $('runBtn').disabled=state.running;$('runBtn').innerHTML=state.running?'Kontrola probíhá…':'<span class="play">▶</span> Spustit kontrolu';$('csvBtn').classList.toggle('disabled',!state.csv_available);
+  const runBtn=$('runBtn');
+  runBtn.disabled=state.running;
+  const runSmall=runBtn.querySelector('.run-check-cta-copy small');
+  const runStrong=runBtn.querySelector('.run-check-cta-copy strong');
+  const runIcon=runBtn.querySelector('.run-check-cta-icon .play');
+  if(runSmall)runSmall.textContent=state.running?'PROBÍHÁ AKTUÁLNÍ OVĚŘENÍ':'SPUSTIT NOVÉ OVĚŘENÍ';
+  if(runStrong)runStrong.textContent=state.running?'Kontrola probíhá…':'Spustit kontrolu';
+  if(runIcon)runIcon.textContent=state.running?'↻':'▶';
+  $('csvBtn').classList.toggle('disabled',!state.csv_available);
   const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(sessionCheckStarted&&state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(sessionCheckStarted&&state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}
-  const lastCheck=$('lastCheck');if(lastCheck){lastCheck.textContent=state.running?'Kontrola právě probíhá':('Poslední kontrola: '+shortDateTime(state.finished_at));}
+  const lastCheck=$('lastCheck');if(lastCheck){lastCheck.textContent=state.running?'Právě probíhá':shortDateTime(state.finished_at);}
   $('footerLeft').textContent=state.running&&state.started_at?'Spuštěno: '+state.started_at:(sessionCheckStarted&&state.finished_at?'Dokončeno: '+state.finished_at:'Připraveno');renderRows();renderChanges();
 }
 

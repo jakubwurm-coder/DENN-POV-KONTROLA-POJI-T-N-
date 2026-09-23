@@ -1,5 +1,7 @@
 let state={results:[],summary:{},sources:{},running:false,progress:{percent:0,phase:'Připraveno',eta_seconds:0}};
 let activeFilter='VŠE';
+let sessionCheckStarted=false;
+let initialStateLoaded=false;
 
 const $=id=>document.getElementById(id);
 
@@ -183,7 +185,7 @@ function ensureConnectionDots(activeIndex,finished,error){
 function renderProgress(){
   const p=state.progress||{};
   const serverPercent=Math.max(0,Math.min(100,Number(p.percent)||0));
-  const finished=!state.running&&!!state.finished_at&&!state.error;
+  const finished=sessionCheckStarted&&!state.running&&!!state.finished_at&&!state.error;
   let percent=serverPercent;
 
   const visual=$('connectionVisual');
@@ -325,30 +327,46 @@ function render(){
   summaryCards.forEach(card=>card.classList.toggle('status-running',!!state.running));
 
   if(state.running){
+    sessionCheckStarted=true;
     setText('overallStatusText','Probíhá kontrola');
     setText('missingStatusText','Probíhá kontrola');
     setText('extraStatusText','Probíhá kontrola');
     setText('activeStatusText','Probíhá kontrola');
     summaryCards.forEach(card=>{card.classList.remove('status-ok','status-problem');});
+  }else if(!sessionCheckStarted){
+    setText('overallStatusText','Čeká na kontrolu');
+    setText('missingStatusText','Čeká na kontrolu');
+    setText('extraStatusText','Čeká na kontrolu');
+    setText('activeStatusText','Čeká na kontrolu');
+    summaryCards.forEach(card=>{card.classList.remove('status-ok','status-problem');});
   }else{
-    setStatusCard('overallCard','overallStatusText',!!state.finished_at&&!state.error&&issues.total===0,'Vše v pořádku',state.error?'Chyba kontroly':(state.finished_at?'Vyžaduje kontrolu':'Čeká na kontrolu'));
+    setStatusCard('overallCard','overallStatusText',!!state.finished_at&&!state.error&&issues.total===0,'Vše v pořádku',state.error?'Chyba kontroly':'Vyžaduje kontrolu');
     const missingCard=document.querySelector('.summary-card[data-filter="MISSING"]');
     if(missingCard){missingCard.classList.toggle('status-ok',issues.missing===0);missingCard.classList.toggle('status-problem',issues.missing>0);}
     const extraCard=document.querySelector('.summary-card[data-filter="UNWANTED_INSURANCE"]');
     if(extraCard){extraCard.classList.toggle('status-ok',issues.unwanted===0);extraCard.classList.toggle('status-problem',issues.unwanted>0);}
     setText('missingStatusText',issues.missing===0?'V pořádku':'Vyžaduje kontrolu');
     setText('extraStatusText',issues.unwanted===0?'V pořádku':'Vyžaduje kontrolu');
-    setText('activeStatusText',state.finished_at?'Evidence načtena':'Čeká na kontrolu');
+    setText('activeStatusText','Evidence načtena');
   }
   source('tirbazar','tir');source('uniqa','uniqa');source('allianz','allianz');renderProgress();
   $('runBtn').disabled=state.running;$('runBtn').innerHTML=state.running?'Kontrola probíhá…':'<span class="play">▶</span> Spustit kontrolu';$('csvBtn').classList.toggle('disabled',!state.csv_available);
-  const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}
+  const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(sessionCheckStarted&&state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(sessionCheckStarted&&state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}
   const lastCheck=$('lastCheck');if(lastCheck){lastCheck.textContent=state.running?'Kontrola právě probíhá':('Poslední kontrola: '+shortDateTime(state.finished_at));}
-  $('footerLeft').textContent=state.finished_at?'Dokončeno: '+state.finished_at:(state.started_at?'Spuštěno: '+state.started_at:'Připraveno');renderRows();renderChanges();
+  $('footerLeft').textContent=state.running&&state.started_at?'Spuštěno: '+state.started_at:(sessionCheckStarted&&state.finished_at?'Dokončeno: '+state.finished_at:'Připraveno');renderRows();renderChanges();
 }
 
-async function refresh(){try{const r=await fetch('/api/state',{cache:'no-store'});state=await r.json();render();if(state.error)toast(visibleSystemText(state.error),true);}catch(e){toast('Nepodařilo se načíst stav aplikace.',true);}}
-async function run(){try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
+async function refresh(){try{
+  const r=await fetch('/api/state',{cache:'no-store'});
+  state=await r.json();
+  if(!initialStateLoaded){
+    if(state.running)sessionCheckStarted=true;
+    initialStateLoaded=true;
+  }
+  render();
+  if(sessionCheckStarted&&state.error)toast(visibleSystemText(state.error),true);
+}catch(e){toast('Nepodařilo se načíst stav aplikace.',true);}}
+async function run(){sessionCheckStarted=true;try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
 
 function showDetail(r){
   const original=r.original_status?`<div style="margin-top:5px;color:#64748b;font-size:11px">Původní stav: ${esc(visibleSystemText(r.original_status))}</div>`:'';

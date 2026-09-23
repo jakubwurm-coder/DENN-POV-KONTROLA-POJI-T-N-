@@ -160,17 +160,21 @@ const connectionSteps=[
   'Navazuji spojení s kancelářským agentem',
   'Ověřuji dostupnost interní sítě',
   'Kontroluji přístup k SQL serveru',
-  'Ověřuji dostupnost dat pro kontrolu',
+  'Načítám interní evidenci vozidel',
   'Připravuji seznam vozidel ke kontrole',
   'Kontroluji VIN a registrační značky',
+  'Vyřazuji vozidla mimo rozsah kontroly',
   'Navazuji spojení s evidencí pojištění',
-  'Načítám aktivní smlouvy pojištění',
+  'Načítám aktivní záznamy pojištění',
   'Kontroluji dostupnost doplňkového zdroje pojištění',
   'Ověřuji vozidla podle VIN',
   'Doplňuji ověření podle registračních značek',
-  'Porovnávám databázi vozidel s pojištěním',
-  'Vyhodnocuji rozdíly a výjimky',
-  'Ukládám výsledky a aktualizuji přehled'
+  'Porovnávám evidenci vozidel s pojištěním',
+  'Kontroluji chybějící pojištění',
+  'Kontroluji pojištění navíc a výjimky',
+  'Vyhodnocuji rozdíly a ruční stavy',
+  'Ukládám výsledky kontroly',
+  'Aktualizuji výsledný přehled'
 ];
 let connectionVisualIndex=0;
 let connectionVisualPercent=0;

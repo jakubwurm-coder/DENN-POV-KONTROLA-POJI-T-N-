@@ -110,10 +110,11 @@ function matches(r){
   if(activeFilter==='DEPOSIT')return r.status_raw==='NEPOJIŠTĚNO, ALE DEPOZIT';
   if(activeFilter==='SOLD_UNIQA')return r.status_raw==='PRODANÉ, ALE V UNIQA'&&!resolved;
   if(activeFilter==='EXTRA_UNIQA'){
-    return (r.status_raw==='NAVÍC V UNIQA'&&!resolved)
-      || r.status_raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
+    return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'].includes(r.status_raw);
   }
-  if(activeFilter==='UNWANTED_INSURANCE')return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE V UNIQA'].includes(r.status_raw)&&!resolved;
+  if(activeFilter==='UNWANTED_INSURANCE'){
+    return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'].includes(r.status_raw);
+  }
   return true;
 }
 
@@ -332,8 +333,11 @@ function shortDateTime(value){
 function render(){
   const s=state.summary||{};
   const issues=primaryIssueCounts();
-  const absentInsuredAll=(state.results||[]).filter(r=>String(r.status_raw||'').toUpperCase()==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ').length;
-  const extraOverviewCount=(Number(s.extra_uniqa)||0)+absentInsuredAll;
+  const extraOverviewRows=(state.results||[]).filter(r=>{
+    const raw=String(r.status_raw||'').toUpperCase();
+    return raw==='NAVÍC V UNIQA'||raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
+  });
+  const extraOverviewCount=extraOverviewRows.length;
   const waitingFreshPage=!sessionCheckStarted&&!state.running;
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
   const shown=(value)=>waitingFreshPage?0:(Number(value)||0);

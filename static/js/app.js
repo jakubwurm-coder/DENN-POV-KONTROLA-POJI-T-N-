@@ -288,7 +288,7 @@ function renderProgress(){
   $('progressEta').textContent='Připraveno';
   $('progressHeadline').textContent='Kontrola připojení';
   $('progressPhase').textContent='Připraveno ke spuštění kontroly.';
-  $('progressDetail').textContent='Po spuštění se ověří SQL a evidence pojištění.';
+  $('progressDetail').textContent='Po spuštění se ověří interní databáze SQL a evidence dat z pojišťovny.';
   $('progressBar').style.width='0%';
   if(visual)visual.className='connection-visual idle';
   if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';

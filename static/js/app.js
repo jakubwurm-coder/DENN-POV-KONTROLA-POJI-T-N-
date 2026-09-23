@@ -170,24 +170,24 @@ function setStatusCard(cardId,textId,ok,okText,badText){
 }
 
 const connectionSteps=[
-  'Navazuji spojení s kancelářským agentem',
-  'Ověřuji dostupnost interní sítě',
-  'Kontroluji přístup k SQL serveru',
-  'Načítám interní evidenci vozidel',
-  'Připravuji seznam vozidel ke kontrole',
-  'Kontroluji VIN a registrační značky',
-  'Vyřazuji vozidla mimo rozsah kontroly',
+  'Inicializuji kontrolní proces',
+  'Ověřuji síťovou konektivitu',
+  'Navazuji relaci se SQL serverem',
+  'Načítám datovou sadu vozidel',
+  'Normalizuji VIN a registrační značky',
+  'Aplikuji validační pravidla a výjimky',
+  'Filtruji záznamy mimo rozsah kontroly',
   'Navazuji spojení s evidencí pojištění',
-  'Načítám aktivní záznamy pojištění',
-  'Kontroluji dostupnost doplňkového zdroje pojištění',
-  'Ověřuji vozidla podle VIN',
-  'Doplňuji ověření podle registračních značek',
-  'Porovnávám evidenci vozidel s pojištěním',
-  'Kontroluji chybějící pojištění',
-  'Kontroluji pojištění navíc a výjimky',
-  'Vyhodnocuji rozdíly a ruční stavy',
-  'Ukládám výsledky kontroly',
-  'Aktualizuji výsledný přehled'
+  'Synchronizuji aktivní záznamy pojištění',
+  'Validuji integritu načtených dat',
+  'Páruji záznamy podle VIN',
+  'Páruji záznamy podle registrační značky',
+  'Provádím křížové porovnání datových sad',
+  'Detekuji chybějící pojištění',
+  'Detekuji pojištění navíc a výjimky',
+  'Vyhodnocuji konflikty a ruční statusy',
+  'Finalizuji validační výsledek',
+  'Publikuji aktuální přehled'
 ];
 let connectionVisualIndex=0;
 let connectionVisualPercent=0;

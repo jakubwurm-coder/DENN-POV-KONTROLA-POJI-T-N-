@@ -380,6 +380,19 @@ function render(){
     navExtraCount.classList.toggle('is-alert',!hideExtraIndicator);
     navExtraCount.classList.toggle('is-hidden',hideExtraIndicator);
   }
+
+  const setMetricProblemState=(filter,problemCount)=>{
+    const card=document.querySelector('.metric-card[data-filter="'+filter+'"]');
+    if(!card)return;
+    card.classList.remove('metric-danger','metric-success');
+    if(!suppressFinalResults){
+      card.classList.add(problemCount>0?'metric-danger':'metric-success');
+    }
+  };
+  setMetricProblemState('ABSENT_INSURED',issues.absent);
+  setMetricProblemState('SOLD_UNIQA',issues.sold);
+  setMetricProblemState('EXTRA_UNIQA',extraProblemCount);
+
   const summaryCards=document.querySelectorAll('.overview-sticky .summary-card');
   summaryCards.forEach(card=>card.classList.toggle('status-running',!!state.running));
   const missingDot=$('missingStatusDot');

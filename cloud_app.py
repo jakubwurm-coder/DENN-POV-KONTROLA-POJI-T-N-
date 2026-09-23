@@ -149,6 +149,23 @@ def _db_init(cur) -> None:
             updated_at TEXT NOT NULL
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS denni_pov_annotation_history (
+            id BIGSERIAL PRIMARY KEY,
+            vehicle_key TEXT NOT NULL,
+            vin TEXT NOT NULL DEFAULT '',
+            spz TEXT NOT NULL DEFAULT '',
+            vehicle TEXT NOT NULL DEFAULT '',
+            original_status TEXT NOT NULL DEFAULT '',
+            old_workflow_status TEXT NOT NULL DEFAULT '',
+            new_workflow_status TEXT NOT NULL DEFAULT '',
+            old_note TEXT NOT NULL DEFAULT '',
+            new_note TEXT NOT NULL DEFAULT '',
+            changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            changed_at_text TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS denni_pov_annotation_history_key_idx ON denni_pov_annotation_history (vehicle_key, id DESC)")
 
 
 def _db_load() -> dict[str, Any] | None:
@@ -380,19 +397,23 @@ def _annotations_load(legacy: dict[str, Any] | None = None) -> dict[str, dict[st
         return _normalize_annotations(legacy)
 
 
-def _annotation_save(vehicle_key: str, note: str, workflow_status: str) -> None:
-    """Persist one vehicle annotation. Raises if the durable write did not commit."""
+def _annotation_save(vehicle_key: str, note: str, workflow_status: str, snapshot: dict[str, Any] | None = None) -> None:
+    """Persist one vehicle annotation and an immutable audit record."""
+    snapshot = snapshot if isinstance(snapshot, dict) else {}
     try:
         with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
+                cur.execute(
+                    "SELECT note, workflow_status FROM denni_pov_annotations WHERE vehicle_key = %s",
+                    (vehicle_key,),
+                )
+                old_row = cur.fetchone()
+                old_note = str(old_row[0] or "") if old_row else ""
+                old_status = str(old_row[1] or "") if old_row else ""
 
-                # Empty status + empty note means return to the original state.
                 if not note and not workflow_status:
-                    cur.execute(
-                        "DELETE FROM denni_pov_annotations WHERE vehicle_key = %s",
-                        (vehicle_key,),
-                    )
+                    cur.execute("DELETE FROM denni_pov_annotations WHERE vehicle_key = %s", (vehicle_key,))
                 else:
                     cur.execute("""
                         INSERT INTO denni_pov_annotations (vehicle_key, note, workflow_status, updated_at)
@@ -403,11 +424,93 @@ def _annotation_save(vehicle_key: str, note: str, workflow_status: str) -> None:
                             workflow_status = EXCLUDED.workflow_status,
                             updated_at = EXCLUDED.updated_at
                     """, (vehicle_key, note, workflow_status, _now()))
+
+                if old_note != note or old_status != workflow_status:
+                    cur.execute("""
+                        INSERT INTO denni_pov_annotation_history
+                            (vehicle_key, vin, spz, vehicle, original_status,
+                             old_workflow_status, new_workflow_status,
+                             old_note, new_note, changed_at_text)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        vehicle_key,
+                        str(snapshot.get("vin") or ""),
+                        str(snapshot.get("spz_tir") or snapshot.get("spz_uniqa") or ""),
+                        str(snapshot.get("vozidlo") or ""),
+                        str(snapshot.get("status_raw") or snapshot.get("status") or ""),
+                        old_status,
+                        workflow_status,
+                        old_note,
+                        note,
+                        _now(),
+                    ))
                 conn.commit()
     except PersistenceUnavailable:
         raise
     except Exception as exc:
         raise PersistenceUnavailable(_safe_db_error(exc)) from exc
+
+
+def _annotation_history_load(limit: int = 300) -> list[dict[str, Any]]:
+    if not _DATABASE_URL:
+        return []
+    try:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                _db_init(cur)
+                cur.execute("""
+                    SELECT vehicle_key, vin, spz, vehicle, original_status,
+                           old_workflow_status, new_workflow_status,
+                           old_note, new_note, changed_at_text
+                    FROM denni_pov_annotation_history
+                    ORDER BY id DESC
+                    LIMIT %s
+                """, (max(1, min(limit, 1000)),))
+                rows = cur.fetchall()
+
+                # Current annotations are also included even if they predate the audit table.
+                cur.execute("""
+                    SELECT vehicle_key, note, workflow_status, updated_at
+                    FROM denni_pov_annotations
+                """)
+                current_rows = cur.fetchall()
+                conn.commit()
+
+        history = [{
+            "vehicle_key": row[0] or "",
+            "vin": row[1] or "",
+            "spz": row[2] or "",
+            "vehicle": row[3] or "",
+            "original_status": row[4] or "",
+            "old_workflow_status": row[5] or "",
+            "new_workflow_status": row[6] or "",
+            "old_note": row[7] or "",
+            "new_note": row[8] or "",
+            "changed_at": row[9] or "",
+            "source": "history",
+        } for row in rows]
+
+        keys_in_history = {str(item.get("vehicle_key") or "") for item in history}
+        for vehicle_key, note, workflow_status, updated_at in current_rows:
+            if str(vehicle_key or "") not in keys_in_history:
+                history.append({
+                    "vehicle_key": vehicle_key or "",
+                    "vin": vehicle_key if not str(vehicle_key or "").startswith("SPZ:") else "",
+                    "spz": str(vehicle_key or "")[4:] if str(vehicle_key or "").startswith("SPZ:") else "",
+                    "vehicle": "",
+                    "original_status": "",
+                    "old_workflow_status": "",
+                    "new_workflow_status": workflow_status or "",
+                    "old_note": "",
+                    "new_note": note or "",
+                    "changed_at": updated_at or "",
+                    "source": "current",
+                })
+        history.sort(key=lambda item: str(item.get("changed_at") or ""), reverse=True)
+        return history[:max(1, min(limit, 1000))]
+    except Exception as exc:
+        print(f"Annotation history load failed: {exc}")
+        return []
 
 def _file_load() -> dict[str, Any] | None:
     try:
@@ -543,13 +646,41 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     deposit = int(summary.get("deposit") or 0)
     summary["active"] = max(0, int(summary.get("active") or 0) - deposit)
     summary["ok_total"] = max(0, int(summary.get("ok_total") or 0) - deposit)
-    # "Navíc v UNIQA" má ukazovat jen nevyřešené případy.
-    summary["extra_uniqa"] = sum(
-        1
-        for row in rows
-        if str(row.get("status_raw") or "").upper() == "NAVÍC V UNIQA"
-        and str(row.get("workflow_status") or "").upper() != "VYŘEŠENO"
+
+    resolved_statuses = {"VYŘEŠENO", "V POŘÁDKU"}
+    issue_statuses = {
+        "CHYBÍ V UNIQA",
+        "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+        "PRODANÉ, ALE V UNIQA",
+        "NAVÍC V UNIQA",
+    }
+    resolved_issue_rows = [
+        row for row in rows
+        if str(row.get("status_raw") or "").upper() in issue_statuses
+        and str(row.get("workflow_status") or "").upper() in resolved_statuses
+    ]
+    summary["ok_total"] += len(resolved_issue_rows)
+    summary["missing"] = sum(
+        1 for row in rows
+        if str(row.get("status_raw") or "").upper() == "CHYBÍ V UNIQA"
+        and str(row.get("workflow_status") or "").upper() not in resolved_statuses
     )
+    summary["absent_insured"] = sum(
+        1 for row in rows
+        if str(row.get("status_raw") or "").upper() == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ"
+        and str(row.get("workflow_status") or "").upper() not in resolved_statuses
+    )
+    summary["sold_uniqa"] = sum(
+        1 for row in rows
+        if str(row.get("status_raw") or "").upper() == "PRODANÉ, ALE V UNIQA"
+        and str(row.get("workflow_status") or "").upper() not in resolved_statuses
+    )
+    summary["extra_uniqa"] = sum(
+        1 for row in rows
+        if str(row.get("status_raw") or "").upper() == "NAVÍC V UNIQA"
+        and str(row.get("workflow_status") or "").upper() not in resolved_statuses
+    )
+    summary["manual_ok"] = len(resolved_issue_rows)
     public["summary"] = summary
     public["csv_available"] = bool(rows)
     return public
@@ -584,6 +715,16 @@ def api_history():
     return jsonify({"ok": True, "history": _history_load(limit_i)})
 
 
+@app.get("/api/manual-history")
+def api_manual_history():
+    limit = request.args.get("limit", "300")
+    try:
+        limit_i = int(limit)
+    except ValueError:
+        limit_i = 300
+    return jsonify({"ok": True, "history": _annotation_history_load(limit_i)})
+
+
 @app.post("/api/result-meta")
 def api_result_meta():
     payload = request.get_json(silent=True)
@@ -596,12 +737,18 @@ def api_result_meta():
 
     note = str(payload.get("note") or "").strip()[:2000]
     workflow_status = str(payload.get("workflow_status") or "").strip().upper()
-    if workflow_status not in {"", "VYŘEŠENO", "ŘEŠÍ SE", "KONTROLA"}:
+    if workflow_status not in {"", "V POŘÁDKU", "VYŘEŠENO", "ŘEŠÍ SE", "KONTROLA"}:
         return jsonify({"ok": False, "persisted": False, "message": "Nepovolený status."}), 400
 
     # PostgreSQL is authoritative. Never claim success if this write fails.
+    with _lock:
+        current_data = _load_state()
+        snapshot = next(
+            (dict(row) for row in (current_data.get("results") or []) if _result_key(row) == key),
+            {},
+        )
     try:
-        _annotation_save(key, note, workflow_status)
+        _annotation_save(key, note, workflow_status, snapshot)
     except PersistenceUnavailable as exc:
         print(f"Annotation durable save failed for {key}: {exc}")
         return jsonify({

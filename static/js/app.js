@@ -199,18 +199,6 @@ function connectionStepIndex(percent){
   return Math.max(0,Math.min(connectionSteps.length-1,byPercent));
 }
 
-function progressOkLabel(percent){
-  const p=Math.max(0,Math.min(100,Number(percent)||0));
-  if(p>=100)return 'Kontrola dokončena · OK';
-  if(p>=92)return 'Vyhodnocení hotovo · OK';
-  if(p>=82)return 'Porovnání dokončeno · OK';
-  if(p>=70)return 'Evidence pojištění načtena · OK';
-  if(p>=55)return 'VIN a SPZ ověřeny · OK';
-  if(p>=38)return 'Evidence vozidel načtena · OK';
-  if(p>=22)return 'SQL připojení · OK';
-  if(p>=10)return 'Interní síť · OK';
-  return '';
-}
 
 function ensureConnectionDots(percent,finished,error){
   const box=$('connectionStepDots');if(!box)return;
@@ -258,12 +246,6 @@ function renderProgress(){
     $('progressPhase').textContent=detail;
     if($('progressDetail'))$('progressDetail').textContent='Průběh jednotlivých kroků kontroly.';
     $('progressBar').style.width=Math.max(3,percent)+'%';
-    const okState=$('progressOkState');
-    if(okState){
-      const okLabel=progressOkLabel(percent);
-      okState.textContent=okLabel;
-      okState.hidden=!okLabel;
-    }
 
     if(visual){visual.className='connection-visual running';}
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';
@@ -278,7 +260,6 @@ function renderProgress(){
     $('progressPercent').textContent='!';
     $('progressEta').textContent='Chyba';
     $('progressHeadline').textContent='Kontrola připojení';
-    if($('progressOkState'))$('progressOkState').hidden=true;
     $('progressPhase').textContent='Kontrolu se nepodařilo dokončit.';
     if($('progressDetail'))$('progressDetail').textContent=visibleSystemText(state.error);
     $('progressBar').style.width='100%';
@@ -302,10 +283,6 @@ function renderProgress(){
     $('progressPercent').textContent=Math.round(percent)+' %';
     $('progressEta').textContent=percent<100?'Dokončuji':'Dokončeno';
     $('progressHeadline').textContent='Kontrola připojení';
-    if($('progressOkState')){
-      $('progressOkState').textContent=progressOkLabel(percent);
-      $('progressOkState').hidden=false;
-    }
     $('progressPhase').textContent=percent<100?'Dokončuji kontrolu a připravuji výsledky.':'Kontrola byla úspěšně dokončena.';
     $('progressBar').style.width=percent+'%';
     if(visual)visual.className='connection-visual done';
@@ -341,7 +318,6 @@ function renderProgress(){
   $('progressPercent').textContent='0 %';
   $('progressEta').textContent='Připraveno';
   $('progressHeadline').textContent='Kontrola připojení';
-  if($('progressOkState'))$('progressOkState').hidden=true;
   $('progressPhase').textContent='Připraveno ke spuštění kontroly.';
   if($('progressDetail'))$('progressDetail').textContent='Po spuštění se ověří interní databáze SQL a evidence dat z pojišťovny.';
   $('progressBar').style.width='0%';

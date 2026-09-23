@@ -338,9 +338,15 @@ function render(){
   setText('tipMissingOverall',shown(issues.missing));setText('tipExtraOverall',shown(issues.unwanted));
   setText('cAbsentInsured',shown(s.absent_insured));setText('cAbsentInsuredTop',shown(issues.absent));setText('cAbsentUninsured',shown(s.absent_uninsured));
   setText('cDeposit',shown(s.deposit));setText('cSold',shown(s.sold_uniqa));setText('cSoldTop',shown(issues.sold));
-  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(issues.unwanted));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
+  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(extraOverviewCount));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
   const summaryCards=document.querySelectorAll('.overview-sticky .summary-card');
   summaryCards.forEach(card=>card.classList.toggle('status-running',!!state.running));
+  const missingDot=$('missingStatusDot');
+  if(missingDot){
+    missingDot.classList.remove('ok','problem','loading');
+    if(state.running) missingDot.classList.add('loading');
+    else if(sessionCheckStarted) missingDot.classList.add(issues.missing===0?'ok':'problem');
+  }
 
   if(state.running){
     sessionCheckStarted=true;
@@ -360,9 +366,9 @@ function render(){
     const missingCard=document.querySelector('.summary-card[data-filter="MISSING"]');
     if(missingCard){missingCard.classList.toggle('status-ok',issues.missing===0);missingCard.classList.toggle('status-problem',issues.missing>0);}
     const extraCard=document.querySelector('.summary-card[data-filter="UNWANTED_INSURANCE"]');
-    if(extraCard){extraCard.classList.toggle('status-ok',issues.unwanted===0);extraCard.classList.toggle('status-problem',issues.unwanted>0);}
+    if(extraCard){extraCard.classList.toggle('status-ok',extraOverviewCount===0);extraCard.classList.toggle('status-problem',extraOverviewCount>0);}
     setText('missingStatusText',issues.missing===0?'V pořádku':'Vyžaduje kontrolu');
-    setText('extraStatusText',issues.unwanted===0?'V pořádku':'Vyžaduje kontrolu');
+    setText('extraStatusText',extraOverviewCount===0?'V pořádku':'Vyžaduje kontrolu');
     setText('activeStatusText','Evidence načtena');
   }
   source('tirbazar','tir');source('uniqa','uniqa');source('allianz','allianz');renderProgress();

@@ -28,6 +28,24 @@ function visibleSystemText(value){
   return String(value??'');
 }
 
+function rowBadgeClass(r){
+  const raw=String(r.status_raw||'').toUpperCase();
+  const workflow=String(r.workflow_status||'').toUpperCase();
+  const forceExtraRed=(activeFilter==='EXTRA_UNIQA'||activeFilter==='UNWANTED_INSURANCE')
+    && (raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'||raw==='NAVÍC V UNIQA')
+    && !['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
+  return forceExtraRed?'badge-missing':badgeClass(r);
+}
+
+function rowPriority(r){
+  const badge=rowBadgeClass(r);
+  if(['badge-missing','badge-error','badge-sold','badge-extra'].includes(badge)) return 0;
+  if(badge==='badge-warning') return 1;
+  if(badge==='badge-deposit') return 2;
+  if(badge==='badge-ok') return 3;
+  return 2;
+}
+
 function source(name,prefix){
   const s=state.sources[name]||{};
   $(prefix+'Dot').className='status-dot '+(s.state||'idle');
@@ -136,17 +154,18 @@ function renderRows(){
   }
 
   const q=$('search').value.trim().toUpperCase();
-  const rows=state.results.filter(r=>matches(r)&&(!q||Object.values(r).join(' ').toUpperCase().includes(q)));
+  const rows=state.results
+    .filter(r=>matches(r)&&(!q||Object.values(r).join(' ').toUpperCase().includes(q)))
+    .sort((a,b)=>{
+      const priority=rowPriority(a)-rowPriority(b);
+      if(priority!==0)return priority;
+      return String(displaySpz(a)||a.vin||'').localeCompare(String(displaySpz(b)||b.vin||''),'cs',{numeric:true,sensitivity:'base'});
+    });
   $('footerRight').textContent='Zobrazeno: '+rows.length+' z '+state.results.length;
   if(!rows.length){$('rows').innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Žádné výsledky pro zvolený filtr.</td></tr>';return;}
   $('rows').innerHTML=rows.map(r=>{
     const index=state.results.indexOf(r);
-    const raw=String(r.status_raw||'').toUpperCase();
-    const workflow=String(r.workflow_status||'').toUpperCase();
-    const forceExtraRed=(activeFilter==='EXTRA_UNIQA'||activeFilter==='UNWANTED_INSURANCE')
-      && (raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'||raw==='NAVÍC V UNIQA')
-      && !['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
-    const badge=forceExtraRed?'badge-missing':badgeClass(r);
+    const badge=rowBadgeClass(r);
     return `<tr data-index="${index}"><td><span class="status-badge ${badge}">${esc(visibleSystemText(r.status))}</span></td><td>${esc(r.vin||'—')}</td><td>${esc(displaySpz(r)||'—')}</td><td>${esc(r.vykup||'—')}</td><td>${esc(r.prodej||'—')}</td><td>${esc(visibleSystemText(r.detail||'—'))}</td></tr>`;
   }).join('');
   document.querySelectorAll('#rows tr[data-index]').forEach(tr=>tr.addEventListener('click',()=>showDetail(state.results[Number(tr.dataset.index)])));

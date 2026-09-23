@@ -59,15 +59,10 @@
           <p>Denní přehled aktuálního stavu pojištění vozidel.</p>
         </div>
 
-        <div class="top-actions">
-          <a id="csvBtn" class="btn btn-secondary disabled" href="/download/xlsx">
-            <span class="btn-icon">⇩</span> STÁHNOUT PŘEHLED
-          </a>
-          <div class="run-control">
-            <button id="runBtn" class="btn btn-primary" type="button">
-              <span class="play">▶</span> Spustit kontrolu
-            </button>
-            <span id="lastCheck" class="last-check">Poslední kontrola: načítám…</span>
+        <div class="top-actions top-actions-meta">
+          <div class="header-last-check">
+            <span>POSLEDNÍ KONTROLA</span>
+            <strong id="lastCheck">Načítám…</strong>
           </div>
         </div>
       </header>
@@ -103,6 +98,33 @@
             </div>
           </article>
 
+        </section>
+
+        <section class="control-action-dock" aria-label="Akce kontroly">
+          <div class="control-action-copy">
+            <span class="control-action-eyebrow">AKTUÁLNÍ OVĚŘENÍ</span>
+            <strong>Spusťte novou kontrolu pojištění</strong>
+            <small>Načtou se aktuální data a přepočítá celý přehled.</small>
+          </div>
+
+          <div class="control-action-buttons">
+            <button id="runBtn" class="run-check-cta" type="button">
+              <span class="run-check-cta-icon"><span class="play">▶</span></span>
+              <span class="run-check-cta-copy">
+                <small>SPUSTIT NOVÉ OVĚŘENÍ</small>
+                <strong>Spustit kontrolu</strong>
+              </span>
+              <span class="run-check-cta-arrow">›</span>
+            </button>
+
+            <a id="csvBtn" class="download-overview-btn disabled" href="/download/xlsx">
+              <span class="download-overview-icon">⇩</span>
+              <span>
+                <small>EXPORT VÝSLEDKŮ</small>
+                <strong>Stáhnout přehled</strong>
+              </span>
+            </a>
+          </div>
         </section>
 
         <section id="progressPanel" class="connection-check-panel">

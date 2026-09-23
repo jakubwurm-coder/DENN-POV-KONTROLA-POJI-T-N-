@@ -2548,3 +2548,50 @@ body.check-running #csvBtn{
     border-top:1px solid rgba(190,207,221,.85);
   }
 }
+
+
+/* 2026-09-24 · run control beside overall status */
+.overall-run-slot{
+  margin-left:auto;
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+}
+.overall-run-slot .run-check-cta{
+  min-width:270px;
+  min-height:66px;
+  padding:10px 14px;
+  border-radius:16px;
+}
+.overall-run-slot .run-check-cta-icon{
+  width:46px;
+  height:46px;
+  flex:0 0 46px;
+}
+.overall-run-slot .run-check-cta-copy small{
+  font-size:8px;
+}
+.overall-run-slot .run-check-cta-copy strong{
+  min-height:0!important;
+  margin:2px 0 0!important;
+  color:#fff!important;
+  font-size:17px!important;
+  line-height:1.1!important;
+  white-space:nowrap;
+}
+.control-action-dock-compact{
+  min-height:0;
+  padding:10px 14px;
+}
+@media(max-width:900px){
+  .overview-sticky #overallCard{
+    flex-wrap:wrap;
+  }
+  .overall-run-slot{
+    width:100%;
+    margin:12px 0 0;
+  }
+  .overall-run-slot .run-check-cta{
+    width:100%;
+  }
+}

@@ -2487,3 +2487,12 @@ body.check-running #csvBtn{
 .progress-ok-state[hidden]{
   display:none!important;
 }
+
+
+/* 2026-09-24 · single main result card */
+.overview-sticky{
+  grid-template-columns:1fr!important;
+}
+.overview-sticky #overallCard{
+  width:100%;
+}

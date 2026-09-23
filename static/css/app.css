@@ -2240,3 +2240,41 @@ body.check-running #csvBtn{
     white-space:normal;
   }
 }
+
+
+/* 2026-09-24 · semantic colors for overview cards */
+.metric-card.metric-success{
+  border-color:#bfe6d3;
+  background:linear-gradient(180deg,#ffffff 0%,#f3fbf7 100%);
+}
+.metric-card.metric-success:hover{
+  border-color:#9ed8bd;
+  box-shadow:0 12px 28px rgba(20,145,91,.10);
+}
+.metric-card.metric-success .metric-label{
+  color:#35745a;
+}
+.metric-card.metric-success strong{
+  color:#0b8b57;
+}
+.metric-card.metric-success small{
+  color:#6f8f7e;
+}
+
+.metric-card.metric-danger{
+  border-color:#efc1ca;
+  background:linear-gradient(180deg,#ffffff 0%,#fff5f7 100%);
+}
+.metric-card.metric-danger:hover{
+  border-color:#e7a4b1;
+  box-shadow:0 12px 28px rgba(201,18,53,.10);
+}
+.metric-card.metric-danger .metric-label{
+  color:#9a4052;
+}
+.metric-card.metric-danger strong{
+  color:#c91235;
+}
+.metric-card.metric-danger small{
+  color:#9a7880;
+}

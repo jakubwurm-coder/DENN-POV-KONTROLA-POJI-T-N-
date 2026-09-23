@@ -129,9 +129,9 @@ function renderRows(){
     return;
   }
 
-  if(state.running){
+  if(state.running||(sessionCheckStarted&&!state.error&&!state.running&&!!state.finished_at&&connectionVisualPercent<100)){
     $('footerRight').textContent='Zobrazeno: 0 z 0';
-    $('rows').innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Kontrola právě probíhá. Výsledky se zobrazí až po jejím dokončení.</td></tr>';
+    $('rows').innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Kontrola právě probíhá. Výsledky se zobrazí až po jejím dokončení na 100 %.</td></tr>';
     return;
   }
 
@@ -319,6 +319,11 @@ function renderProgress(){
       return;
     }
 
+    if(!document.body.classList.contains('check-finalized')){
+      document.body.classList.add('check-finalized');
+      setTimeout(render,0);
+    }
+
     const sources=state.sources||{};
     const sourceError=Object.values(sources).some(x=>x&&x.state==='error');
     if($('connectionFinalText'))$('connectionFinalText').textContent=sourceError
@@ -388,7 +393,8 @@ function render(){
   }).length;
 
   const waitingFreshPage=!sessionCheckStarted&&!state.running;
-  const suppressFinalResults=waitingFreshPage||state.running;
+  const visualCompletionPending=sessionCheckStarted&&!state.error&&!state.running&&!!state.finished_at&&connectionVisualPercent<100;
+  const suppressFinalResults=waitingFreshPage||state.running||visualCompletionPending;
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
   const shown=(value)=>suppressFinalResults?0:(Number(value)||0);
   document.body.classList.toggle('check-running',!!state.running);
@@ -401,7 +407,7 @@ function render(){
 
   const navExtraCount=$('navExtraCount');
   if(navExtraCount){
-    const showExtraIndicator=!state.running&&sessionCheckStarted&&!!state.finished_at&&!state.error&&extraProblemCount>0;
+    const showExtraIndicator=!suppressFinalResults&&sessionCheckStarted&&!!state.finished_at&&!state.error&&extraProblemCount>0;
     navExtraCount.textContent=showExtraIndicator?String(extraProblemCount):'0';
     navExtraCount.classList.toggle('is-alert',showExtraIndicator);
     navExtraCount.classList.toggle('is-hidden',!showExtraIndicator);
@@ -425,16 +431,17 @@ function render(){
   const missingDot=$('missingStatusDot');
   if(missingDot){
     missingDot.classList.remove('ok','problem','loading');
-    if(state.running) missingDot.classList.add('loading');
+    if(state.running||visualCompletionPending) missingDot.classList.add('loading');
     else if(sessionCheckStarted) missingDot.classList.add(issues.missing===0?'ok':'problem');
   }
 
-  if(state.running){
+  if(state.running||visualCompletionPending){
     sessionCheckStarted=true;
-    setText('overallStatusText','Probíhá kontrola');
-    setText('missingStatusText','Probíhá kontrola');
-    setText('extraStatusText','Probíhá kontrola');
-    setText('activeStatusText','Probíhá kontrola');
+    const pendingText=state.running?'Probíhá kontrola':'Dokončuji kontrolu';
+    setText('overallStatusText',pendingText);
+    setText('missingStatusText',pendingText);
+    setText('extraStatusText',pendingText);
+    setText('activeStatusText',pendingText);
     summaryCards.forEach(card=>{card.classList.remove('status-ok','status-problem');});
   }else if(!sessionCheckStarted){
     setText('overallStatusText','Čeká na kontrolu');
@@ -479,6 +486,7 @@ async function refresh(){try{
 }catch(e){toast('Nepodařilo se načíst stav aplikace.',true);}}
 async function run(){
   sessionCheckStarted=true;
+  document.body.classList.remove('check-finalized');
   state.running=true;
   state.summary={};
   state.results=[];

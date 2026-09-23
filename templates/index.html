@@ -75,8 +75,7 @@
             <div class="summary-copy status-copy">
               <span>Celkový výsledek</span>
               <strong id="overallStatusText">Čeká na kontrolu</strong>
-              <small id="overallStatusSub">Celkový stav pojištění</small>
-            </div>
+                          </div>
             <div class="summary-tooltip" id="overallTooltip">
               <b>Aktuální počty</b>
               <span>Chybí pojištění: <strong id="tipMissingOverall">0</strong></span>
@@ -87,14 +86,26 @@
           <article class="summary-card status-card" data-filter="MISSING">
             <div class="summary-icon">✓</div>
             <div class="summary-copy status-copy">
-              <span>Chybějící pojištění</span>
+              <span class="summary-title-with-dot"><i id="missingStatusDot" class="summary-status-dot"></i>Chybějící pojištění</span>
               <strong id="missingStatusText">V pořádku</strong>
-              <small>vozidla, která mají být pojištěná</small>
             </div>
             <span class="summary-arrow">›</span>
             <div class="summary-tooltip">
               <b>Aktuální počet</b>
               <span>Chybí pojištění: <strong id="cMissing">0</strong></span>
+            </div>
+          </article>
+
+          <article class="summary-card status-card" data-filter="UNWANTED_INSURANCE">
+            <div class="summary-icon">!</div>
+            <div class="summary-copy status-copy">
+              <span>Pojištění navíc</span>
+              <strong id="extraStatusText">Čeká na kontrolu</strong>
+            </div>
+            <span class="summary-arrow">›</span>
+            <div class="summary-tooltip">
+              <b>Aktuální počet</b>
+              <span>Pojištění navíc: <strong id="cExtraTop">0</strong></span>
             </div>
           </article>
 
@@ -157,14 +168,6 @@
             <div id="connectionStepDots" class="connection-step-dots" aria-label="Průběh kontroly"></div>
           </div>
 
-          <div id="connectionFinal" class="connection-final" hidden>
-            <span class="connection-final-icon">✓</span>
-            <div>
-              <small>VÝSLEDEK KONTROLY PŘIPOJENÍ</small>
-              <strong id="connectionFinalText">Kontrola připojení SQL a pojišťoven v pořádku</strong>
-              <span id="connectionFinalSub">Všechny potřebné zdroje odpověděly a data byla načtena.</span>
-            </div>
-          </div>
         </section>
 
         <section id="sourceSection" class="source-section" hidden>

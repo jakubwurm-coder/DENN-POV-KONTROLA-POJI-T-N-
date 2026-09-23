@@ -79,6 +79,16 @@
               <span>Celkový výsledek</span>
               <strong id="overallStatusText">Čeká na kontrolu</strong>
             </div>
+            <div class="overall-run-slot">
+            <button id="runBtn" class="run-check-cta" type="button">
+              <span class="run-check-cta-icon"><span class="play">▶</span></span>
+              <span class="run-check-cta-copy">
+                <small>SPUSTIT NOVÉ OVĚŘENÍ</small>
+                <strong>Spustit kontrolu</strong>
+              </span>
+              <span class="run-check-cta-arrow">›</span>
+            </button>
+            </div>
             <div id="overallCounts" class="overall-counts" hidden>
               <span class="overall-counts-label">AKTUÁLNÍ POČTY</span>
               <div class="overall-count-item">
@@ -96,15 +106,6 @@
 
         <section class="control-action-dock control-action-dock-compact" aria-label="Akce kontroly">
           <div class="control-action-buttons">
-            <button id="runBtn" class="run-check-cta" type="button">
-              <span class="run-check-cta-icon"><span class="play">▶</span></span>
-              <span class="run-check-cta-copy">
-                <small>SPUSTIT NOVÉ OVĚŘENÍ</small>
-                <strong>Spustit kontrolu</strong>
-              </span>
-              <span class="run-check-cta-arrow">›</span>
-            </button>
-
             <a id="csvBtn" class="download-overview-btn disabled" href="/download/xlsx">
               <span class="download-overview-icon">⇩</span>
               <span>

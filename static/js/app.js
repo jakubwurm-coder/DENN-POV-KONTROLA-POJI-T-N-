@@ -150,10 +150,9 @@ const connectionSteps=[
   'Navazuji spojení s kancelářským agentem',
   'Ověřuji dostupnost interní sítě',
   'Kontroluji přístup k SQL serveru',
-  'Otevírám interní databázi vozidel',
-  'Načítám aktivní vozidla',
-  'Kontroluji VIN a registrační značky',
+  'Ověřuji dostupnost dat pro kontrolu',
   'Připravuji seznam vozidel ke kontrole',
+  'Kontroluji VIN a registrační značky',
   'Navazuji spojení s evidencí pojištění',
   'Načítám aktivní smlouvy pojištění',
   'Kontroluji dostupnost doplňkového zdroje pojištění',
@@ -165,6 +164,8 @@ const connectionSteps=[
 ];
 let connectionVisualIndex=0;
 let connectionRunStamp='';
+let connectionVisualPercent=0;
+let connectionFinishAnimating=false;
 
 function connectionStepIndex(percent){
   const byPercent=Math.floor((Math.max(0,Math.min(99,Number(percent)||0))/100)*connectionSteps.length);
@@ -181,9 +182,9 @@ function ensureConnectionDots(activeIndex,finished,error){
 
 function renderProgress(){
   const p=state.progress||{};
-  let percent=Math.max(0,Math.min(100,Number(p.percent)||0));
+  const serverPercent=Math.max(0,Math.min(100,Number(p.percent)||0));
   const finished=!state.running&&!!state.finished_at&&!state.error;
-  if(finished)percent=100;
+  let percent=serverPercent;
 
   const visual=$('connectionVisual');
   const finalBox=$('connectionFinal');
@@ -193,14 +194,18 @@ function renderProgress(){
     if(connectionRunStamp!==String(state.started_at||'')){
       connectionRunStamp=String(state.started_at||'');
       connectionVisualIndex=0;
+      connectionVisualPercent=Math.max(1,serverPercent);
+      connectionFinishAnimating=false;
     }
+    connectionVisualPercent=Math.max(connectionVisualPercent,serverPercent);
+    percent=Math.min(96,connectionVisualPercent);
     const idx=connectionStepIndex(percent);
     const detail=connectionSteps[idx];
 
     $('progressPercent').textContent=Math.round(percent)+' %';
     $('progressEta').textContent=formatEta(p.eta_seconds);
     $('progressHeadline').textContent='Kontrola připojení';
-    $('progressPhase').textContent='Probíhá kontrola SQL, databáze vozidel a evidence pojištění.';
+    $('progressPhase').textContent='Probíhá kontrola SQL a evidence pojištění.';
     $('progressDetail').textContent=detail;
     $('progressBar').style.width=Math.max(3,percent)+'%';
 
@@ -228,15 +233,28 @@ function renderProgress(){
   }
 
   if(finished){
-    $('progressPercent').textContent='100 %';
-    $('progressEta').textContent='Dokončeno';
+    connectionFinishAnimating=connectionVisualPercent<100;
+    if(connectionFinishAnimating){
+      connectionVisualPercent=Math.min(100,connectionVisualPercent+5);
+    }else{
+      connectionVisualPercent=100;
+    }
+    percent=connectionVisualPercent;
+    $('progressPercent').textContent=Math.round(percent)+' %';
+    $('progressEta').textContent=percent<100?'Dokončuji…':'Dokončeno';
     $('progressHeadline').textContent='Kontrola připojení';
-    $('progressPhase').textContent='Kontrola byla úspěšně dokončena.';
-    $('progressBar').style.width='100%';
+    $('progressPhase').textContent=percent<100?'Dokončuji kontrolu a aktualizuji přehled.':'Kontrola byla úspěšně dokončena.';
+    $('progressBar').style.width=percent+'%';
     if(visual)visual.className='connection-visual done';
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='✓';
-    if(runningBox)runningBox.hidden=true;
-    if(finalBox)finalBox.hidden=false;
+    if(runningBox)runningBox.hidden=percent>=100;
+    if(finalBox)finalBox.hidden=percent<100;
+
+    if(percent<100){
+      $('progressDetail').textContent='Dokončuji kontrolu a připravuji výsledný stav.';
+      ensureConnectionDots(connectionSteps.length-1,false,false);
+      return;
+    }
 
     const sources=state.sources||{};
     const sourceError=Object.values(sources).some(x=>x&&x.state==='error');
@@ -245,16 +263,18 @@ function renderProgress(){
       :'Kontrola připojení SQL a pojišťoven v pořádku';
     if($('connectionFinalSub'))$('connectionFinalSub').textContent=sourceError
       ?'Některý datový zdroj vyžaduje kontrolu.'
-      :'SQL databáze i evidence pojištění odpověděly a výsledky byly aktualizovány.';
+      :'SQL i evidence pojištění odpověděly a výsledky byly aktualizovány.';
     ensureConnectionDots(connectionSteps.length-1,true,false);
     return;
   }
 
+  connectionVisualPercent=0;
+  connectionFinishAnimating=false;
   $('progressPercent').textContent='0 %';
   $('progressEta').textContent='Připraveno';
   $('progressHeadline').textContent='Kontrola připojení';
   $('progressPhase').textContent='Připraveno ke spuštění kontroly.';
-  $('progressDetail').textContent='Po spuštění se ověří SQL, databáze vozidel a evidence pojištění.';
+  $('progressDetail').textContent='Po spuštění se ověří SQL a evidence pojištění.';
   $('progressBar').style.width='0%';
   if(visual)visual.className='connection-visual idle';
   if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';
@@ -365,7 +385,14 @@ $('runBtn').addEventListener('click',run);$('search').addEventListener('input',r
 setInterval(()=>{
   if(state.running){
     connectionVisualIndex=Math.min(connectionSteps.length-1,connectionVisualIndex+1);
+    if(connectionVisualPercent<50) connectionVisualPercent+=1.8;
+    else if(connectionVisualPercent<75) connectionVisualPercent+=1.0;
+    else if(connectionVisualPercent<90) connectionVisualPercent+=0.55;
+    else if(connectionVisualPercent<96) connectionVisualPercent+=0.2;
+    connectionVisualPercent=Math.min(96,connectionVisualPercent);
+    renderProgress();
+  }else if(state.finished_at&&!state.error&&connectionVisualPercent<100){
     renderProgress();
   }
-},2600);
+},650);
 setInterval(refresh,2000);refresh();

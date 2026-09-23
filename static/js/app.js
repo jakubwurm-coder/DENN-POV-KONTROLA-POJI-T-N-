@@ -315,14 +315,16 @@ function shortDateTime(value){
 function render(){
   const s=state.summary||{};
   const issues=primaryIssueCounts();
+  const waitingFreshPage=!sessionCheckStarted&&!state.running;
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
+  const shown=(value)=>waitingFreshPage?0:(Number(value)||0);
   document.body.classList.toggle('check-running',!!state.running);
-  setText('cActive',s.active||0);setText('cActiveHover',s.active||0);setText('cActiveOverview',s.active||0);setText('cOkTotal',s.ok_total||0);
-  setText('cOkUniqa',s.ok_uniqa||0);setText('cOkAllianz',s.ok_allianz||0);setText('cMissing',issues.missing);
-  setText('tipMissingOverall',issues.missing);setText('tipExtraOverall',issues.unwanted);
-  setText('cAbsentInsured',s.absent_insured||0);setText('cAbsentInsuredTop',issues.absent);setText('cAbsentUninsured',s.absent_uninsured||0);
-  setText('cDeposit',s.deposit||0);setText('cSold',s.sold_uniqa||0);setText('cSoldTop',issues.sold);
-  setText('cExtra',s.extra_uniqa||0);setText('cExtraHover',issues.extra);setText('cExtraTop',issues.unwanted);setText('cTodayChanges',(state.changes&&state.changes.count)||0);
+  setText('cActive',shown(s.active));setText('cActiveHover',shown(s.active));setText('cActiveOverview',shown(s.active));setText('cOkTotal',shown(s.ok_total));
+  setText('cOkUniqa',shown(s.ok_uniqa));setText('cOkAllianz',shown(s.ok_allianz));setText('cMissing',shown(issues.missing));
+  setText('tipMissingOverall',shown(issues.missing));setText('tipExtraOverall',shown(issues.unwanted));
+  setText('cAbsentInsured',shown(s.absent_insured));setText('cAbsentInsuredTop',shown(issues.absent));setText('cAbsentUninsured',shown(s.absent_uninsured));
+  setText('cDeposit',shown(s.deposit));setText('cSold',shown(s.sold_uniqa));setText('cSoldTop',shown(issues.sold));
+  setText('cExtra',shown(s.extra_uniqa));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(issues.unwanted));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
   const summaryCards=document.querySelectorAll('.overview-sticky .summary-card');
   summaryCards.forEach(card=>card.classList.toggle('status-running',!!state.running));
 
@@ -366,7 +368,13 @@ async function refresh(){try{
   render();
   if(sessionCheckStarted&&state.error)toast(visibleSystemText(state.error),true);
 }catch(e){toast('Nepodařilo se načíst stav aplikace.',true);}}
-async function run(){sessionCheckStarted=true;try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
+async function run(){
+  sessionCheckStarted=true;
+  state.running=true;
+  state.summary={};
+  state.changes={count:0,items:[]};
+  render();
+  try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
 
 function showDetail(r){
   const original=r.original_status?`<div style="margin-top:5px;color:#64748b;font-size:11px">Původní stav: ${esc(visibleSystemText(r.original_status))}</div>`:'';

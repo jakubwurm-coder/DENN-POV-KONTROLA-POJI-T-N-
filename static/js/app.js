@@ -402,6 +402,11 @@ function render(){
   setMetricProblemState('SOLD_UNIQA',issues.sold);
   setMetricProblemState('EXTRA_UNIQA',extraProblemCount);
 
+  const overallCounts=$('overallCounts');
+  if(overallCounts){
+    overallCounts.hidden=suppressFinalResults||!!state.error;
+  }
+
   const summaryCards=document.querySelectorAll('.overview-sticky .summary-card');
   summaryCards.forEach(card=>card.classList.toggle('status-running',!!state.running));
   const missingDot=$('missingStatusDot');

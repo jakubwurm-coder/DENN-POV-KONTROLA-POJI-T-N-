@@ -654,10 +654,18 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         "PRODANÉ, ALE V UNIQA",
         "NAVÍC V UNIQA",
     }
+
+    def _is_resolved_issue(row: dict[str, Any]) -> bool:
+        raw = str(row.get("status_raw") or "").upper()
+        workflow = str(row.get("workflow_status") or "").upper()
+        if raw == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ":
+            return workflow == "VYŘEŠENO"
+        return workflow in resolved_statuses
+
     resolved_issue_rows = [
         row for row in rows
         if str(row.get("status_raw") or "").upper() in issue_statuses
-        and str(row.get("workflow_status") or "").upper() in resolved_statuses
+        and _is_resolved_issue(row)
     ]
     # Do počtu "Pojištění v pořádku" patří jen vyřešené problémy vozidel,
     # která jsou součástí aktivní kontroly. Záznamy "NAVÍC V UNIQA"
@@ -681,7 +689,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     summary["absent_insured"] = sum(
         1 for row in rows
         if str(row.get("status_raw") or "").upper() == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ"
-        and str(row.get("workflow_status") or "").upper() not in resolved_statuses
+        and str(row.get("workflow_status") or "").upper() != "VYŘEŠENO"
     )
     summary["sold_uniqa"] = sum(
         1 for row in rows

@@ -256,7 +256,7 @@ function renderProgress(){
     $('progressEta').textContent='Probíhá';
     $('progressHeadline').textContent='Kontrola připojení';
     $('progressPhase').textContent=detail;
-    $('progressDetail').textContent='Průběh jednotlivých kroků kontroly.';
+    if($('progressDetail'))$('progressDetail').textContent='Průběh jednotlivých kroků kontroly.';
     $('progressBar').style.width=Math.max(3,percent)+'%';
     const okState=$('progressOkState');
     if(okState){
@@ -280,7 +280,7 @@ function renderProgress(){
     $('progressHeadline').textContent='Kontrola připojení';
     if($('progressOkState'))$('progressOkState').hidden=true;
     $('progressPhase').textContent='Kontrolu se nepodařilo dokončit.';
-    $('progressDetail').textContent=visibleSystemText(state.error);
+    if($('progressDetail'))$('progressDetail').textContent=visibleSystemText(state.error);
     $('progressBar').style.width='100%';
     if(visual)visual.className='connection-visual error';
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='!';
@@ -314,7 +314,7 @@ function renderProgress(){
     if(finalBox)finalBox.hidden=percent<100;
 
     if(percent<100){
-      $('progressDetail').textContent='Dokončuji kontrolu a připravuji výsledný stav.';
+      if($('progressDetail'))$('progressDetail').textContent='Dokončuji kontrolu a připravuji výsledný stav.';
       ensureConnectionDots(percent,false,false);
       return;
     }
@@ -343,7 +343,7 @@ function renderProgress(){
   $('progressHeadline').textContent='Kontrola připojení';
   if($('progressOkState'))$('progressOkState').hidden=true;
   $('progressPhase').textContent='Připraveno ke spuštění kontroly.';
-  $('progressDetail').textContent='Po spuštění se ověří interní databáze SQL a evidence dat z pojišťovny.';
+  if($('progressDetail'))$('progressDetail').textContent='Po spuštění se ověří interní databáze SQL a evidence dat z pojišťovny.';
   $('progressBar').style.width='0%';
   if(visual)visual.className='connection-visual idle';
   if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';

@@ -2436,3 +2436,19 @@ body.check-running #csvBtn{
   }
   .overview-group-head{align-items:flex-start}
 }
+
+
+/* 2026-09-24 · unread-style extra-insurance indicator */
+.nav-item .nav-count{
+  transition:opacity .18s ease,transform .18s ease,background .18s ease,box-shadow .18s ease;
+}
+.nav-item .nav-count.is-alert{
+  background:#d9143b!important;
+  color:#fff!important;
+  box-shadow:0 0 0 4px rgba(217,20,59,.14);
+}
+.nav-item .nav-count.is-hidden{
+  opacity:0;
+  transform:scale(.82);
+  pointer-events:none;
+}

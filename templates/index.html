@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260923c">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260923e">
 </head>
 <body>
   <div class="app-shell">
@@ -24,35 +24,11 @@
         <button id="navAllVehicles" class="nav-item active" type="button">
           <span class="nav-icon">▦</span><span>Všechna vozidla</span>
         </button>
-        <button class="nav-item" type="button" data-filter="ACTIVE">
-          <span class="nav-icon">▰</span><span>Aktivní ke kontrole</span>
-        </button>
         <button class="nav-item" type="button" data-filter="MISSING">
           <span class="nav-icon">!</span><span>Chybí pojištění</span>
         </button>
-        <button class="nav-item" type="button" data-filter="ABSENT_INSURED">
-          <span class="nav-icon">!</span><span>Nepřítomné · pojištěno</span>
-        </button>
-        <button class="nav-item" type="button" data-filter="ABSENT_UNINSURED">
-          <span class="nav-icon">✓</span><span>Nepřítomné · nepojištěno</span>
-        </button>
-        <button class="nav-item" type="button" data-filter="DEPOSIT">
-          <span class="nav-icon">●</span><span>Depozit</span>
-        </button>
-        <button class="nav-item" type="button" data-filter="SOLD_UNIQA">
-          <span class="nav-icon">↗</span><span>Prodané, ale pojištěno</span>
-        </button>
-        <button id="navChanges" class="nav-item" type="button">
-          <span class="nav-icon">↕</span><span>Dnešní změny</span>
-        </button>
-        <button id="navManualHistory" class="nav-item" type="button">
-          <span class="nav-icon">✎</span><span>Ruční změny</span>
-        </button>
-        <button id="navBreakdown" class="nav-item" type="button">
-          <span class="nav-icon">▤</span><span>Pojištění a výjimky</span>
-        </button>
-        <button id="navSources" class="nav-item" type="button">
-          <span class="nav-icon">⚙</span><span>Datové zdroje</span>
+        <button id="navOthers" class="nav-item" type="button">
+          <span class="nav-icon">▤</span><span>Ostatní přehledy</span>
         </button>
       </nav>
 
@@ -224,16 +200,64 @@
 
         <section id="breakdownSection" class="breakdown-section" hidden>
           <div class="section-heading compact-heading">
-            <div><span class="section-kicker">Rozdělení výsledků</span><h2>Pojištění a výjimky</h2></div>
+            <div>
+              <span class="section-kicker">Rozcestník</span>
+              <h2>Ostatní přehledy</h2>
+              <p style="margin:6px 0 0;color:#64748b;font-size:13px">Podrobné stavy, výjimky a historie mimo hlavní kontrolu chybějícího pojištění.</p>
+            </div>
           </div>
           <div class="metric-grid">
-            <button class="metric-card" type="button" data-filter="OK_TOTAL"><span class="metric-label">Pojištění nalezeno</span><strong id="cOkUniqa">0</strong><small>ověřeno v evidenci pojištění</small></button>
+            <button class="metric-card" type="button" data-filter="ACTIVE">
+              <span class="metric-label">Aktivní ke kontrole</span>
+              <strong id="cActiveOverview">0</strong>
+              <small>vozidla v aktivní kontrole</small>
+            </button>
+            <button class="metric-card" type="button" data-filter="OK_TOTAL">
+              <span class="metric-label"><i class="metric-dot green"></i> Pojištění v pořádku</span>
+              <strong id="cOkUniqa">0</strong>
+              <small>ověřená vozidla bez problému</small>
+            </button>
             <span id="cOkAllianz" hidden>0</span>
-            <button class="metric-card" type="button" data-filter="ABSENT_INSURED"><span class="metric-label"><i class="metric-dot purple"></i> Nepřítomné · pojištěno</span><strong id="cAbsentInsured">0</strong><small>špatně · pojištění má být ukončeno</small></button>
-            <button class="metric-card" type="button" data-filter="ABSENT_UNINSURED"><span class="metric-label"><i class="metric-dot cyan"></i> Nepřítomné · nepojištěno</span><strong id="cAbsentUninsured">0</strong><small>správně · bez aktivního pojištění</small></button>
-            <button class="metric-card" type="button" data-filter="DEPOSIT"><span class="metric-label"><i class="metric-dot amber"></i> Depozit</span><strong id="cDeposit">0</strong><small>bez pojištění, ale evidováno</small></button>
-            <button class="metric-card" type="button" data-filter="SOLD_UNIQA"><span class="metric-label"><i class="metric-dot purple"></i> Prodané, ale pojištěno</span><strong id="cSold">0</strong><small>po prodeji stále aktivní pojištění</small></button>
-            <button class="metric-card" type="button" data-filter="EXTRA_UNIQA"><span class="metric-label"><i class="metric-dot cyan"></i> Pojištění navíc</span><strong id="cExtra">0</strong><small>nenalezeno v evidenci výkupů</small></button>
+            <button class="metric-card" type="button" data-filter="ABSENT_INSURED">
+              <span class="metric-label"><i class="metric-dot purple"></i> Nepřítomné · pojištěno</span>
+              <strong id="cAbsentInsured">0</strong>
+              <small>nevyřešené případy</small>
+            </button>
+            <button class="metric-card" type="button" data-filter="ABSENT_UNINSURED">
+              <span class="metric-label"><i class="metric-dot cyan"></i> Nepřítomné · nepojištěno</span>
+              <strong id="cAbsentUninsured">0</strong>
+              <small>správný stav bez pojištění</small>
+            </button>
+            <button class="metric-card" type="button" data-filter="DEPOSIT">
+              <span class="metric-label"><i class="metric-dot amber"></i> Depozit</span>
+              <strong id="cDeposit">0</strong>
+              <small>vozidla vyřazená z POV kontroly</small>
+            </button>
+            <button class="metric-card" type="button" data-filter="SOLD_UNIQA">
+              <span class="metric-label"><i class="metric-dot purple"></i> Prodané, ale pojištěno</span>
+              <strong id="cSold">0</strong>
+              <small>nevyřešené případy</small>
+            </button>
+            <button class="metric-card" type="button" data-filter="EXTRA_UNIQA">
+              <span class="metric-label"><i class="metric-dot cyan"></i> Pojištění navíc</span>
+              <strong id="cExtra">0</strong>
+              <small>nenalezeno v evidenci vozidel</small>
+            </button>
+            <button id="overviewTodayChanges" class="metric-card overview-action" type="button">
+              <span class="metric-label">↕ Dnešní změny</span>
+              <strong id="cTodayChanges">0</strong>
+              <small>změny zachycené během dne</small>
+            </button>
+            <button id="overviewManualChanges" class="metric-card overview-action" type="button">
+              <span class="metric-label">✎ Ruční změny</span>
+              <strong>Historie</strong>
+              <small>statusy, poznámky a zásahy uživatele</small>
+            </button>
+            <button id="overviewSources" class="metric-card overview-action" type="button">
+              <span class="metric-label">⚙ Datové zdroje</span>
+              <strong>Stav</strong>
+              <small>TIRBazar a evidence pojištění</small>
+            </button>
           </div>
         </section>
 
@@ -312,6 +336,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923d"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260923e"></script>
 </body>
 </html>

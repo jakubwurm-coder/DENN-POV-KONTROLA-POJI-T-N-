@@ -281,7 +281,7 @@ def compare_vehicles(
                         tir_spz=tir_spz,
                         uniqa_spz=uniqa_spz,
                         status="OK",
-                        detail="Pojištění nalezeno v UNIQA.",
+                        detail="Pojištění nalezeno UNIQA",
                         datum_vykupu=vehicle.datum_vykupu,
                         datum_prodeje="",
                     )
@@ -353,20 +353,7 @@ def compare_vehicles(
                 or ""
             )
 
-            detail = (
-                f"Pojištění nalezeno v ALLIANZ podle {allianz_match}."
-            )
-
-            if policy:
-                detail += f" Pojistka: {policy}."
-
-            if identifier:
-                detail += f" Evidence Allianz: {identifier}."
-
-            if poj_od or poj_do:
-                detail += (
-                    f" Období: {poj_od or '?'} - {poj_do or '?'}."
-                )
+            detail = "Pojištění nalezeno ALLIANZ"
 
             results.append(
                 ComparisonResult(

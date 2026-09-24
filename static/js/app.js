@@ -466,7 +466,11 @@ function render(){
   if(runSmall)runSmall.textContent=state.running?'PROBÍHÁ AKTUÁLNÍ OVĚŘENÍ':'SPUSTIT NOVÉ OVĚŘENÍ';
   if(runStrong)runStrong.textContent=state.running?'Kontrola probíhá…':'Spustit kontrolu';
   if(runIcon)runIcon.textContent=state.running?'↻':'▶';
-  $('csvBtn').classList.toggle('disabled',!state.csv_available);
+  const csvBtn=$('csvBtn');
+  const exportReady=!!state.csv_available&&!state.running&&sessionCheckStarted&&!!state.finished_at&&!state.error;
+  csvBtn.classList.toggle('disabled',!state.csv_available||state.running);
+  csvBtn.classList.toggle('export-ready',exportReady);
+  csvBtn.setAttribute('aria-disabled',(!state.csv_available||state.running)?'true':'false');
   const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(sessionCheckStarted&&state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(sessionCheckStarted&&state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}
   const lastCheck=$('lastCheck');if(lastCheck){lastCheck.textContent=state.running?'Právě probíhá':shortDateTime(state.finished_at);}
   $('footerLeft').textContent=state.running&&state.started_at?'Spuštěno: '+state.started_at:(sessionCheckStarted&&state.finished_at?'Dokončeno: '+state.finished_at:'Připraveno');renderRows();renderChanges();

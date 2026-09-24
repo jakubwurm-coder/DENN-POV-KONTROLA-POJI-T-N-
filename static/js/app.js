@@ -57,9 +57,18 @@ function hideBreakdown(){const section=$('breakdownSection');if(section)section.
 function hideData(){const section=$('dataSection');if(section)section.hidden=true;}
 function hideChanges(){const section=$('changesSection');if(section)section.hidden=true;const btn=$('navChanges');if(btn)btn.classList.remove('active');}
 function hideManualHistory(){const section=$('manualHistorySection');if(section)section.hidden=true;const btn=$('navManualHistory');if(btn)btn.classList.remove('active');}
-function showData(){hideChanges();hideManualHistory();const section=$('dataSection');if(!section)return;section.hidden=false;section.scrollIntoView({behavior:'smooth',block:'start'});}
+function hideHowItWorks(){const section=$('howItWorksSection');if(section)section.hidden=true;const btn=$('navHowItWorks');if(btn)btn.classList.remove('active');}
+function showHowItWorks(){
+  hideSources();hideBreakdown();hideChanges();hideManualHistory();hideData();
+  const section=$('howItWorksSection');if(!section)return;
+  section.hidden=false;
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  const nav=$('navHowItWorks');if(nav)nav.classList.add('active');
+  section.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function showData(){hideChanges();hideManualHistory();hideHowItWorks();const section=$('dataSection');if(!section)return;section.hidden=false;section.scrollIntoView({behavior:'smooth',block:'start'});}
 function showChanges(){
-  hideSources();hideBreakdown();hideManualHistory();hideData();
+  hideSources();hideBreakdown();hideManualHistory();hideHowItWorks();hideData();
   const section=$('changesSection');if(!section)return;
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
@@ -69,7 +78,7 @@ function showChanges(){
 }
 function showSources(){
   const section=$('sourceSection');if(!section)return;
-  hideBreakdown();hideChanges();hideManualHistory();hideData();
+  hideBreakdown();hideChanges();hideManualHistory();hideHowItWorks();hideData();
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   const nav=$('navOthers');if(nav)nav.classList.add('active');
@@ -77,7 +86,7 @@ function showSources(){
 }
 function showBreakdown(){
   const section=$('breakdownSection');if(!section)return;
-  hideSources();hideChanges();hideManualHistory();hideData();
+  hideSources();hideChanges();hideManualHistory();hideHowItWorks();hideData();
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   const nav=$('navOthers');if(nav)nav.classList.add('active');
@@ -85,7 +94,7 @@ function showBreakdown(){
 }
 
 async function showManualHistory(){
-  hideSources();hideBreakdown();hideChanges();hideData();
+  hideSources();hideBreakdown();hideChanges();hideHowItWorks();hideData();
   const section=$('manualHistorySection');if(!section)return;
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
@@ -571,7 +580,7 @@ function clearFilter(){
 }
 let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return;lastToast=msg;const t=$('toast');t.textContent=msg;t.className='toast'+(error?' error':'');t.hidden=false;setTimeout(()=>{t.hidden=true;lastToast='';},5000);}
 
-$('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));$('navHowItWorks').classList.add('active');const section=$('howItWorksSection');if(section)section.scrollIntoView({behavior:'smooth',block:'start'});});$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
+$('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 setInterval(()=>{
   if(state.running){
     if(connectionVisualPercent<50) connectionVisualPercent+=1.8;

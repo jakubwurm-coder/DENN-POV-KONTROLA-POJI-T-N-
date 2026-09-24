@@ -496,14 +496,67 @@ async function run(){
   render();
   try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
 
+const kostkaLabels={
+  VIN:'VIN',TovarniZnacka:'Tovární značka',ObchodniOznaceni:'Obchodní označení',
+  DruhVozidla:'Druh vozidla',KategorieVozidla:'Kategorie vozidla',
+  DatumPrvniRegistrace:'První registrace',DatumPrvniRegistraceVCr:'První registrace v ČR',
+  Palivo:'Palivo',ZdvihovyObjem:'Objem motoru',MaxVykon:'Výkon',
+  NejvetsiTechnickyPripustnaHmotnost:'Největší technicky přípustná hmotnost',
+  ProvozniHmotnost:'Provozní hmotnost',Barva:'Barva',PlatnostSTK:'Platnost STK'
+};
+function kostkaRows(data){
+  const rows=[];
+  function walk(value,path,depth){
+    if(rows.length>=120||depth>3||value===null||value==='')return;
+    if(Array.isArray(value)){
+      if(value.length&&value.every(x=>x===null||typeof x!=='object')) rows.push([path,value.join(', ')]);
+      else value.slice(0,20).forEach((item,i)=>walk(item,`${path} ${i+1}`,depth+1));
+    }else if(typeof value==='object'){
+      Object.entries(value).forEach(([key,item])=>{
+        if(key.startsWith('_'))return;
+        const label=kostkaLabels[key]||key.replace(/([a-zá-ž])([A-ZÁ-Ž])/g,'$1 $2');
+        walk(item,path?`${path} · ${label}`:label,depth+1);
+      });
+    }else rows.push([path,String(value)]);
+  }
+  walk(data,'',0);
+  return rows.map(([label,value])=>`<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join('');
+}
+async function loadKostka(vin){
+  const section=$('kostkaSection'),status=$('kostkaStatus');
+  if(!section||!status)return;
+  status.textContent='Načítám uložené údaje…';
+  try{
+    for(let attempt=0;attempt<13;attempt++){
+      if($('kostkaSection')!==section||!$('detailDialog').open)return;
+      const response=await fetch('/api/vehicle-technical/'+encodeURIComponent(vin),{cache:'no-store'});
+      const result=await response.json();
+      if(!response.ok||!result.ok)throw new Error(result.message||'Údaje se nepodařilo načíst.');
+      if($('kostkaSection')!==section||!$('detailDialog').open)return;
+      if(result.data){
+        const rows=kostkaRows(result.data);
+        status.textContent='Datová kostka · uloženo '+new Date(result.fetched_at).toLocaleDateString('cs-CZ');
+        $('kostkaData').innerHTML=rows?`<dl class="detail-grid kostka-grid">${rows}</dl>`:'';
+        return;
+      }
+      status.textContent=result.message||'Technické údaje zatím nejsou dostupné.';
+      if(!result.pending)return;
+      if(attempt<12)await new Promise(resolve=>setTimeout(resolve,10000));
+    }
+    if($('kostkaSection')===section)status.textContent='Údaje zatím nejsou dostupné. Zobrazí se po další kontrole.';
+  }catch(error){if($('kostkaSection')===section)status.textContent=error.message||'Načtení se nezdařilo.';}
+}
 function showDetail(r){
   const original=r.original_status?`<div style="margin-top:5px;color:#64748b;font-size:11px">Původní stav: ${esc(visibleSystemText(r.original_status))}</div>`:'';
   const vehicle=(r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ')).trim()||'—';
   const spzValue=displaySpz(r)||'—';
-  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span>${original}</dd><dt>Vozidlo</dt><dd>${esc(vehicle)}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ</dt><dd>${esc(spzValue)}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.detail||'—'))}</dd></dl><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option>${r.status_raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'?'':'<option value="V POŘÁDKU">V pořádku</option>'}<option value="KONTROLA">Kontrola</option><option value="ŘEŠÍ SE">Řeší se</option><option value="VYŘEŠENO">Vyřešeno</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení pojištění zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
+  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span>${original}</dd><dt>Vozidlo</dt><dd>${esc(vehicle)}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ</dt><dd>${esc(spzValue)}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.detail||'—'))}</dd></dl><section id="kostkaSection" class="kostka-section"><div class="kostka-heading"><div><h3>Technické údaje vozidla</h3><p id="kostkaStatus">Načítám uložené údaje…</p></div></div><div id="kostkaData"></div></section><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option>${r.status_raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'?'':'<option value="V POŘÁDKU">V pořádku</option>'}<option value="KONTROLA">Kontrola</option><option value="ŘEŠÍ SE">Řeší se</option><option value="VYŘEŠENO">Vyřešeno</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení pojištění zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
   $('workflowStatus').value=r.workflow_status||'';
   $('saveMeta').addEventListener('click',()=>saveMeta(r));
   $('detailDialog').showModal();
+  const vin=String(r.vin||'').replace(/\s/g,'').toUpperCase();
+  if(/^[A-HJ-NPR-Z0-9]{17}$/.test(vin))loadKostka(vin);
+  else $('kostkaStatus').textContent='Vozidlo nemá platné VIN pro vyhledání.';
 }
 
 async function saveMeta(r){

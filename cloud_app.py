@@ -7,6 +7,7 @@ import json
 import os
 import re
 import threading
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from typing import Any
 from flask import Flask, Response, jsonify, render_template, request
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+import requests
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
@@ -23,6 +25,93 @@ app.config["JSON_AS_ASCII"] = False
 _lock = threading.Lock()
 _STATE_FILE = Path(os.getenv("CLOUD_STATE_FILE", "/tmp/denni_pov_state.json"))
 _DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+_KOSTKA_URL = "https://api.dataovozidlech.cz/api/vehicletechnicaldata/v2"
+_KOSTKA_VIN = re.compile(r"[A-HJ-NPR-Z0-9]{17}\Z")
+_kostka_worker_lock = threading.Lock()
+_KOSTKA_REFRESH_DAYS = 30
+
+
+def _kostka_keys() -> list[str]:
+    return list(dict.fromkeys(key for key in (
+        os.getenv("DATOVA_KOSTKA_API_KEY", "").strip(),
+        os.getenv("DATOVA_KOSTKA_API_KEY_1", "").strip(),
+        os.getenv("DATOVA_KOSTKA_API_KEY_2", "").strip(),
+    ) if key))
+
+
+def _kostka_saved(vin: str) -> tuple[dict[str, Any], str] | None:
+    if not _DATABASE_URL:
+        return None
+    with _db_connect() as conn:
+        with conn.cursor() as cur:
+            _db_init(cur)
+            cur.execute("SELECT data, fetched_at FROM denni_pov_vehicle_technical WHERE vin = %s", (vin,))
+            row = cur.fetchone()
+            conn.commit()
+    return (row[0], row[1].isoformat()) if row else None
+
+
+def _kostka_fetch(vin: str, keys: list[str]) -> dict[str, Any] | None:
+    for key in keys:
+        response = requests.get(_KOSTKA_URL, params={"vin": vin},
+                                headers={"api_key": key}, timeout=12)
+        if response.status_code in (401, 403):
+            continue
+        response.raise_for_status()
+        payload = response.json()
+        data = payload.get("Data") if isinstance(payload, dict) else None
+        return data if isinstance(payload, dict) and payload.get("Status") == 1 and isinstance(data, dict) and data else None
+    raise ValueError("API klíč Datové kostky nebyl přijat.")
+
+
+def _kostka_update(vins: list[str]) -> None:
+    if not _kostka_worker_lock.acquire(blocking=False):
+        return
+    try:
+        keys = _kostka_keys()
+        if not keys or not _DATABASE_URL:
+            return
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                _db_init(cur)
+                cur.execute("""
+                    SELECT vin FROM denni_pov_vehicle_technical
+                    WHERE vin = ANY(%s) AND fetched_at >= NOW() - (%s * INTERVAL '1 day')
+                """, (vins, _KOSTKA_REFRESH_DAYS))
+                fresh = {row[0] for row in cur.fetchall()}
+                conn.commit()
+        for vin in dict.fromkeys(vins):
+            if vin in fresh:
+                continue
+            try:
+                technical = _kostka_fetch(vin, keys)
+                if technical:
+                    with _db_connect() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                INSERT INTO denni_pov_vehicle_technical (vin, data, fetched_at)
+                                VALUES (%s, %s::jsonb, NOW())
+                                ON CONFLICT (vin) DO UPDATE
+                                SET data = EXCLUDED.data, fetched_at = EXCLUDED.fetched_at
+                            """, (vin, json.dumps(technical, ensure_ascii=False)))
+                            conn.commit()
+            except (requests.RequestException, ValueError, PersistenceUnavailable) as exc:
+                print(f"Datová kostka {vin}: {exc.__class__.__name__}")
+                if isinstance(exc, ValueError):
+                    break  # Invalid credentials cannot be fixed by trying another VIN.
+            time.sleep(0.2)
+    except Exception as exc:
+        print(f"Automatické načtení Datové kostky selhalo: {exc.__class__.__name__}")
+    finally:
+        _kostka_worker_lock.release()
+
+
+def _kostka_start(rows: list[dict[str, Any]]) -> None:
+    vins = [vin for row in rows if isinstance(row, dict)
+            if _KOSTKA_VIN.fullmatch(vin := re.sub(r"\s+", "", str(row.get("vin") or "")).upper())]
+    if vins and _DATABASE_URL and _kostka_keys():
+        threading.Thread(target=_kostka_update, args=(vins,), daemon=True,
+                         name="datova-kostka-refresh").start()
 
 class PersistenceUnavailable(RuntimeError):
     """Raised when durable annotation storage is not available."""
@@ -166,6 +255,13 @@ def _db_init(cur) -> None:
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS denni_pov_annotation_history_key_idx ON denni_pov_annotation_history (vehicle_key, id DESC)")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS denni_pov_vehicle_technical (
+            vin TEXT PRIMARY KEY,
+            data JSONB NOT NULL,
+            fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """)
 
 
 def _db_load() -> dict[str, Any] | None:
@@ -726,6 +822,31 @@ def api_state():
     return jsonify(_public_state(data))
 
 
+@app.get("/api/vehicle-technical/<vin>")
+def api_vehicle_technical(vin: str):
+    """Read the saved technical record for a vehicle in the dashboard."""
+    vin = re.sub(r"\s+", "", vin).upper()
+    if not _KOSTKA_VIN.fullmatch(vin):
+        return jsonify({"ok": False, "message": "Neplatné VIN vozidla."}), 400
+
+    with _lock:
+        results = _load_state().get("results") or []
+    if not any(re.sub(r"\s+", "", str(row.get("vin") or "")).upper() == vin
+               for row in results if isinstance(row, dict)):
+        return jsonify({"ok": False, "message": "Vozidlo není v aktuálním přehledu."}), 404
+
+    try:
+        saved = _kostka_saved(vin)
+    except Exception:
+        return jsonify({"ok": False, "message": "Uložené technické údaje teď nejsou dostupné."}), 503
+    if saved:
+        return jsonify({"ok": True, "vin": vin, "data": saved[0], "fetched_at": saved[1]})
+    configured = bool(_kostka_keys() and _DATABASE_URL)
+    message = ("Technické údaje se načítají na pozadí." if configured else
+               "API Datové kostky není na serveru nastavené.")
+    return jsonify({"ok": True, "vin": vin, "pending": configured, "message": message})
+
+
 @app.get("/api/history")
 def api_history():
     limit = request.args.get("limit", "100")
@@ -885,6 +1006,9 @@ def api_sync():
         if final_run:
             data["changes"] = _history_save_daily(data, alert_sent)
         _save_state(data)
+
+    if final_run and not data.get("error"):
+        _kostka_start(data.get("results") or [])
 
     return jsonify({"ok": True, "message": "Data byla synchronizována na Render.", "alert_sent": alert_sent})
 

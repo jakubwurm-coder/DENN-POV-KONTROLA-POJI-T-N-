@@ -939,6 +939,14 @@ button{cursor:pointer}
 .detail-grid dt{color:#7890a4;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
 .detail-grid dd{margin:0;color:#29465f;word-break:break-word}
 .detail-grid dd:last-child,.detail-grid dt:nth-last-child(2){border-bottom:0}
+.kostka-section{padding:18px 22px;border-top:1px solid #e8eef3}
+.kostka-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.kostka-heading h3{font-size:14px;margin:0 0 5px}
+.kostka-heading p{font-size:11px;color:#64748b;margin:0}
+.kostka-heading button{flex:none}
+.kostka-grid{padding:12px 0 0;grid-template-columns:minmax(130px,38%) minmax(0,1fr)}
+.kostka-grid dt,.kostka-grid dd{font-size:12px;padding:8px 0}
+@media(max-width:540px){.kostka-heading{align-items:flex-start;flex-direction:column}}
 
 .toast{
   position:fixed;

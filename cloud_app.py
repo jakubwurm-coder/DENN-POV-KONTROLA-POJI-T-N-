@@ -29,6 +29,11 @@ _KOSTKA_URL = "https://api.dataovozidlech.cz/api/vehicletechnicaldata/v2"
 _KOSTKA_VIN = re.compile(r"[A-HJ-NPR-Z0-9]{17}\Z")
 _kostka_worker_lock = threading.Lock()
 _KOSTKA_REFRESH_DAYS = 30
+_KOSTKA_MAX_PER_CHECK = 15
+
+
+class KostkaLimitReached(RuntimeError):
+    """The provider asked us to pause requests for this API key."""
 
 
 def _kostka_keys() -> list[str]:
@@ -57,6 +62,8 @@ def _kostka_fetch(vin: str, keys: list[str]) -> dict[str, Any] | None:
                                 headers={"api_key": key}, timeout=12)
         if response.status_code in (401, 403):
             continue
+        if response.status_code in (429, 503) or response.status_code >= 500:
+            raise KostkaLimitReached("Datová kostka požaduje pauzu mezi dotazy.")
         response.raise_for_status()
         payload = response.json()
         data = payload.get("Data") if isinstance(payload, dict) else None
@@ -80,26 +87,32 @@ def _kostka_update(vins: list[str]) -> None:
                 """, (vins, _KOSTKA_REFRESH_DAYS))
                 fresh = {row[0] for row in cur.fetchall()}
                 conn.commit()
+        attempted = 0
         for vin in dict.fromkeys(vins):
             if vin in fresh:
                 continue
+            if attempted >= _KOSTKA_MAX_PER_CHECK:
+                break
+            attempted += 1
             try:
                 technical = _kostka_fetch(vin, keys)
-                if technical:
-                    with _db_connect() as conn:
-                        with conn.cursor() as cur:
-                            cur.execute("""
-                                INSERT INTO denni_pov_vehicle_technical (vin, data, fetched_at)
-                                VALUES (%s, %s::jsonb, NOW())
-                                ON CONFLICT (vin) DO UPDATE
-                                SET data = EXCLUDED.data, fetched_at = EXCLUDED.fetched_at
-                            """, (vin, json.dumps(technical, ensure_ascii=False)))
-                            conn.commit()
+                with _db_connect() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO denni_pov_vehicle_technical (vin, data, fetched_at)
+                            VALUES (%s, %s::jsonb, NOW())
+                            ON CONFLICT (vin) DO UPDATE
+                            SET data = EXCLUDED.data, fetched_at = EXCLUDED.fetched_at
+                        """, (vin, json.dumps(technical or {}, ensure_ascii=False)))
+                        conn.commit()
+            except KostkaLimitReached:
+                print("Datová kostka: limit požadavků, další VIN počkají na následující kontrolu.")
+                break
             except (requests.RequestException, ValueError, PersistenceUnavailable) as exc:
                 print(f"Datová kostka {vin}: {exc.__class__.__name__}")
-                if isinstance(exc, ValueError):
-                    break  # Invalid credentials cannot be fixed by trying another VIN.
-            time.sleep(0.2)
+                if isinstance(exc, (ValueError, PersistenceUnavailable)):
+                    break
+            time.sleep(1)
     except Exception as exc:
         print(f"Automatické načtení Datové kostky selhalo: {exc.__class__.__name__}")
     finally:
@@ -840,7 +853,9 @@ def api_vehicle_technical(vin: str):
     except Exception:
         return jsonify({"ok": False, "message": "Uložené technické údaje teď nejsou dostupné."}), 503
     if saved:
-        return jsonify({"ok": True, "vin": vin, "data": saved[0], "fetched_at": saved[1]})
+        if saved[0]:
+            return jsonify({"ok": True, "vin": vin, "data": saved[0], "fetched_at": saved[1]})
+        return jsonify({"ok": True, "vin": vin, "message": "Datová kostka k tomuto VIN nemá technické údaje."})
     configured = bool(_kostka_keys() and _DATABASE_URL)
     message = ("Technické údaje se načítají na pozadí." if configured else
                "API Datové kostky není na serveru nastavené.")

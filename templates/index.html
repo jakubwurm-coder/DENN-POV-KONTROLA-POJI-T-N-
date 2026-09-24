@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260924s">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260924t">
 </head>
 <body>
   <div class="app-shell">
@@ -32,6 +32,9 @@
         </button>
         <button id="navOthers" class="nav-item" type="button">
           <span class="nav-icon">▤</span><span>Ostatní přehledy</span>
+        </button>
+        <button id="navHowItWorks" class="nav-item" type="button">
+          <span class="nav-icon">?</span><span>Jak kontrola funguje</span>
         </button>
       </nav>
 
@@ -137,6 +140,96 @@
 
           <div class="connection-progress-track"><div id="progressBar"></div></div>
 
+        </section>
+
+        <section id="howItWorksSection" class="how-it-works-section" aria-labelledby="howItWorksTitle">
+          <div class="how-head">
+            <div>
+              <span class="section-kicker">Jak systém pracuje</span>
+              <h2 id="howItWorksTitle">Jak kontrola pojištění funguje</h2>
+              <p>Systém nejdříve určí, která vozidla podle interní evidence mají být pojištěná, a teprve potom jejich stav porovná s evidencí pojištění.</p>
+            </div>
+            <div class="how-principle">
+              <span>HLAVNÍ IDENTIFIKÁTOR</span>
+              <strong>VIN</strong>
+              <small>SPZ slouží jako doplňkový údaj.</small>
+            </div>
+          </div>
+
+          <div class="how-flow" aria-label="Postup kontroly">
+            <article class="how-step">
+              <span class="how-step-number">1</span>
+              <div><small>INTERNÍ EVIDENCE</small><strong>TIRBazar SQL</strong><p>Načtou se vozidla, VIN, SPZ, stav, výkup, prodej, země původu a interní poznámka.</p></div>
+            </article>
+            <article class="how-step">
+              <span class="how-step-number">2</span>
+              <div><small>FILTRACE</small><strong>Která vozidla kontrolovat</strong><p>Podle stavu vozidla se určí, zda má být pojištěné, nepojištěné, nebo se do kontroly vůbec nezařadí.</p></div>
+            </article>
+            <article class="how-step">
+              <span class="how-step-number">3</span>
+              <div><small>OVĚŘENÍ POJIŠTĚNÍ</small><strong>UNIQA → Allianz</strong><p>Nejdříve se hledá aktivní pojištění podle VIN v UNIQA, poté v Allianz podle VIN a případně SPZ.</p></div>
+            </article>
+            <article class="how-step">
+              <span class="how-step-number">4</span>
+              <div><small>VÝSLEDEK</small><strong>Automatické vyhodnocení</strong><p>Systém rozliší správný stav, chybějící pojištění, pojištění navíc, depozit, nesoulad SPZ nebo nemožnost ověření.</p></div>
+            </article>
+          </div>
+
+          <div class="how-source-grid">
+            <article class="how-source-card">
+              <div class="how-source-icon">SQL</div>
+              <div><small>ZDROJ VOZIDEL</small><strong>TIRBazar</strong><p>Interní databáze Vans Centre. Je výchozím zdrojem pro určení, které vozidlo má být v daném okamžiku pojištěné.</p></div>
+            </article>
+            <article class="how-source-card">
+              <div class="how-source-icon">U</div>
+              <div><small>PRVNÍ KONTROLA</small><strong>UNIQA · Denní POV</strong><p>Načítá se seznam aktivních pojistek. Porovnání probíhá primárně podle VIN; chybějící VIN se ověřují ještě samostatným vyhledáním.</p></div>
+            </article>
+            <article class="how-source-card">
+              <div class="how-source-icon">A</div>
+              <div><small>DRUHÁ KONTROLA</small><strong>Allianz</strong><p>Flotilový přehled pojištění. Vozidlo se hledá nejdříve podle VIN a následně podle SPZ, pokud je v přehledu vedeno pouze registrační značkou.</p></div>
+            </article>
+          </div>
+
+          <div class="how-details-grid">
+            <details class="how-details" open>
+              <summary>
+                <span><small>PRAVIDLA VÝBĚRU</small><strong>Která vozidla vstupují do kontroly</strong></span>
+                <span class="how-details-plus">+</span>
+              </summary>
+              <div class="how-details-body">
+                <div class="logic-row"><strong>Vykoupené</strong><span>Kontroluje se vždy. Očekávaný stav: <b>pojištěno</b>.</span></div>
+                <div class="logic-row"><strong>Rezervované</strong><span>Kontroluje se pouze tehdy, pokud má evidovaný výkup.</span></div>
+                <div class="logic-row"><strong>V komisi</strong><span>Kontroluje se až po evidovaném vykoupení z komise.</span></div>
+                <div class="logic-row"><strong>Nepřítomné</strong><span>Pokud má evidovaný výkup, zůstává v kontrole, ale očekávaný stav je <b>nepojištěno</b>.</span></div>
+                <div class="logic-row"><strong>Depozit</strong><span>Pokud poznámka obsahuje „DEPOZIT“, vozidlo je výjimkou z běžné POV kontroly a zobrazí se jako <b>Depozit – vozidlo nepojištěno</b>.</span></div>
+                <div class="logic-row"><strong>Vyřazené stavy</strong><span>Prodané, Vrácené z komise, Pronajaté, Volné, Parkované, Parkování ukončeno a další nesplňující podmínky se běžně nekontrolují.</span></div>
+                <div class="logic-row"><strong>Bez VIN</strong><span>Bez VIN nelze spolehlivě provést hlavní porovnání, proto takové vozidlo do standardní kontroly nevstupuje.</span></div>
+                <div class="logic-row"><strong>Země a SPZ</strong><span>České vozidlo se kontroluje i bez SPZ. Při chybějící zemi může český formát SPZ rozhodnout o zařazení vozidla do kontroly.</span></div>
+              </div>
+            </details>
+
+            <details class="how-details" open>
+              <summary>
+                <span><small>VÝZNAM VÝSLEDKŮ</small><strong>Jak číst jednotlivé stavy</strong></span>
+                <span class="how-details-plus">+</span>
+              </summary>
+              <div class="how-details-body status-legend">
+                <div class="logic-row"><strong><i class="logic-dot ok"></i>Pojištění v pořádku</strong><span>Vozidlo má být pojištěné a aktivní pojištění bylo nalezeno.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot bad"></i>Chybí pojištění</strong><span>Vozidlo má být pojištěné, ale není nalezeno ani v UNIQA, ani v Allianz.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot bad"></i>Nepřítomné, ale pojištěno</strong><span>Vozidlo má být nepojištěné, přesto bylo nalezeno aktivní pojištění.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot ok"></i>Nepřítomné, ale nepojištěno</strong><span>Správný stav pro nepřítomné vozidlo s evidovaným výkupem.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot deposit"></i>Depozit</strong><span>Vozidlo je evidované jako depozit a není považováno za chybějící POV.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot warn"></i>SPZ nesouhlasí</strong><span>Pojištění bylo nalezeno podle VIN, ale SPZ v obou evidencích se liší. VIN má přednost.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot warn"></i>Nelze ověřit</strong><span>Některý zdroj nebyl dostupný. Systém proto nevytvoří falešné hlášení o chybějícím pojištění.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot bad"></i>Pojištění navíc</strong><span>Aktivní pojištění bylo nalezeno u vozidla, které podle interní evidence nemá být v aktuální pojištěné skupině.</span></div>
+              </div>
+            </details>
+          </div>
+
+          <div class="how-safety-note">
+            <span class="how-safety-icon">✓</span>
+            <div><strong>Technická chyba se nepovažuje za chybějící pojištění.</strong><p>Pokud se některý zdroj nepodaří načíst, výsledek je „Nelze ověřit“. Vozidlo se neoznačí jako nepojištěné pouze proto, že některý systém právě neodpověděl.</p></div>
+          </div>
         </section>
 
         <section id="sourceSection" class="source-section" hidden>

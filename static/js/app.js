@@ -218,6 +218,23 @@ function connectionStepIndex(percent){
   return Math.max(0,Math.min(connectionSteps.length-1,byPercent));
 }
 
+function progressStageIndex(percent){
+  const p=Math.max(0,Math.min(100,Number(percent)||0));
+  if(p<22)return 0;
+  if(p<55)return 1;
+  if(p<86)return 2;
+  return 3;
+}
+
+function renderProgressStages(percent,finished=false){
+  const current=finished?4:progressStageIndex(percent);
+  document.querySelectorAll('#progressStages .progress-stage-item').forEach((el,i)=>{
+    el.classList.remove('active','done');
+    if(finished||i<current)el.classList.add('done');
+    else if(i===current)el.classList.add('active');
+  });
+}
+
 
 function ensureConnectionDots(percent,finished,error){
   const box=$('connectionStepDots');if(!box)return;
@@ -265,6 +282,7 @@ function renderProgress(){
     $('progressPhase').textContent=detail;
     if($('progressDetail'))$('progressDetail').textContent='Průběh jednotlivých kroků kontroly.';
     $('progressBar').style.width=Math.max(3,percent)+'%';
+    renderProgressStages(percent,false);
 
     if(visual){visual.className='connection-visual running';}
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';
@@ -282,6 +300,7 @@ function renderProgress(){
     $('progressPhase').textContent='Kontrolu se nepodařilo dokončit.';
     if($('progressDetail'))$('progressDetail').textContent=visibleSystemText(state.error);
     $('progressBar').style.width='100%';
+    renderProgressStages(percent,false);
     if(visual)visual.className='connection-visual error';
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='!';
     if(finalBox)finalBox.hidden=true;
@@ -304,6 +323,7 @@ function renderProgress(){
     $('progressHeadline').textContent='Kontrola připojení';
     $('progressPhase').textContent=percent<100?'Dokončuji kontrolu a připravuji výsledky.':'Kontrola byla úspěšně dokončena.';
     $('progressBar').style.width=percent+'%';
+    renderProgressStages(percent,percent>=100);
     if(visual)visual.className='connection-visual done';
     if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='✓';
     if(runningBox)runningBox.hidden=percent>=100;
@@ -340,6 +360,7 @@ function renderProgress(){
   $('progressPhase').textContent='Připraveno ke spuštění kontroly.';
   if($('progressDetail'))$('progressDetail').textContent='Po spuštění se ověří interní databáze SQL a evidence dat z pojišťovny.';
   $('progressBar').style.width='0%';
+  renderProgressStages(0,false);
   if(visual)visual.className='connection-visual idle';
   if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';
   if(finalBox)finalBox.hidden=true;
@@ -424,6 +445,18 @@ function render(){
   const overallCounts=$('overallCounts');
   if(overallCounts){
     overallCounts.hidden=suppressFinalResults||!!state.error;
+  }
+
+  const loadingResults=$('loadingResults');
+  if(loadingResults)loadingResults.hidden=!(state.running||visualCompletionPending);
+
+  const overallSubstatus=$('overallSubstatus');
+  if(overallSubstatus){
+    if(state.running)overallSubstatus.textContent='Načítám aktuální data z interních a externích zdrojů.';
+    else if(visualCompletionPending)overallSubstatus.textContent='Finalizuji validační výsledek a připravuji přehled.';
+    else if(!sessionCheckStarted)overallSubstatus.textContent='Připraveno ke spuštění aktuální kontroly.';
+    else if(state.error)overallSubstatus.textContent='Kontrolu se nepodařilo dokončit.';
+    else overallSubstatus.textContent='Aktuální kontrola byla dokončena.';
   }
 
   const summaryCards=document.querySelectorAll('.overview-sticky .summary-card');

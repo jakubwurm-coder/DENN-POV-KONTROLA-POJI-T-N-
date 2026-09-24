@@ -16,9 +16,7 @@ function badgeClass(r){
   const raw=String(r.status_raw||'').toUpperCase();
   const workflow=String(r.workflow_status||'').toUpperCase();
   if(raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'){
-    if(workflow==='VYŘEŠENO') return 'badge-ok';
-    if(workflow==='ŘEŠÍ SE'||workflow==='KONTROLA'||workflow==='V POŘÁDKU') return 'badge-warning';
-    return 'badge-error';
+    return workflow==='VYŘEŠENO'?'badge-ok':'badge-error';
   }
   if(workflow==='VYŘEŠENO'||workflow==='V POŘÁDKU') return 'badge-ok';
   if(workflow==='ŘEŠÍ SE'||workflow==='KONTROLA') return 'badge-warning';

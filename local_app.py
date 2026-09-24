@@ -150,11 +150,7 @@ def _deposit_result(vehicle) -> ComparisonResult:
         tir_spz=getattr(vehicle, "spz", "") or "",
         uniqa_spz="",
         status="NEPOJIŠTĚNO, ALE DEPOZIT",
-        detail=(
-            "Vozidlo je v TIRBazar označeno jako DEPOZIT a proto je vyřazeno "
-            "z kontroly povinného ručení."
-            + (f" Poznámka: {note}" if note else "")
-        ),
+        detail="Depozit - vozidlo nepojištěno",
         datum_vykupu=getattr(vehicle, "datum_vykupu", "") or "",
         datum_prodeje=getattr(vehicle, "datum_prodeje", "") or "",
     )

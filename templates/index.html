@@ -78,6 +78,7 @@
             <div class="summary-copy status-copy">
               <span>Celkový výsledek</span>
               <strong id="overallStatusText">Čeká na kontrolu</strong>
+              <small id="overallSubstatus">Připraveno ke spuštění aktuální kontroly.</small>
             </div>
             <div id="overallCounts" class="overall-counts" hidden>
               <span class="overall-counts-label">AKTUÁLNÍ POČTY</span>
@@ -137,6 +138,33 @@
 
           <div class="connection-progress-track"><div id="progressBar"></div></div>
 
+          <div id="progressStages" class="progress-stages" aria-label="Fáze kontroly">
+            <div class="progress-stage-item" data-stage="0"><span>1</span><div><strong>Připojení</strong><small>Síť a SQL</small></div></div>
+            <div class="progress-stage-item" data-stage="1"><span>2</span><div><strong>Načtení dat</strong><small>Vozidla a pojištění</small></div></div>
+            <div class="progress-stage-item" data-stage="2"><span>3</span><div><strong>Vyhodnocení</strong><small>VIN, SPZ a výjimky</small></div></div>
+            <div class="progress-stage-item" data-stage="3"><span>4</span><div><strong>Výsledky</strong><small>Finalizace přehledu</small></div></div>
+          </div>
+
+        </section>
+
+        <section id="loadingResults" class="loading-results" hidden aria-live="polite">
+          <div class="loading-results-head">
+            <div>
+              <span class="section-kicker">PŘÍPRAVA VÝSLEDKŮ</span>
+              <h2>Aktuální přehled se sestavuje</h2>
+              <p>Výsledky se zobrazí najednou po dokončení kontroly na 100 %.</p>
+            </div>
+            <span class="loading-live-dot"></span>
+          </div>
+          <div class="loading-table-skeleton">
+            <div class="loading-skeleton-row loading-skeleton-head">
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="loading-skeleton-row"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="loading-skeleton-row"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="loading-skeleton-row"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="loading-skeleton-row"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          </div>
         </section>
 
         <section id="sourceSection" class="source-section" hidden>

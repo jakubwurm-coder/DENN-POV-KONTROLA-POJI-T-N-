@@ -2595,3 +2595,34 @@ body.check-running #csvBtn{
     width:100%;
   }
 }
+
+
+/* 2026-09-24 · contextual controls directly beside overall status */
+.overview-sticky #overallCard{
+  justify-content:flex-start;
+}
+.overview-sticky #overallCard .summary-copy{
+  flex:0 1 auto;
+  min-width:300px;
+}
+.overall-counts{
+  margin-left:30px!important;
+  margin-right:14px;
+  padding-left:24px!important;
+  padding-right:0!important;
+}
+.overall-run-slot{
+  margin-left:30px!important;
+}
+.overall-counts:not([hidden]) + .overall-run-slot{
+  margin-left:auto!important;
+}
+@media(max-width:1000px){
+  .overview-sticky #overallCard .summary-copy{
+    min-width:0;
+  }
+  .overall-counts,
+  .overall-run-slot{
+    margin-left:18px!important;
+  }
+}

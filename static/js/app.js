@@ -500,31 +500,18 @@ async function run(){
   render();
   try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
 
-const kostkaLabels={
-  VIN:'VIN',TovarniZnacka:'Tovární značka',ObchodniOznaceni:'Obchodní označení',
-  DruhVozidla:'Druh vozidla',KategorieVozidla:'Kategorie vozidla',
-  DatumPrvniRegistrace:'První registrace',DatumPrvniRegistraceVCr:'První registrace v ČR',
-  Palivo:'Palivo',ZdvihovyObjem:'Objem motoru',MaxVykon:'Výkon',
-  NejvetsiTechnickyPripustnaHmotnost:'Největší technicky přípustná hmotnost',
-  ProvozniHmotnost:'Provozní hmotnost',Barva:'Barva',PlatnostSTK:'Platnost STK'
-};
+function kostkaDate(value){
+  const match=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  return match?`${match[3]}/${match[2]}/${match[1]}`:(value||'—');
+}
 function kostkaRows(data){
-  const rows=[];
-  function walk(value,path,depth){
-    if(rows.length>=120||depth>3||value===null||value==='')return;
-    if(Array.isArray(value)){
-      if(value.length&&value.every(x=>x===null||typeof x!=='object')) rows.push([path,value.join(', ')]);
-      else value.slice(0,20).forEach((item,i)=>walk(item,`${path} ${i+1}`,depth+1));
-    }else if(typeof value==='object'){
-      Object.entries(value).forEach(([key,item])=>{
-        if(key.startsWith('_'))return;
-        const label=kostkaLabels[key]||key.replace(/([a-zá-ž])([A-ZÁ-Ž])/g,'$1 $2');
-        walk(item,path?`${path} · ${label}`:label,depth+1);
-      });
-    }else rows.push([path,String(value)]);
-  }
-  walk(data,'',0);
-  return rows.map(([label,value])=>`<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join('');
+  const rows=[
+    ['Stav v registru',data.StatusNazev],
+    ['Tovární značka',data.TovarniZnacka],
+    ['Obchodní označení',data.ObchodniOznaceni],
+    ['Technická prohlídka do',kostkaDate(data.PravidelnaTechnickaProhlidkaDo)]
+  ];
+  return rows.map(([label,value])=>`<dt>${esc(label)}</dt><dd>${esc(value||'—')}</dd>`).join('');
 }
 async function loadKostka(vin){
   const section=$('kostkaSection'),status=$('kostkaStatus');

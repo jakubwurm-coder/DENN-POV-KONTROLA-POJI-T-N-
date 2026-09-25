@@ -1,0 +1,29 @@
+openapi: 3.1.0
+info:
+  title: DENNÍ POV – kontrola pojištění
+  version: 1.0.0
+  description: Read-only API pro aktuální stav kontroly pojištění vozidel.
+servers:
+  - url: https://denni-pov-kontrola.onrender.com
+paths:
+  /api/assistant/status:
+    get:
+      operationId: getInsuranceStatus
+      summary: Načte aktuální souhrn DENNÍ POV a problémová vozidla.
+      responses:
+        '200':
+          description: Aktuální stav kontroly pojištění.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Chybí nebo nesouhlasí API token.
+      security:
+        - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

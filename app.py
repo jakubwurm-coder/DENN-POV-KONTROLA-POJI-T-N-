@@ -8,9 +8,11 @@ ONLINE_MODE = os.getenv("ONLINE_MODE", "").strip().lower() in {"1", "true", "yes
 
 if ONLINE_MODE:
     import cloud_app as _cloud
+    from assistant_api import install_assistant_api
 
     app = _cloud.app
     install_cloud_annotations(app, _cloud)
+    install_assistant_api(app, _cloud._load_state, _cloud._public_state, _cloud._lock)
 else:
     import local_app as _local
 

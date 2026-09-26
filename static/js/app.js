@@ -16,7 +16,7 @@ function badgeClass(r){
   const raw=String(r.status_raw||'').toUpperCase();
   const workflow=String(r.workflow_status||'').toUpperCase();
   if(raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'){
-    return workflow==='VYŘEŠENO'?'badge-ok':'badge-error';
+    return workflow==='VYŘEŠENO'?'badge-ok':'badge-missing';
   }
   if(workflow==='VYŘEŠENO'||workflow==='V POŘÁDKU') return 'badge-ok';
   if(workflow==='ŘEŠÍ SE'||workflow==='KONTROLA') return 'badge-warning';
@@ -198,7 +198,8 @@ function renderRows(){
     const vehicle=r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ');
     const workflow=r.workflow_status|| (needsAttention(r)?'Nové':'—');
     const workflowClass=['VYŘEŠENO','V POŘÁDKU'].includes(workflow)?'badge-ok':workflow==='—'?'badge-neutral':'badge-warning';
-    return `<tr data-index="${index}"><td><button class="vehicle-open" type="button" data-index="${index}" aria-label="Otevřít vozidlo ${esc(displaySpz(r)||r.vin)}">${esc(displaySpz(r)||'Bez SPZ')}</button>${vehicle?`<span class="vehicle-name">${esc(vehicle)}</span>`:''}<span class="vehicle-vin">${esc(r.vin||'—')}</span></td><td><span class="status-badge ${badge}">${esc(resultLabel(r))}</span></td><td><span class="status-badge ${workflowClass}">${esc(workflow)}</span>${r.note?'<span class="note-indicator">Poznámka v detailu</span>':''}</td></tr>`;
+    const rowClass=(String(r.status_raw||'').toUpperCase()==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ' && String(r.workflow_status||'').toUpperCase()!=='VYŘEŠENO')?'problem-row':'';
+    return `<tr class="${rowClass}" data-index="${index}"><td><button class="vehicle-open" type="button" data-index="${index}" aria-label="Otevřít vozidlo ${esc(displaySpz(r)||r.vin)}">${esc(displaySpz(r)||'Bez SPZ')}</button>${vehicle?`<span class="vehicle-name">${esc(vehicle)}</span>`:''}<span class="vehicle-vin">${esc(r.vin||'—')}</span></td><td><span class="status-badge ${badge}">${esc(resultLabel(r))}</span></td><td><span class="status-badge ${workflowClass}">${esc(workflow)}</span>${r.note?'<span class="note-indicator">Poznámka v detailu</span>':''}</td></tr>`;
   }).join('');
   document.querySelectorAll('.vehicle-open').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();showDetail(state.results[Number(button.dataset.index)]);}));
   document.querySelectorAll('#rows tr[data-index]').forEach(tr=>tr.addEventListener('click',()=>showDetail(state.results[Number(tr.dataset.index)])));

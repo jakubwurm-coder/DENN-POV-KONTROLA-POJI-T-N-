@@ -752,9 +752,28 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         rows.append(row)
     public["results"] = rows
     summary = dict(data.get("summary") or {})
-    deposit = int(summary.get("deposit") or 0)
-    summary["active"] = max(0, int(summary.get("active") or 0) - deposit)
-    summary["ok_total"] = max(0, int(summary.get("ok_total") or 0) - deposit)
+
+    # Veřejný souhrn se počítá z aktuálních řádků, nikoli z historicky
+    # uložených agregací. Tím se čísla na dashboardu, API a ve filtrech
+    # nemohou rozcházet ani po změně pravidel počítání.
+    raw_counts = Counter(str(row.get("status_raw") or "").upper() for row in rows)
+    active_statuses = {
+        "OK",
+        "CHYBÍ V UNIQA",
+        "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+        "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ",
+        "SPZ NESOUHLASÍ",
+        "NELZE OVĚŘIT",
+    }
+    summary["active"] = sum(
+        1 for row in rows
+        if str(row.get("status_raw") or "").upper() in active_statuses
+    )
+    summary["ok_total"] = raw_counts.get("OK", 0)
+    summary["absent_uninsured"] = raw_counts.get("NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ", 0)
+    summary["deposit"] = raw_counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0)
+    summary["spz_mismatch"] = raw_counts.get("SPZ NESOUHLASÍ", 0)
+    summary["unverified"] = raw_counts.get("NELZE OVĚŘIT", 0)
 
     resolved_statuses = {"VYŘEŠENO", "V POŘÁDKU"}
     issue_statuses = {
@@ -779,17 +798,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     # Do počtu "Pojištění v pořádku" patří jen vyřešené problémy vozidel,
     # která jsou součástí aktivní kontroly. Záznamy "NAVÍC V UNIQA"
     # a prodaná vozidla nejsou aktivní flotila a nesmí zvyšovat ok_total.
-    resolved_active_rows = [
-        row for row in resolved_issue_rows
-        if str(row.get("status_raw") or "").upper() in {
-            "CHYBÍ V UNIQA",
-            "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-        }
-    ]
-    summary["ok_total"] = min(
-        int(summary.get("active") or 0),
-        int(summary.get("ok_total") or 0) + len(resolved_active_rows),
-    )
+    # Ruční stav řešení nemění technický výsledek kontroly pojištění.
     summary["missing"] = sum(
         1 for row in rows
         if str(row.get("status_raw") or "").upper() == "CHYBÍ V UNIQA"

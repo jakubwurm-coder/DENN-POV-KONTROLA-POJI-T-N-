@@ -32,6 +32,8 @@ def install_assistant_api(app, load_state: Callable[[], dict[str, Any]], public_
             "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
             "PRODANÉ, ALE V UNIQA",
             "NAVÍC V UNIQA",
+            "SPZ NESOUHLASÍ",
+            "NELZE OVĚŘIT",
         }
         resolved = {"VYŘEŠENO", "V POŘÁDKU"}
         problems = []
@@ -64,6 +66,8 @@ def install_assistant_api(app, load_state: Callable[[], dict[str, Any]], public_
                 "absent_uninsured": int(summary.get("absent_uninsured") or 0),
                 "sold_uniqa": int(summary.get("sold_uniqa") or 0),
                 "extra_uniqa": int(summary.get("extra_uniqa") or 0),
+                "spz_mismatch": int(summary.get("spz_mismatch") or 0),
+                "unverified": int(summary.get("unverified") or 0),
                 "problems": len(problems),
             },
             "problems": problems,

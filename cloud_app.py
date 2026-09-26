@@ -1145,7 +1145,7 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
         "CHYBÍ V UNIQA": ("FFF0F3", red),
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ": ("FFF0F3", red),
         "PRODANÉ, ALE V UNIQA": ("F4F0FF", "7256B8"),
-        "NEPOJIŠTĚNO, ALE DEPOZIT": ("FFF7E7", "A87512"),
+        "NEPOJIŠTĚNO, ALE DEPOZIT": ("E9F7F0", green),
         "NAVÍC V UNIQA": ("EAF7FA", "16849B"),
         "SPZ NESOUHLASÍ": ("FFF7E7", "A87512"),
         "NELZE OVĚŘIT": ("F1F4F6", "647789"),

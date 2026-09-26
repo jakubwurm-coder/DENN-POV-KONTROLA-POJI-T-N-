@@ -137,7 +137,14 @@ function matches(r){
   if(activeFilter==='VŠE')return true;
   if(activeFilter==='ATTENTION')return needsAttention(r);
   if(activeFilter==='ACTIVE')return ['OK','CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ','SPZ NESOUHLASÍ','NELZE OVĚŘIT'].includes(r.status_raw);
-  if(activeFilter==='OK_TOTAL')return r.status_raw==='OK';
+  if(activeFilter==='OK_TOTAL'){
+    const raw=String(r.status_raw||'').toUpperCase();
+    const workflow=String(r.workflow_status||'').toUpperCase();
+    if(raw==='OK')return true;
+    if(raw==='CHYBÍ V UNIQA')return ['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
+    if(raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ')return workflow==='VYŘEŠENO';
+    return false;
+  }
   if(activeFilter==='OK_UNIQA')return r.status_raw==='OK'&&r.pojistovna==='UNIQA';
   if(activeFilter==='OK_ALLIANZ')return r.status_raw==='OK'&&r.pojistovna==='ALLIANZ';
   const resolved=['VYŘEŠENO','V POŘÁDKU'].includes(r.workflow_status);

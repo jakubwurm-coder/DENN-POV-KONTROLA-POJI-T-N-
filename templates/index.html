@@ -262,17 +262,17 @@
               <button class="metric-card" type="button" data-filter="ABSENT_INSURED">
                 <span class="metric-label">Nepřítomné · pojištěno</span>
                 <strong id="cAbsentInsured">0</strong>
-                <small>nevyřešené případy</small>
+                <small>z toho vyřešeno <b id="cAbsentResolved">0</b> · k řešení <b id="cAbsentOpen">0</b></small>
               </button>
               <button class="metric-card" type="button" data-filter="SOLD_UNIQA">
                 <span class="metric-label">Prodané, ale pojištěno</span>
                 <strong id="cSold">0</strong>
-                <small>nevyřešené případy</small>
+                <small>z toho vyřešeno <b id="cSoldResolved">0</b> · k řešení <b id="cSoldOpen">0</b></small>
               </button>
               <button class="metric-card" type="button" data-filter="EXTRA_UNIQA">
                 <span class="metric-label">Ostatní pojištění navíc</span>
                 <strong id="cExtra">0</strong>
-                <small>aktivní pojistka mimo vozidla určená ke kontrole</small>
+                <small>z toho vyřešeno <b id="cExtraResolved">0</b> · k řešení <b id="cExtraOpen">0</b></small>
               </button>
             </div>
           </div>
@@ -413,6 +413,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260926counts3d"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260926counts4"></script>
 </body>
 </html>

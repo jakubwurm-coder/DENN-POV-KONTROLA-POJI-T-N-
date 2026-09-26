@@ -799,7 +799,19 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     # Do počtu "Pojištění v pořádku" patří jen vyřešené problémy vozidel,
     # která jsou součástí aktivní kontroly. Záznamy "NAVÍC V UNIQA"
     # a prodaná vozidla nejsou aktivní flotila a nesmí zvyšovat ok_total.
-    # Ruční stav řešení nemění technický výsledek kontroly pojištění.
+    # Ručně vyřešený problém aktivního vozidla patří ve veřejném přehledu
+    # mezi "Pojištění v pořádku", aby se aktivní flotila rozpadla do
+    # vzájemně srozumitelných kategorií bez chybějících kusů.
+    resolved_active_rows = [
+        row for row in resolved_issue_rows
+        if str(row.get("status_raw") or "").upper() in {
+            "CHYBÍ V UNIQA",
+            "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+        }
+    ]
+    summary["ok_total"] = int(summary.get("ok_total") or 0) + len(resolved_active_rows)
+    summary["resolved_active"] = len(resolved_active_rows)
+
     summary["missing"] = sum(
         1 for row in rows
         if str(row.get("status_raw") or "").upper() == "CHYBÍ V UNIQA"

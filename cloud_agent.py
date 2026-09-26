@@ -140,24 +140,44 @@ def _send_result_email(snapshot: dict[str, Any]) -> bool:
         print("E-mail výsledku nebyl odeslán: chybí SMTP nastavení nebo uložené heslo.")
         return False
 
-    summary = snapshot.get("summary") or {}
+    # Po finální synchronizaci použij veřejný stav z webu. Ten už zahrnuje
+    # trvalé ruční stavy řešení a stejné počítání jako dashboard.
+    email_snapshot = snapshot
+    try:
+        response = requests.get(f"{CLOUD_URL}/api/state", timeout=20)
+        response.raise_for_status()
+        cloud_state = response.json()
+        if isinstance(cloud_state, dict) and isinstance(cloud_state.get("summary"), dict):
+            email_snapshot = cloud_state
+    except Exception as exc:
+        print("E-mail: veřejný stav webu se nepodařilo načíst, používám lokální výsledek:", exc)
+
+    summary = email_snapshot.get("summary") or {}
     missing = int(summary.get("missing") or 0)
-    active = max(0, int(summary.get("active") or 0) - int(summary.get("deposit") or 0))
+    absent_insured = int(summary.get("absent_insured") or 0)
+    sold_uniqa = int(summary.get("sold_uniqa") or 0)
+    extra_uniqa = int(summary.get("extra_uniqa") or 0)
+    spz_mismatch = int(summary.get("spz_mismatch") or 0)
+    unverified = int(summary.get("unverified") or 0)
+    problems = missing + absent_insured + sold_uniqa + extra_uniqa + spz_mismatch + unverified
+    active = int(summary.get("active") or 0)
     ok_total = int(summary.get("ok_total") or 0)
-    subject = f"DENNÍ POV: CHYBÍ POJIŠTĚNÍ ({missing})" if missing > 0 else "DENNÍ POV: KONTROLA V POŘÁDKU"
+    subject = f"DENNÍ POV: VYŽADUJE KONTROLU ({problems})" if problems > 0 else "DENNÍ POV: KONTROLA V POŘÁDKU"
 
     lines = [
         "DENNÍ POV – výsledek kontroly",
         "",
-        f"Kontrola dokončena: {snapshot.get('finished_at') or datetime.now().strftime('%d.%m.%Y %H:%M:%S')}",
+        f"Kontrola dokončena: {email_snapshot.get('finished_at') or snapshot.get('finished_at') or datetime.now().strftime('%d.%m.%Y %H:%M:%S')}",
         f"Aktivní vozidla ke kontrole: {active}",
-        f"Pojištění v pořádku: {ok_total}",
+        f"Pojištěno správně: {ok_total}",
+        f"Nepřítomné · nepojištěno: {int(summary.get('absent_uninsured') or 0)}",
         f"Chybí pojištění: {missing}",
+        f"Pojištění navíc: {absent_insured + sold_uniqa + extra_uniqa}",
         "",
     ]
     if missing > 0:
         lines.append("Vozidla s chybějícím pojištěním:")
-        for row in snapshot.get("results") or []:
+        for row in email_snapshot.get("results") or []:
             status_raw = str(row.get("status_raw") or "").upper()
             status = str(row.get("status") or "").upper()
             if status_raw == "CHYBÍ V UNIQA" or status == "CHYBÍ POJIŠTĚNÍ":

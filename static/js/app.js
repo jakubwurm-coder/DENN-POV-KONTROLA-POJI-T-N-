@@ -1,5 +1,5 @@
 let state={results:[],summary:{},sources:{},running:false,progress:{percent:0,phase:'Připraveno',eta_seconds:0}};
-let activeFilter='VŠE';
+let activeFilter='ATTENTION';
 let sessionCheckStarted=false;
 let initialStateLoaded=false;
 
@@ -122,8 +122,20 @@ async function showManualHistory(){
   }
 }
 
+const problemStatuses=['CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE V UNIQA','NAVÍC V UNIQA','SPZ NESOUHLASÍ','NELZE OVĚŘIT'];
+function needsAttention(r){
+  const raw=String(r.status_raw||'').toUpperCase();
+  const workflow=String(r.workflow_status||'').toUpperCase();
+  const resolved=raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'?workflow==='VYŘEŠENO':['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
+  return problemStatuses.includes(raw)&&!resolved;
+}
+function resultLabel(r){
+  return ({'OK':'Pojištění v pořádku','CHYBÍ V UNIQA':'Chybí pojištění','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'Nepřítomné · pojištěno','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'Nepřítomné · nepojištěno','PRODANÉ, ALE V UNIQA':'Prodané · pojištěno','NAVÍC V UNIQA':'Pojištění navíc','NEPOJIŠTĚNO, ALE DEPOZIT':'Depozit','SPZ NESOUHLASÍ':'SPZ nesouhlasí','NELZE OVĚŘIT':'Nelze ověřit'}[r.status_raw]||r.original_status||r.status_raw||r.status||'—');
+}
+filterNames.ATTENTION='K řešení';
 function matches(r){
   if(activeFilter==='VŠE')return true;
+  if(activeFilter==='ATTENTION')return needsAttention(r);
   if(activeFilter==='ACTIVE')return ['OK','CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','SPZ NESOUHLASÍ','NELZE OVĚŘIT'].includes(r.status_raw);
   if(activeFilter==='OK_TOTAL')return r.status_raw==='OK'||r.status_raw==='NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ';
   if(activeFilter==='OK_UNIQA')return r.status_raw==='OK'&&r.pojistovna==='UNIQA';
@@ -138,25 +150,28 @@ function matches(r){
     return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'].includes(r.status_raw);
   }
   if(activeFilter==='UNWANTED_INSURANCE'){
-    return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'].includes(r.status_raw);
+    return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE V UNIQA'].includes(r.status_raw)&&needsAttention(r);
   }
   return true;
 }
 
-function renderActiveFilter(){const box=$('activeFilter');if(activeFilter==='VŠE'){box.hidden=true;return;}$('activeFilterLabel').textContent=filterNames[activeFilter]||activeFilter;box.hidden=false;}
+function renderActiveFilter(){const box=$('activeFilter');if(['VŠE','ATTENTION'].includes(activeFilter)){box.hidden=true;return;}$('activeFilterLabel').textContent=filterNames[activeFilter]||activeFilter;box.hidden=false;}
 
 function renderRows(){
   renderActiveFilter();
+  document.querySelectorAll('.view-switch button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.filter===activeFilter)));
+  $('clearBtn').hidden=!$('search').value;
+
 
   if(!sessionCheckStarted&&!state.running){
     $('footerRight').textContent='Zobrazeno: 0 z 0';
-    $('rows').innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Nejdříve spusťte aktuální kontrolu pojištění.</td></tr>';
+    $('rows').innerHTML='<tr class="empty-row"><td colspan="3" class="empty">Nejdříve spusťte aktuální kontrolu pojištění.</td></tr>';
     return;
   }
 
   if(state.running||(sessionCheckStarted&&!state.error&&!state.running&&!!state.finished_at&&connectionVisualPercent<100)){
     $('footerRight').textContent='Zobrazeno: 0 z 0';
-    $('rows').innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Kontrola právě probíhá. Výsledky se zobrazí až po jejím dokončení na 100 %.</td></tr>';
+    $('rows').innerHTML='<tr class="empty-row"><td colspan="3" class="empty">Kontrola právě probíhá. Výsledky se zobrazí až po jejím dokončení na 100 %.</td></tr>';
     return;
   }
 
@@ -169,12 +184,16 @@ function renderRows(){
       return String(displaySpz(a)||a.vin||'').localeCompare(String(displaySpz(b)||b.vin||''),'cs',{numeric:true,sensitivity:'base'});
     });
   $('footerRight').textContent='Zobrazeno: '+rows.length+' z '+state.results.length;
-  if(!rows.length){$('rows').innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Žádné výsledky pro zvolený filtr.</td></tr>';return;}
+  if(!rows.length){$('rows').innerHTML=`<tr class="empty-row"><td colspan="3" class="empty">${activeFilter==='ATTENTION'&&!q?'Žádné případy k řešení.':'Žádná vozidla pro zvolené hledání nebo filtr.'}</td></tr>`;return;}
   $('rows').innerHTML=rows.map(r=>{
     const index=state.results.indexOf(r);
-    const badge=rowBadgeClass(r);
-    return `<tr data-index="${index}"><td><span class="status-badge ${badge}">${esc(visibleSystemText(r.status))}</span></td><td>${esc(r.vin||'—')}</td><td>${esc(displaySpz(r)||'—')}</td><td>${esc(r.vykup||'—')}</td><td>${esc(r.prodej||'—')}</td><td>${esc(visibleSystemText(r.detail||'—'))}</td></tr>`;
+    const badge=badgeClass({...r,workflow_status:''});
+    const vehicle=r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ');
+    const workflow=r.workflow_status|| (needsAttention(r)?'Nové':'—');
+    const workflowClass=['VYŘEŠENO','V POŘÁDKU'].includes(workflow)?'badge-ok':workflow==='—'?'badge-neutral':'badge-warning';
+    return `<tr data-index="${index}"><td><button class="vehicle-open" type="button" data-index="${index}" aria-label="Otevřít vozidlo ${esc(displaySpz(r)||r.vin)}">${esc(displaySpz(r)||'Bez SPZ')}</button>${vehicle?`<span class="vehicle-name">${esc(vehicle)}</span>`:''}<span class="vehicle-vin">${esc(r.vin||'—')}</span></td><td><span class="status-badge ${badge}">${esc(resultLabel(r))}</span></td><td><span class="status-badge ${workflowClass}">${esc(workflow)}</span>${r.note?'<span class="note-indicator">Poznámka v detailu</span>':''}</td></tr>`;
   }).join('');
+  document.querySelectorAll('.vehicle-open').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();showDetail(state.results[Number(button.dataset.index)]);}));
   document.querySelectorAll('#rows tr[data-index]').forEach(tr=>tr.addEventListener('click',()=>showDetail(state.results[Number(tr.dataset.index)])));
 }
 
@@ -195,165 +214,21 @@ function setStatusCard(cardId,textId,ok,okText,badText){
   textEl.textContent=ok?okText:badText;
 }
 
-const connectionSteps=[
-  'Inicializuji kontrolní proces',
-  'Ověřuji síťovou konektivitu',
-  'Navazuji relaci se SQL serverem',
-  'Načítám datovou sadu vozidel',
-  'Normalizuji VIN a registrační značky',
-  'Aplikuji validační pravidla a výjimky',
-  'Filtruji záznamy mimo rozsah kontroly',
-  'Navazuji spojení s evidencí pojištění',
-  'Synchronizuji aktivní záznamy pojištění',
-  'Validuji integritu načtených dat',
-  'Páruji záznamy podle VIN',
-  'Páruji záznamy podle registrační značky',
-  'Provádím křížové porovnání datových sad',
-  'Detekuji chybějící pojištění',
-  'Detekuji pojištění navíc a výjimky',
-  'Vyhodnocuji konflikty a ruční statusy',
-  'Finalizuji validační výsledek',
-  'Publikuji aktuální přehled'
-];
-let connectionVisualIndex=0;
 let connectionVisualPercent=0;
-let connectionFinishAnimating=false;
-let connectionUseLocalProgress=false;
-
-function connectionStepIndex(percent){
-  const byPercent=Math.floor((Math.max(0,Math.min(99,Number(percent)||0))/100)*connectionSteps.length);
-  return Math.max(0,Math.min(connectionSteps.length-1,byPercent));
-}
-
-
-function ensureConnectionDots(percent,finished,error){
-  const box=$('connectionStepDots');if(!box)return;
-  const total=connectionSteps.length;
-  const current=Math.max(0,Math.min(100,Number(percent)||0));
-  const filled=finished?total:Math.floor((current/100)*total);
-
-  box.innerHTML=connectionSteps.map((_,i)=>{
-    let cls='';
-    if(error&&i===Math.max(0,filled-1)) cls='error';
-    else if(i<filled) cls='done';
-    else if(i===filled&&!finished&&current>0) cls='active';
-    return '<span class="'+cls+'"></span>';
-  }).join('');
-}
 
 function renderProgress(){
-  const p=state.progress||{};
-  const serverPercent=Math.max(0,Math.min(100,Number(p.percent)||0));
-  const finished=sessionCheckStarted&&!state.running&&!!state.finished_at&&!state.error;
-  let percent=serverPercent;
-
-  const visual=$('connectionVisual');
-  const finalBox=$('connectionFinal');
-  const runningBox=$('connectionRunningDetail');
-
-  if(state.running){
-    if(connectionVisualPercent<=0){
-      connectionVisualIndex=0;
-      connectionVisualPercent=connectionUseLocalProgress?1:Math.max(1,serverPercent);
-      connectionFinishAnimating=false;
-    }
-    // Po ručním spuštění v tomto prohlížeči používáme jeden plynulý lokální
-    // průběh. Backend může skočit třeba rovnou na 96 %, ale UI se nesmí přeskočit.
-    if(!connectionUseLocalProgress){
-      connectionVisualPercent=Math.max(connectionVisualPercent,serverPercent);
-    }
-    percent=Math.min(96,connectionVisualPercent);
-    const idx=connectionStepIndex(percent);
-    const detail=connectionSteps[idx];
-
-    $('progressPercent').textContent=Math.round(percent)+' %';
-    $('progressEta').textContent='Probíhá';
-    $('progressHeadline').textContent='Kontrola připojení';
-    $('progressPhase').textContent=detail;
-    if($('progressDetail'))$('progressDetail').textContent='Průběh jednotlivých kroků kontroly.';
-    $('progressBar').style.width=Math.max(3,percent)+'%';
-
-    if(visual){visual.className='connection-visual running';}
-    if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';
-    if(finalBox)finalBox.hidden=true;
-    if(runningBox)runningBox.hidden=false;
-    ensureConnectionDots(percent,false,false);
-    return;
-  }
-
-  if(state.error){
-    connectionUseLocalProgress=false;
-    $('progressPercent').textContent='!';
-    $('progressEta').textContent='Chyba';
-    $('progressHeadline').textContent='Kontrola připojení';
-    $('progressPhase').textContent='Kontrolu se nepodařilo dokončit.';
-    if($('progressDetail'))$('progressDetail').textContent=visibleSystemText(state.error);
-    $('progressBar').style.width='100%';
-    if(visual)visual.className='connection-visual error';
-    if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='!';
-    if(finalBox)finalBox.hidden=true;
-    if(runningBox)runningBox.hidden=false;
-    ensureConnectionDots(percent,false,true);
-    return;
-  }
-
-  if(finished){
-    connectionUseLocalProgress=false;
-    connectionFinishAnimating=connectionVisualPercent<100;
-    if(connectionFinishAnimating){
-      connectionVisualPercent=Math.min(100,connectionVisualPercent+5);
-    }else{
-      connectionVisualPercent=100;
-    }
-    percent=connectionVisualPercent;
-    $('progressPercent').textContent=Math.round(percent)+' %';
-    $('progressEta').textContent=percent<100?'Dokončuji':'Dokončeno';
-    $('progressHeadline').textContent='Kontrola připojení';
-    $('progressPhase').textContent=percent<100?'Dokončuji kontrolu a připravuji výsledky.':'Kontrola byla úspěšně dokončena.';
-    $('progressBar').style.width=percent+'%';
-    if(visual)visual.className='connection-visual done';
-    if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='✓';
-    if(runningBox)runningBox.hidden=percent>=100;
-    if(finalBox)finalBox.hidden=percent<100;
-
-    if(percent<100){
-      if($('progressDetail'))$('progressDetail').textContent='Dokončuji kontrolu a připravuji výsledný stav.';
-      ensureConnectionDots(percent,false,false);
-      return;
-    }
-
-    if(!document.body.classList.contains('check-finalized')){
-      document.body.classList.add('check-finalized');
-      setTimeout(render,0);
-    }
-
-    const sources=state.sources||{};
-    const sourceError=Object.values(sources).some(x=>x&&x.state==='error');
-    if($('connectionFinalText'))$('connectionFinalText').textContent=sourceError
-      ?'Kontrola připojení dokončena s upozorněním'
-      :'Kontrola připojení SQL a pojišťoven v pořádku';
-    if($('connectionFinalSub'))$('connectionFinalSub').textContent=sourceError
-      ?'Některý datový zdroj vyžaduje kontrolu.'
-      :'SQL i evidence pojištění odpověděly a výsledky byly aktualizovány.';
-    ensureConnectionDots(100,true,false);
-    return;
-  }
-
-  connectionVisualPercent=0;
-  connectionFinishAnimating=false;
-  $('progressPercent').textContent='0 %';
-  $('progressEta').textContent='Připraveno';
-  $('progressHeadline').textContent='Kontrola připojení';
-  $('progressPhase').textContent='Připraveno ke spuštění kontroly.';
-  if($('progressDetail'))$('progressDetail').textContent='Po spuštění se ověří interní databáze SQL a evidence dat z pojišťovny.';
-  $('progressBar').style.width='0%';
-  if(visual)visual.className='connection-visual idle';
-  if($('connectionVisualIcon'))$('connectionVisualIcon').textContent='↻';
-  if(finalBox)finalBox.hidden=true;
-  if(runningBox)runningBox.hidden=false;
-  ensureConnectionDots(0,false,false);
+  const running=!!state.running;
+  $('progressPanel').hidden=!running&&!state.error;
+  const percent=Math.max(0,Math.min(100,Number((state.progress||{}).percent)||0));
+  connectionVisualPercent=running?percent:100;
+  $('progressPercent').textContent=state.error?'!':Math.round(percent)+' %';
+  $('progressEta').textContent=state.error?'Chyba':'Probíhá';
+  $('progressHeadline').textContent=state.error?'Kontrola se nezdařila':'Kontroluji pojištění';
+  $('progressPhase').textContent=state.error?'Výsledek není úplný. Zkuste kontrolu znovu nebo otevřete stav datových zdrojů.':((state.progress||{}).phase||'Načítám a porovnávám evidenci vozidel.');
+  $('progressBar').style.width=percent+'%';
+  $('connectionVisual').className='connection-visual '+(state.error?'error':'running');
+  $('connectionVisualIcon').textContent=state.error?'!':'↻';
 }
-
 
 function renderChanges(){
   const changes=state.changes||{};
@@ -384,6 +259,8 @@ function shortDateTime(value){
 function render(){
   const s=state.summary||{};
   const issues=primaryIssueCounts();
+  const attention=(state.results||[]).filter(needsAttention).length;
+  const sourceError=Object.values(state.sources||{}).some(source=>source&&source.state==='error');
   const extraOverviewRows=(state.results||[]).filter(r=>{
     const raw=String(r.status_raw||'').toUpperCase();
     return raw==='NAVÍC V UNIQA'||raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
@@ -395,22 +272,24 @@ function render(){
   }).length;
 
   const waitingFreshPage=!sessionCheckStarted&&!state.running;
-  const visualCompletionPending=sessionCheckStarted&&!state.error&&!state.running&&!!state.finished_at&&connectionVisualPercent<100;
+  const visualCompletionPending=false;
   const suppressFinalResults=waitingFreshPage||state.running||visualCompletionPending;
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
   const shown=(value)=>suppressFinalResults?0:(Number(value)||0);
   document.body.classList.toggle('check-running',!!state.running);
+  setText('attentionCount',suppressFinalResults?'—':attention);
+  setText('allCount',suppressFinalResults?'—':state.results.length);
   setText('cActive',shown(s.active));setText('cActiveHover',shown(s.active));setText('cActiveOverview',shown(s.active));setText('cOkTotal',shown(s.ok_total));
   setText('cOkUniqa',shown(s.ok_uniqa));setText('cOkAllianz',shown(s.ok_allianz));setText('cMissing',shown(issues.missing));
   setText('tipMissingOverall',shown(issues.missing));setText('tipExtraOverall',shown(issues.unwanted));
   setText('cAbsentInsured',shown(s.absent_insured));setText('cAbsentInsuredTop',shown(issues.absent));setText('cAbsentUninsured',shown(s.absent_uninsured));
   setText('cDeposit',shown(s.deposit));setText('cSold',shown(s.sold_uniqa));setText('cSoldTop',shown(issues.sold));
-  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(extraOverviewCount));setText('navExtraCount',shown(extraProblemCount));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
+  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(extraOverviewCount));setText('navExtraCount',shown(issues.unwanted));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
 
   const navExtraCount=$('navExtraCount');
   if(navExtraCount){
-    const showExtraIndicator=!suppressFinalResults&&sessionCheckStarted&&!!state.finished_at&&!state.error&&extraProblemCount>0;
-    navExtraCount.textContent=showExtraIndicator?String(extraProblemCount):'0';
+    const showExtraIndicator=!suppressFinalResults&&sessionCheckStarted&&!!state.finished_at&&!state.error&&issues.unwanted>0;
+    navExtraCount.textContent=showExtraIndicator?String(issues.unwanted):'0';
     navExtraCount.classList.toggle('is-alert',showExtraIndicator);
     navExtraCount.classList.toggle('is-hidden',!showExtraIndicator);
     navExtraCount.hidden=!showExtraIndicator;
@@ -457,7 +336,7 @@ function render(){
     setText('activeStatusText','Čeká na kontrolu');
     summaryCards.forEach(card=>{card.classList.remove('status-ok','status-problem');});
   }else{
-    setStatusCard('overallCard','overallStatusText',!!state.finished_at&&!state.error&&issues.total===0,'Vše v pořádku',state.error?'Chyba kontroly':'Vyžaduje kontrolu');
+    setStatusCard('overallCard','overallStatusText',!!state.finished_at&&!state.error&&!sourceError&&attention===0,'Bez otevřených případů',state.error?'Chyba kontroly':sourceError?'Neúplná kontrola':'Vyžaduje řešení');
     const missingCard=document.querySelector('.summary-card[data-filter="MISSING"]');
     if(missingCard){missingCard.classList.toggle('status-ok',issues.missing===0);missingCard.classList.toggle('status-problem',issues.missing>0);}
     const extraCard=document.querySelector('.summary-card[data-filter="UNWANTED_INSURANCE"]');
@@ -466,6 +345,7 @@ function render(){
     setText('extraStatusText',extraOverviewCount===0?'V pořádku':'Vyžaduje kontrolu');
     setText('activeStatusText','Evidence načtena');
   }
+  setText('overallIcon',state.running?'↻':state.error||sourceError||attention?'!':sessionCheckStarted?'✓':'—');
   source('tirbazar','tir');source('uniqa','uniqa');source('allianz','allianz');renderProgress();
   const runBtn=$('runBtn');
   runBtn.disabled=state.running;
@@ -487,27 +367,31 @@ function render(){
 
 async function refresh(){try{
   const r=await fetch('/api/state',{cache:'no-store'});
+  if(!r.ok)throw new Error('Načtení selhalo');
   state=await r.json();
+  if(!state.running)connectionVisualPercent=100;
   if(!initialStateLoaded){
-    if(state.running)sessionCheckStarted=true;
+    if(state.running||state.finished_at||state.error)sessionCheckStarted=true;
+    if(!state.running)connectionVisualPercent=100;
     initialStateLoaded=true;
   }
   render();
   if(sessionCheckStarted&&state.error)toast(visibleSystemText(state.error),true);
 }catch(e){toast('Nepodařilo se načíst stav aplikace.',true);}}
 async function run(){
+  const previousState=state;
+  state={...state};
   sessionCheckStarted=true;
   document.body.classList.remove('check-finalized');
   state.running=true;
   state.summary={};
   state.results=[];
   state.changes={count:0,items:[]};
-  connectionVisualIndex=0;
-  connectionVisualPercent=1;
-  connectionFinishAnimating=false;
-  connectionUseLocalProgress=true;
+  connectionVisualPercent=0;
+  state.error=null;
+  setFilter('ATTENTION');
   render();
-  try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){toast('Kontrolu se nepodařilo spustit.',true);}}
+  try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){state=previousState;render();toast('Kontrolu se nepodařilo spustit.',true);}}
 
 function kostkaDate(value){
   const match=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
@@ -575,7 +459,7 @@ function setFilter(filter){
   document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x.dataset.filter===filter));
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   const side=document.querySelector(`.nav-item[data-filter="${filter}"]`);
-  if(side)side.classList.add('active');else if(filter!=='VŠE'&&$('navOthers'))$('navOthers').classList.add('active');
+  if(side)side.classList.add('active');else if(filter==='VŠE')$('navAllVehicles').classList.add('active');else if(filter!=='VŠE'&&$('navOthers'))$('navOthers').classList.add('active');
   renderRows();
 }
 function clearFilter(){
@@ -586,17 +470,6 @@ function clearFilter(){
 }
 let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return;lastToast=msg;const t=$('toast');t.textContent=msg;t.className='toast'+(error?' error':'');t.hidden=false;setTimeout(()=>{t.hidden=true;lastToast='';},5000);}
 
-$('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',clearFilter);$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
-setInterval(()=>{
-  if(state.running){
-    if(connectionVisualPercent<50) connectionVisualPercent+=1.8;
-    else if(connectionVisualPercent<75) connectionVisualPercent+=1.0;
-    else if(connectionVisualPercent<90) connectionVisualPercent+=0.55;
-    else if(connectionVisualPercent<96) connectionVisualPercent+=0.2;
-    connectionVisualPercent=Math.min(96,connectionVisualPercent);
-    renderProgress();
-  }else if(state.finished_at&&!state.error&&connectionVisualPercent<100){
-    renderProgress();
-  }
-},650);
+$('runBtn').addEventListener('click',run);$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
+$('csvBtn').addEventListener('click',event=>{if($('csvBtn').getAttribute('aria-disabled')==='true')event.preventDefault();});
 setInterval(refresh,2000);refresh();

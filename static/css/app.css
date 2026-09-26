@@ -2964,3 +2964,64 @@ body.check-running #csvBtn{
 @media(max-width:520px){
   .logic-row{grid-template-columns:1fr;gap:4px}
 }
+
+/* Compact daily workspace: focus on exceptions and vehicle lookup. */
+body{background:#f4f7fa}
+.topbar{min-height:100px;padding-top:22px;padding-bottom:22px}
+.topbar h1{font-size:26px;letter-spacing:-.025em;text-transform:none}
+.overview-sticky{position:static!important;top:auto!important;margin-bottom:20px}
+.overview-sticky #overallCard{min-height:110px;padding:20px 24px;gap:18px;box-shadow:0 3px 14px #16324d08}
+.overview-sticky #overallCard .summary-copy{min-width:0;flex:1 1 180px}
+.overview-sticky .status-copy strong{font-size:23px!important;min-height:0;line-height:1.25}
+.overall-counts{min-width:170px;margin:0!important;padding:0 18px!important}
+.overall-counts-label{display:none}
+.overall-count-item{font-size:12px;gap:16px}
+.overall-run-slot{margin-left:0!important}
+.overall-run-slot .run-check-cta{min-width:190px;min-height:48px;border-radius:10px;padding:10px 14px;box-shadow:none;gap:10px}
+.overall-run-slot .run-check-cta-icon{width:26px;height:26px;flex-basis:26px;background:transparent;border:0}
+.overall-run-slot .run-check-cta-copy strong{font-size:14px!important;margin:0!important}
+.run-check-cta-arrow{display:none}
+.data-toolbar{gap:16px;flex-wrap:wrap;align-items:center}
+.data-tools{flex-wrap:wrap;gap:8px}
+.view-switch{display:flex;gap:4px;padding:4px;background:#e9eff5;border-radius:12px}
+.view-switch button{border:0;background:transparent;color:#587086;border-radius:9px;padding:10px 13px;font-weight:650;white-space:nowrap}
+.view-switch button[aria-pressed="true"]{background:#fff;color:#102e49;box-shadow:0 2px 6px #16324d12}
+.view-switch span{margin-left:7px;font-size:12px;display:inline-block;min-width:20px}
+#csvBtn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;text-decoration:none;white-space:nowrap;animation:none;box-shadow:none}
+#csvBtn.disabled{opacity:.45;cursor:default}
+.table-hint{font-size:12px;color:#728295;margin:0 0 12px}
+#dataSection table{min-width:0;width:100%;table-layout:fixed}
+#dataSection th:first-child{width:42%}
+#dataSection th:nth-child(2){width:34%}
+#dataSection td{padding:15px 18px;white-space:normal;vertical-align:middle;overflow-wrap:anywhere}
+#dataSection .status-badge{white-space:normal;font-size:11px;line-height:1.4;max-width:100%}
+.vehicle-open{display:block;border:0;background:none;padding:0;color:#113751;font-weight:750;font-size:15px;text-align:left}
+.vehicle-open:hover{text-decoration:underline}
+.vehicle-name,.vehicle-vin,.note-indicator{display:block;margin-top:4px;color:#6c8093;font-size:11px}
+.vehicle-vin{font-variant-numeric:tabular-nums;letter-spacing:.035em}
+.badge-neutral{background:#eff3f6;color:#77889a}
+button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3px}
+.connection-check-panel{margin-bottom:20px}
+@media(max-width:1200px){
+  .overall-counts{min-width:150px;padding:0 12px!important}
+  .overview-sticky #overallCard{flex-wrap:wrap}
+  .overall-run-slot{width:auto;margin:0!important}
+}
+@media(max-width:760px){
+  .topbar h1{font-size:23px}
+  .overview-sticky #overallCard{padding:18px;gap:12px}
+  .overview-sticky .status-copy strong{font-size:20px!important}
+  .overall-counts{width:100%;border:0;border-top:1px solid #dce7f0;padding:10px 0 0!important}
+  .overall-run-slot{width:100%}
+  .data-toolbar,.data-tools{width:100%}
+  .view-switch{width:100%}
+  .view-switch button{flex:1;padding:10px 8px}
+  .search-control{flex:1;min-width:180px}
+  #dataSection th,#dataSection td{padding:12px 8px;font-size:11px}
+  #dataSection th:first-child{width:38%}
+  #dataSection th:nth-child(2){width:35%}
+  .vehicle-vin{font-size:9px;letter-spacing:0}
+  .vehicle-open{font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+#dataSection td:nth-child(3){font-family:inherit}

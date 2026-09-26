@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260924t">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260926clean1">
 </head>
 <body>
   <div class="app-shell">
@@ -21,7 +21,8 @@
       </div>
 
       <nav class="nav" aria-label="Filtry vozidel">
-        <button id="navAllVehicles" class="nav-item active" type="button">
+        <button class="nav-item active" type="button" data-filter="ATTENTION"><span class="nav-icon">!</span><span>K řešení</span></button>
+        <button id="navAllVehicles" class="nav-item" type="button">
           <span class="nav-icon">▦</span><span>Všechna vozidla</span>
         </button>
         <button class="nav-item" type="button" data-filter="MISSING">
@@ -61,8 +62,7 @@
       <header class="topbar">
         <div class="topbar-copy">
           <div class="breadcrumb">VANS CENTRE <span>/</span> DENNÍ POV</div>
-          <h1>OVĚŘENÍ POJIŠTĚNÍ VOZIDEL</h1>
-          <p>Denní přehled aktuálního stavu pojištění vozidel.</p>
+          <h1>Kontrola pojištění</h1>
         </div>
 
         <div class="top-actions top-actions-meta">
@@ -79,7 +79,7 @@
           <article id="overallCard" class="summary-card status-primary">
             <div id="overallIcon" class="summary-icon">✓</div>
             <div class="summary-copy status-copy">
-              <span>Celkový výsledek</span>
+              <span>Výsledek poslední kontroly</span>
               <strong id="overallStatusText">Čeká na kontrolu</strong>
             </div>
             <div id="overallCounts" class="overall-counts" hidden>
@@ -97,7 +97,7 @@
               <button id="runBtn" class="run-check-cta" type="button">
                 <span class="run-check-cta-icon"><span class="play">▶</span></span>
                 <span class="run-check-cta-copy">
-                  <small>SPUSTIT NOVÉ OVĚŘENÍ</small>
+
                   <strong>Spustit kontrolu</strong>
                 </span>
                 <span class="run-check-cta-arrow">›</span>
@@ -107,26 +107,14 @@
 
         </section>
 
-        <section class="control-action-dock control-action-dock-compact" aria-label="Akce kontroly">
-          <div class="control-action-buttons">
-            <a id="csvBtn" class="download-overview-btn disabled" href="/download/xlsx">
-              <span class="download-overview-icon">⇩</span>
-              <span>
-                <small>EXPORT VÝSLEDKŮ</small>
-                <strong>Stáhnout přehled</strong>
-              </span>
-            </a>
-          </div>
-        </section>
-
-        <section id="progressPanel" class="connection-check-panel">
+        <section id="progressPanel" class="connection-check-panel" hidden>
           <div class="connection-check-main">
             <div id="connectionVisual" class="connection-visual idle" aria-hidden="true">
               <div class="connection-ring"></div>
               <div id="connectionVisualIcon" class="connection-visual-icon">↻</div>
             </div>
             <div class="connection-check-copy">
-              <span class="progress-eyebrow">LIVE KONTROLA SYSTÉMU</span>
+              <span class="progress-eyebrow">PRŮBĚH KONTROLY</span>
               <div class="progress-headline-row">
                 <strong id="progressHeadline">Kontrola připojení</strong>
               </div>
@@ -392,20 +380,21 @@
           </div>
         </section>
 
-        <section id="dataSection" class="data-section" hidden>
+        <section id="dataSection" class="data-section">
           <div class="data-toolbar">
-            <div><span class="section-kicker">Výsledky</span><h2>Celkový přehled vozidel</h2></div>
+            <div class="view-switch" aria-label="Zobrazení vozidel"><button type="button" data-filter="ATTENTION" aria-pressed="true">K řešení <span id="attentionCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
             <div class="data-tools">
-              <div class="search-control"><span class="search-icon">⌕</span><input id="search" autocomplete="off" placeholder="Hledat VIN nebo SPZ…"></div>
-              <button id="clearBtn" class="btn btn-secondary btn-small" type="button">Vše</button>
+              <div class="search-control"><span class="search-icon">⌕</span><input id="search" autocomplete="off" aria-label="Hledat vozidlo" placeholder="Hledat SPZ, VIN nebo vozidlo…"></div>
+              <button id="clearBtn" class="btn btn-secondary btn-small" type="button" hidden>Zrušit hledání</button><a id="csvBtn" class="btn btn-secondary btn-small disabled" aria-disabled="true" href="/download/xlsx">↓ Stáhnout Excel</a>
             </div>
           </div>
           <div id="activeFilter" class="active-filter" hidden>Aktivní filtr: <strong id="activeFilterLabel"></strong><button id="clearFilterInline" type="button" aria-label="Zrušit filtr">×</button></div>
+          <p class="table-hint">Kliknutím na vozidlo otevřete detail a poznámky.</p>
           <div class="table-card">
             <div class="table-scroll">
               <table>
-                <thead><tr><th>Stav</th><th>VIN</th><th>SPZ</th><th>Datum výkupu</th><th>Datum prodeje</th><th>Výsledek</th></tr></thead>
-                <tbody id="rows"><tr class="empty-row"><td colspan="6" class="empty">Zatím nejsou načtené žádné výsledky.</td></tr></tbody>
+                <thead><tr><th>SPZ / vozidlo</th><th>Výsledek kontroly</th><th>Stav řešení</th></tr></thead>
+                <tbody id="rows"><tr class="empty-row"><td colspan="3" class="empty">Zatím nejsou načtené žádné výsledky.</td></tr></tbody>
               </table>
             </div>
             <div class="table-footer"><span id="footerLeft">Připraveno</span><strong id="footerRight">Zobrazeno: 0</strong></div>
@@ -424,6 +413,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260924v"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260926clean1"></script>
 </body>
 </html>

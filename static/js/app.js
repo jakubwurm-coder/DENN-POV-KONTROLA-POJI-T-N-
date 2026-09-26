@@ -149,12 +149,12 @@ function matches(r){
   if(activeFilter==='OK_ALLIANZ')return r.status_raw==='OK'&&r.pojistovna==='ALLIANZ';
   const resolved=['VYŘEŠENO','V POŘÁDKU'].includes(r.workflow_status);
   if(activeFilter==='MISSING')return r.status_raw==='CHYBÍ V UNIQA'&&!resolved;
-  if(activeFilter==='ABSENT_INSURED')return r.status_raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'&&String(r.workflow_status||'').toUpperCase()!=='VYŘEŠENO';
+  if(activeFilter==='ABSENT_INSURED')return r.status_raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
   if(activeFilter==='ABSENT_UNINSURED')return r.status_raw==='NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ';
   if(activeFilter==='DEPOSIT')return r.status_raw==='NEPOJIŠTĚNO, ALE DEPOZIT';
-  if(activeFilter==='SOLD_UNIQA')return r.status_raw==='PRODANÉ, ALE V UNIQA'&&!resolved;
+  if(activeFilter==='SOLD_UNIQA')return r.status_raw==='PRODANÉ, ALE V UNIQA';
   if(activeFilter==='EXTRA_UNIQA'){
-    return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'].includes(r.status_raw);
+    return r.status_raw==='NAVÍC V UNIQA';
   }
   if(activeFilter==='UNWANTED_INSURANCE'){
     return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE V UNIQA'].includes(r.status_raw)&&needsAttention(r);
@@ -214,6 +214,17 @@ function primaryIssueCounts(){
   return {missing,absent,sold,extra,unwanted:absent+sold+extra,total:missing+absent+sold+extra};
 }
 
+function categoryBreakdown(rawStatus){
+  const rows=(state.results||[]).filter(r=>String(r.status_raw||'').toUpperCase()===rawStatus);
+  const isResolved=r=>{
+    const workflow=String(r.workflow_status||'').toUpperCase();
+    if(rawStatus==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ') return workflow==='VYŘEŠENO';
+    return ['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
+  };
+  const resolved=rows.filter(isResolved).length;
+  return {total:rows.length,resolved,open:Math.max(0,rows.length-resolved)};
+}
+
 function setStatusCard(cardId,textId,ok,okText,badText){
   const card=$(cardId), textEl=$(textId);
   if(!card||!textEl)return;
@@ -269,7 +280,10 @@ function render(){
   const issues=primaryIssueCounts();
   const attention=(state.results||[]).filter(needsAttention).length;
   const sourceError=Object.values(state.sources||{}).some(source=>source&&source.state==='error');
-  const extraProblemCount=issues.extra;
+  const absentBreakdown=categoryBreakdown('NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ');
+  const soldBreakdown=categoryBreakdown('PRODANÉ, ALE V UNIQA');
+  const extraBreakdown=categoryBreakdown('NAVÍC V UNIQA');
+  const extraProblemCount=extraBreakdown.open;
 
   const waitingFreshPage=!sessionCheckStarted&&!state.running;
   const visualCompletionPending=false;
@@ -282,9 +296,12 @@ function render(){
   setText('cActive',shown(s.active));setText('cActiveHover',shown(s.active));setText('cActiveOverview',shown(s.active));setText('cOkTotal',shown(s.ok_total));
   setText('cOkUniqa',shown(s.ok_total));setText('cOkAllianz',shown(s.ok_allianz));setText('cMissing',shown(issues.missing));
   setText('tipMissingOverall',shown(issues.missing));setText('tipExtraOverall',shown(issues.unwanted));
-  setText('cAbsentInsured',shown(s.absent_insured));setText('cAbsentInsuredTop',shown(issues.absent));setText('cAbsentUninsured',shown(s.absent_uninsured));
-  setText('cDeposit',shown(s.deposit));setText('cSold',shown(s.sold_uniqa));setText('cSoldTop',shown(issues.sold));
-  setText('cExtra',shown(issues.extra));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(issues.unwanted));setText('navExtraCount',shown(issues.unwanted));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
+  setText('cAbsentInsured',shown(absentBreakdown.total));setText('cAbsentInsuredTop',shown(issues.absent));setText('cAbsentUninsured',shown(s.absent_uninsured));
+  setText('cAbsentResolved',shown(absentBreakdown.resolved));setText('cAbsentOpen',shown(absentBreakdown.open));
+  setText('cDeposit',shown(s.deposit));setText('cSold',shown(soldBreakdown.total));setText('cSoldTop',shown(issues.sold));
+  setText('cSoldResolved',shown(soldBreakdown.resolved));setText('cSoldOpen',shown(soldBreakdown.open));
+  setText('cExtra',shown(extraBreakdown.total));setText('cExtraResolved',shown(extraBreakdown.resolved));setText('cExtraOpen',shown(extraBreakdown.open));
+  setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(issues.unwanted));setText('navExtraCount',shown(issues.unwanted));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
 
   const navExtraCount=$('navExtraCount');
   if(navExtraCount){
@@ -303,8 +320,8 @@ function render(){
       card.classList.add(problemCount>0?'metric-danger':'metric-success');
     }
   };
-  setMetricProblemState('ABSENT_INSURED',issues.absent);
-  setMetricProblemState('SOLD_UNIQA',issues.sold);
+  setMetricProblemState('ABSENT_INSURED',absentBreakdown.open);
+  setMetricProblemState('SOLD_UNIQA',soldBreakdown.open);
   setMetricProblemState('EXTRA_UNIQA',extraProblemCount);
 
   const overallCounts=$('overallCounts');

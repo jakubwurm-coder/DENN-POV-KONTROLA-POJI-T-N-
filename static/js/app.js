@@ -245,6 +245,8 @@ function renderProgress(){
   $('progressHeadline').textContent=state.error?'Kontrola se nezdařila':'Kontroluji pojištění';
   $('progressPhase').textContent=state.error?'Výsledek není úplný. Zkuste kontrolu znovu nebo otevřete stav datových zdrojů.':((state.progress||{}).phase||'Načítám a porovnávám evidenci vozidel.');
   $('progressBar').style.width=percent+'%';
+  const connectionVisual=$('connectionVisual');
+  if(connectionVisual) connectionVisual.style.setProperty('--connection-progress',String(percent));
   $('connectionVisual').className='connection-visual '+(state.error?'error':'running');
   $('connectionVisualIcon').textContent=state.error?'!':'↻';
 }

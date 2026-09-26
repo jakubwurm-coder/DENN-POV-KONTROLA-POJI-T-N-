@@ -1757,9 +1757,14 @@ button{cursor:pointer}
   position:absolute;
   inset:0;
   border-radius:50%;
-  border:4px solid #e5eef5;
-  border-top-color:#1788dc;
-  border-right-color:#8fc9ef;
+  background:conic-gradient(
+    #1788dc 0deg,
+    #39a9ee calc(var(--connection-progress, 0) * 3.6deg),
+    #e5eef5 calc(var(--connection-progress, 0) * 3.6deg),
+    #e5eef5 360deg
+  );
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));
 }
 .connection-visual-icon{
   position:relative;
@@ -1775,7 +1780,7 @@ button{cursor:pointer}
   font-weight:900;
 }
 .connection-visual.running .connection-ring{
-  animation:connectionSpin 1.05s linear infinite;
+  transition:background .35s ease;
 }
 .connection-visual.running .connection-visual-icon{
   animation:connectionPulse 1.5s ease-in-out infinite;

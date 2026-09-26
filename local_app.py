@@ -94,7 +94,7 @@ def _serialize_result(result) -> dict[str, str]:
     return {
         "status_raw": getattr(result, "status", "") or "",
         "status": _display_status(result),
-        "pojistovna": "",
+        "pojistovna": _insurance_company(result),
         "vin": getattr(result, "vin", "") or "",
         "spz_tir": getattr(result, "tir_spz", "") or "",
         "spz_uniqa": getattr(result, "uniqa_spz", "") or "",
@@ -119,11 +119,12 @@ def _summary(results, active_count: int) -> dict[str, int]:
     ok_allianz = sum(1 for r in results if getattr(r, "status", "") == "OK" and _insurance_company(r) == "ALLIANZ")
     deposit = counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0)
     return {
-        # Cloud i e-mailová vrstva historicky odečítají depozit až při zobrazení.
-        # Proto transportní souhrn drží hrubé počty včetně depozitů, zatímco
-        # samotné porovnání pojištění depozitní vozidla vůbec nekontroluje.
-        "active": active_count + deposit,
-        "ok_total": ok_uniqa + ok_allianz + deposit + counts.get("NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ", 0),
+        # Aktivní počet je přesně množina vozidel vstupujících do běžné POV kontroly.
+        # Depozit je samostatná výjimka a do aktivních vozidel se nezapočítává.
+        "active": active_count,
+        # "Pojištění v pořádku" znamená pouze technický výsledek OK.
+        # Nepřítomné bez pojištění jsou správně, ale mají vlastní samostatnou kategorii.
+        "ok_total": ok_uniqa + ok_allianz,
         "ok_uniqa": ok_uniqa,
         "ok_allianz": ok_allianz,
         "missing": counts.get("CHYBÍ V UNIQA", 0),
@@ -132,6 +133,8 @@ def _summary(results, active_count: int) -> dict[str, int]:
         "deposit": deposit,
         "sold_uniqa": counts.get("PRODANÉ, ALE V UNIQA", 0),
         "extra_uniqa": counts.get("NAVÍC V UNIQA", 0),
+        "spz_mismatch": counts.get("SPZ NESOUHLASÍ", 0),
+        "unverified": counts.get("NELZE OVĚŘIT", 0),
     }
 
 

@@ -136,8 +136,8 @@ filterNames.ATTENTION='K řešení';
 function matches(r){
   if(activeFilter==='VŠE')return true;
   if(activeFilter==='ATTENTION')return needsAttention(r);
-  if(activeFilter==='ACTIVE')return ['OK','CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','SPZ NESOUHLASÍ','NELZE OVĚŘIT'].includes(r.status_raw);
-  if(activeFilter==='OK_TOTAL')return r.status_raw==='OK'||r.status_raw==='NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ';
+  if(activeFilter==='ACTIVE')return ['OK','CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ','SPZ NESOUHLASÍ','NELZE OVĚŘIT'].includes(r.status_raw);
+  if(activeFilter==='OK_TOTAL')return r.status_raw==='OK';
   if(activeFilter==='OK_UNIQA')return r.status_raw==='OK'&&r.pojistovna==='UNIQA';
   if(activeFilter==='OK_ALLIANZ')return r.status_raw==='OK'&&r.pojistovna==='ALLIANZ';
   const resolved=['VYŘEŠENO','V POŘÁDKU'].includes(r.workflow_status);
@@ -261,15 +261,7 @@ function render(){
   const issues=primaryIssueCounts();
   const attention=(state.results||[]).filter(needsAttention).length;
   const sourceError=Object.values(state.sources||{}).some(source=>source&&source.state==='error');
-  const extraOverviewRows=(state.results||[]).filter(r=>{
-    const raw=String(r.status_raw||'').toUpperCase();
-    return raw==='NAVÍC V UNIQA'||raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
-  });
-  const extraOverviewCount=extraOverviewRows.length;
-  const extraProblemCount=extraOverviewRows.filter(r=>{
-    const workflow=String(r.workflow_status||'').trim().toUpperCase();
-    return !['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
-  }).length;
+  const extraProblemCount=issues.extra;
 
   const waitingFreshPage=!sessionCheckStarted&&!state.running;
   const visualCompletionPending=false;
@@ -280,11 +272,11 @@ function render(){
   setText('attentionCount',suppressFinalResults?'—':attention);
   setText('allCount',suppressFinalResults?'—':state.results.length);
   setText('cActive',shown(s.active));setText('cActiveHover',shown(s.active));setText('cActiveOverview',shown(s.active));setText('cOkTotal',shown(s.ok_total));
-  setText('cOkUniqa',shown(s.ok_uniqa));setText('cOkAllianz',shown(s.ok_allianz));setText('cMissing',shown(issues.missing));
+  setText('cOkUniqa',shown(s.ok_total));setText('cOkAllianz',shown(s.ok_allianz));setText('cMissing',shown(issues.missing));
   setText('tipMissingOverall',shown(issues.missing));setText('tipExtraOverall',shown(issues.unwanted));
   setText('cAbsentInsured',shown(s.absent_insured));setText('cAbsentInsuredTop',shown(issues.absent));setText('cAbsentUninsured',shown(s.absent_uninsured));
   setText('cDeposit',shown(s.deposit));setText('cSold',shown(s.sold_uniqa));setText('cSoldTop',shown(issues.sold));
-  setText('cExtra',shown(extraOverviewCount));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(extraOverviewCount));setText('navExtraCount',shown(issues.unwanted));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
+  setText('cExtra',shown(issues.extra));setText('cExtraHover',shown(issues.extra));setText('cExtraTop',shown(issues.unwanted));setText('navExtraCount',shown(issues.unwanted));setText('cTodayChanges',shown((state.changes&&state.changes.count)||0));
 
   const navExtraCount=$('navExtraCount');
   if(navExtraCount){
@@ -340,9 +332,9 @@ function render(){
     const missingCard=document.querySelector('.summary-card[data-filter="MISSING"]');
     if(missingCard){missingCard.classList.toggle('status-ok',issues.missing===0);missingCard.classList.toggle('status-problem',issues.missing>0);}
     const extraCard=document.querySelector('.summary-card[data-filter="UNWANTED_INSURANCE"]');
-    if(extraCard){extraCard.classList.toggle('status-ok',extraOverviewCount===0);extraCard.classList.toggle('status-problem',extraOverviewCount>0);}
+    if(extraCard){extraCard.classList.toggle('status-ok',issues.unwanted===0);extraCard.classList.toggle('status-problem',issues.unwanted>0);}
     setText('missingStatusText',issues.missing===0?'V pořádku':'Vyžaduje kontrolu');
-    setText('extraStatusText',extraOverviewCount===0?'V pořádku':'Vyžaduje kontrolu');
+    setText('extraStatusText',issues.unwanted===0?'V pořádku':'Vyžaduje kontrolu');
     setText('activeStatusText','Evidence načtena');
   }
   setText('overallIcon',state.running?'↻':state.error||sourceError||attention?'!':sessionCheckStarted?'✓':'—');

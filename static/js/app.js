@@ -376,11 +376,12 @@ function render(){
   if(runIcon)runIcon.textContent=state.running?'↻':'▶';
   const csvBtn=$('csvBtn');
   const exportReady=!!state.csv_available&&!state.running&&sessionCheckStarted&&!!state.finished_at&&!state.error;
-  csvBtn.classList.toggle('disabled',!state.csv_available||state.running);
+  const exportDisabled=!sessionCheckStarted||!state.csv_available||state.running||!!state.error;
+  csvBtn.classList.toggle('disabled',exportDisabled);
   csvBtn.classList.toggle('export-ready',exportReady);
-  csvBtn.setAttribute('aria-disabled',(!state.csv_available||state.running)?'true':'false');
+  csvBtn.setAttribute('aria-disabled',exportDisabled?'true':'false');
   const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(sessionCheckStarted&&state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(sessionCheckStarted&&state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}
-  const lastCheck=$('lastCheck');if(lastCheck){lastCheck.textContent=state.running?'Právě probíhá':shortDateTime(state.finished_at);}
+  const lastCheck=$('lastCheck');if(lastCheck){lastCheck.textContent=state.running&&sessionCheckStarted?'Právě probíhá':sessionCheckStarted?shortDateTime(state.finished_at):'—';}
   $('footerLeft').textContent=state.running&&state.started_at?'Spuštěno: '+state.started_at:(sessionCheckStarted&&state.finished_at?'Dokončeno: '+state.finished_at:'Připraveno');renderRows();renderChanges();
 }
 
@@ -390,7 +391,10 @@ async function refresh(){try{
   state=await r.json();
   if(!state.running)connectionVisualPercent=100;
   if(!initialStateLoaded){
-    if(state.running||state.finished_at||state.error)sessionCheckStarted=true;
+    // Nově otevřená stránka začíná vždy čistě. Uložený poslední výsledek
+    // zůstává na serveru kvůli historii, ale na dashboardu se neukáže,
+    // dokud uživatel v této relaci nespustí novou kontrolu.
+    sessionCheckStarted=false;
     if(!state.running)connectionVisualPercent=100;
     initialStateLoaded=true;
   }

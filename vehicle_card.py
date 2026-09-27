@@ -181,6 +181,26 @@ def _edalnice_check(spz: str) -> dict[str, Any]:
     return {"state": "missing", "message": "Pro SPZ nebyla nalezena platná dálniční známka."}
 
 
+def _spz_from_denni_pov(vin: str) -> str:
+    """Find registration plate in the current DENNI POV state by VIN."""
+    try:
+        import cloud_app
+        state = cloud_app._load_state()
+        for row in state.get("results") or []:
+            if not isinstance(row, dict):
+                continue
+            row_vin = re.sub(r"\s+", "", str(row.get("vin") or "")).upper()
+            if row_vin != vin:
+                continue
+            for field in ("spz_tir", "spz_uniqa", "spz_allianz", "spz"):
+                spz = re.sub(r"\s+", "", str(row.get(field) or "")).upper()
+                if spz and SPZ_RE.fullmatch(spz):
+                    return spz
+    except Exception:
+        pass
+    return ""
+
+
 def install_vehicle_card(app) -> None:
     @app.get("/vehicle-card")
     def vehicle_card_page():
@@ -195,8 +215,15 @@ def install_vehicle_card(app) -> None:
             raw = _kostka_fetch(vin)
             vehicle = _technical_summary(raw, vin)
             spz = vehicle.get("spz", "")
+            spz_source = "Datová kostka"
             if not spz or not SPZ_RE.fullmatch(spz):
-                vignette = {"state": "unavailable", "message": "Datová kostka nevrátila použitelnou SPZ, proto nelze eDálnici ověřit."}
+                spz = _spz_from_denni_pov(vin)
+                if spz:
+                    vehicle["spz"] = spz
+                    spz_source = "DENNÍ POV"
+            vehicle["spz_source"] = spz_source if spz else ""
+            if not spz or not SPZ_RE.fullmatch(spz):
+                vignette = {"state": "unavailable", "message": "SPZ nebyla nalezena ani v Datové kostce, ani v DENNÍ POV; eDálnici proto nelze ověřit."}
             else:
                 try:
                     vignette = _edalnice_check(spz)

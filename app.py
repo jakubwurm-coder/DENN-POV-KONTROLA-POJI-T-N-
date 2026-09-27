@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from shared_notes import install_cloud_annotations, install_local_annotations
+from shared_notes import install_cloud_annotations, install_local_annotations\nfrom vehicle_card import install_vehicle_card
 
 ONLINE_MODE = os.getenv("ONLINE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 

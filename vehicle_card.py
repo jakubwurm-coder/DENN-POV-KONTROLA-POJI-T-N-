@@ -145,12 +145,15 @@ def _edalnice_client_credentials(force: bool = False) -> tuple[str, str]:
     response = requests.get(EDALNICE_INDEX_URL, headers=_edalnice_headers("text/html,application/xhtml+xml"), timeout=20)
     response.raise_for_status()
     script_urls = []
-    for src in re.findall(r'<script[^>]+src=["\\\']([^"\\\']+)["\\\']', response.text, flags=re.IGNORECASE):
+    for src in re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', response.text, flags=re.IGNORECASE):
         url = urljoin(EDALNICE_INDEX_URL, src)
         if url not in script_urls:
             script_urls.append(url)
 
-    patterns = [r'["\\\'](eshop\\.client):([^"\\\']+)["\\\']', r'\\b(eshop\\.client):([A-Za-z0-9._~!*()\\-]+)']
+    patterns = [
+        r'["\'](eshop\.client):([^"\']+)["\']',
+        r'\b(eshop\.client):([A-Za-z0-9._~!*()\-]+)',
+    ]
     for script_url in script_urls[:80]:
         try:
             script = requests.get(script_url, headers=_edalnice_headers(), timeout=20)

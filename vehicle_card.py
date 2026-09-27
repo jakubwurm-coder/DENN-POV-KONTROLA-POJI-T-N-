@@ -78,12 +78,12 @@ def _technical_summary(data: dict[str, Any], vin: str) -> dict[str, str]:
         "make": {"TOVARNIZNACKA", "ZNACKA", "MAKE", "VYROBCE"},
         "model": {"OBCHODNIOZNACENI", "MODEL", "TRADEDESCRIPTION"},
         "status": {"STATUSNAZEV", "STATUS", "STAV"},
-        "stk_until": {"PRAVIDELNATECHNICKAPROHLIDKADO", "STKDO", "TECHNICKAPROHLIDKADO"},
+        "stk_until": {"PRAVIDELNATECHNICKAPROHLIDKADO", "PRAVIDELNATECHNICKAPROHLIDKADO", "STKDO", "TECHNICKAPROHLIDKADO"},
         "first_registration": {"DATUMPRVNIREGISTRACE", "PRVNIREGISTRACE", "FIRSTREGISTRATIONDATE"},
         "fuel": {"PALIVO", "PALIVONAZEV", "FUEL"},
-        "engine_ccm": {"ZDVIHOVYOBJEM", "OBJEMMOTORU", "ENGINECAPACITY"},
-        "power_kw": {"MAXIMALNIVYKON", "VYKON", "POWERKW"},
-        "color": {"BARVA", "BARVANAZEV", "COLOR"},
+        "engine_ccm": {"ZDVIHOVYOBJEM", "ZDVIHOVYOBJEMMOTORU", "OBJEMMOTORU", "OBJEM", "ENGINECAPACITY", "ENGINECAPACITYCCM"},
+        "power_kw": {"MAXIMALNIVYKON", "MAXIMALNIVYKONKW", "NEJVYSSIVYKON", "VYKON", "VYKONKW", "POWERKW"},
+        "color": {"BARVA", "BARVANAZEV", "BARVAVOZIDLA", "BARVAVOZIDLANAZEV", "COLOR"},
         "category": {"KATEGORIE", "KATEGORIEVOZIDLA", "VEHICLECATEGORY"},
     }
     result = {"vin": vin}

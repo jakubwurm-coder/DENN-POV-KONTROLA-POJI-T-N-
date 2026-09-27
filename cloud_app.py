@@ -740,6 +740,8 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     rows = []
     for original in data.get("results") or []:
         row = dict(original)
+        if str(row.get("status_raw") or "").upper() == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ":
+            row["detail"] = "Vykoupené, nepřítomné, ale pojištěné – správný stav je NEPOJIŠTĚNO."
         meta = annotations.get(_result_key(row), {})
         row["note"] = str(meta.get("note") or "")
         row["workflow_status"] = str(meta.get("workflow_status") or "")

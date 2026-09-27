@@ -141,11 +141,7 @@ def compare_vehicles(
                         tir_spz=tir_spz,
                         uniqa_spz=normalize_spz(uniqa_vehicle.spz),
                         status="NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-                        detail=(
-                            "Vozidlo má evidovaný výkup a stav NEPŘÍTOMNÉ, "
-                            "ale VIN je stále veden mezi aktivními vozidly UNIQA. "
-                            "Správný stav je NEPOJIŠTĚNO."
-                        ),
+                        detail="Vykoupené, nepřítomné, ale pojištěné – správný stav je NEPOJIŠTĚNO.",
                         datum_vykupu=vehicle.datum_vykupu,
                         datum_prodeje="",
                     )
@@ -160,11 +156,7 @@ def compare_vehicles(
                         tir_spz=tir_spz,
                         uniqa_spz="",
                         status="NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-                        detail=(
-                            f"Vozidlo má evidovaný výkup a stav NEPŘÍTOMNÉ, "
-                            f"ale pojištění bylo nalezeno v ALLIANZ podle {allianz_match}. "
-                            "Správný stav je NEPOJIŠTĚNO."
-                        ),
+                        detail="Vykoupené, nepřítomné, ale pojištěné – správný stav je NEPOJIŠTĚNO.",
                         datum_vykupu=vehicle.datum_vykupu,
                         datum_prodeje="",
                     )

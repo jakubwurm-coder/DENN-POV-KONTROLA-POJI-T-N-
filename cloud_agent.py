@@ -148,9 +148,14 @@ def _send_result_email(snapshot: dict[str, Any]) -> bool:
         response.raise_for_status()
         cloud_state = response.json()
         if isinstance(cloud_state, dict) and isinstance(cloud_state.get("summary"), dict):
+            if cloud_state.get("finished_at") != snapshot.get("finished_at") or cloud_state.get("running") or cloud_state.get("error"):
+                return False
             email_snapshot = cloud_state
+        else:
+            return False
     except Exception as exc:
-        print("E-mail: veřejný stav webu se nepodařilo načíst, používám lokální výsledek:", exc)
+        print("E-mail neodeslán: výsledek webu nelze ověřit:", exc)
+        return False
 
     summary = email_snapshot.get("summary") or {}
     missing = int(summary.get("missing") or 0)
@@ -159,10 +164,19 @@ def _send_result_email(snapshot: dict[str, Any]) -> bool:
     extra_uniqa = int(summary.get("extra_uniqa") or 0)
     spz_mismatch = int(summary.get("spz_mismatch") or 0)
     unverified = int(summary.get("unverified") or 0)
-    problems = missing + absent_insured + sold_uniqa + extra_uniqa + spz_mismatch + unverified
+    problem_statuses = {"CHYBÍ V UNIQA", "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", "PRODANÉ, ALE V UNIQA", "NAVÍC V UNIQA", "SPZ NESOUHLASÍ", "NELZE OVĚŘIT"}
+    problems = 0
+    for row in email_snapshot.get("results") or []:
+        raw = str(row.get("status_raw") or "").upper()
+        workflow = str(row.get("workflow_status") or "").upper()
+        resolved = workflow == "VYŘEŠENO" if raw == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ" else workflow in {"VYŘEŠENO", "V POŘÁDKU"}
+        problems += raw in problem_statuses and not resolved
+    if not problems:
+        print("Kontrola bez otevřených případů – e-mail se neodesílá.")
+        return False
     active = int(summary.get("active") or 0)
     ok_total = int(summary.get("ok_total") or 0)
-    subject = f"DENNÍ POV: VYŽADUJE KONTROLU ({problems})" if problems > 0 else "DENNÍ POV: KONTROLA V POŘÁDKU"
+    subject = f"DENNÍ POV: VYŽADUJE KONTROLU ({problems})"
 
     lines = [
         "DENNÍ POV – výsledek kontroly",

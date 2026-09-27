@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 
-from shared_notes import install_cloud_annotations, install_local_annotations\nfrom vehicle_card import install_vehicle_card
+from shared_notes import install_cloud_annotations, install_local_annotations
+from vehicle_card import install_vehicle_card
 
 ONLINE_MODE = os.getenv("ONLINE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -26,6 +27,7 @@ else:
     _state = _local._state
     _now = _local._now
 
+install_vehicle_card(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))

@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import base64
 import os
 import re
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timezone, timedelta
+from urllib.parse import urljoin
 from typing import Any
 
 import requests
 from flask import jsonify, render_template, request
 
 KOSTKA_URL = "https://api.dataovozidlech.cz/api/vehicletechnicaldata/v2"
-EDALNICE_TOKEN_URL = "https://auth.edalnice.cz/auth/connect/token"
-EDALNICE_CHECK_BASE = "https://eshop.edalnice.cz/api/v3/charge_registrations/3906ba89-153c-4038-8e36-0ca1deb76076"
+EDALNICE_INDEX_URL = "https://edalnice.gov.cz/"
+EDALNICE_TOKEN_URL = "https://auth.edalnice.gov.cz/auth/connect/token"
+EDALNICE_CHECK_BASE = "https://eshop.edalnice.gov.cz/api/v3/charge_registrations/3906ba89-153c-4038-8e36-0ca1deb76076"
+_EDALNICE_TOKEN_CACHE = {"token": "", "expires_at": 0.0}
+_EDALNICE_CLIENT_CACHE = {"client_id": "", "client_secret": "", "expires_at": 0.0}
 VIN_RE = re.compile(r"[A-HJ-NPR-Z0-9]{17}\Z")
 SPZ_RE = re.compile(r"^[A-Z0-9]{5,10}$")
 
@@ -113,71 +119,124 @@ def _kostka_fetch(vin: str) -> dict[str, Any]:
     raise RuntimeError("API klíč Datové kostky nebyl přijat.")
 
 
-def _edalnice_credentials() -> tuple[str, str]:
-    return (
-        _first_env("EDALNICE_CLIENT_ID", "VIGNETTE_CLIENT_ID"),
-        _first_env("EDALNICE_CLIENT_SECRET", "VIGNETTE_CLIENT_SECRET"),
+def _edalnice_headers(accept: str = "*/*") -> dict[str, str]:
+    return {
+        "Accept": accept,
+        "Accept-Language": "cs",
+        "Referer": EDALNICE_INDEX_URL,
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    }
+
+
+def _edalnice_client_credentials(force: bool = False) -> tuple[str, str]:
+    now = time.time()
+    if (not force and _EDALNICE_CLIENT_CACHE["client_id"] and
+            _EDALNICE_CLIENT_CACHE["client_secret"] and
+            _EDALNICE_CLIENT_CACHE["expires_at"] > now):
+        return _EDALNICE_CLIENT_CACHE["client_id"], _EDALNICE_CLIENT_CACHE["client_secret"]
+
+    configured = os.environ.get("EDALNICE_CLIENT_BASIC", "").strip()
+    if ":" in configured:
+        client_id, client_secret = configured.split(":", 1)
+        if client_id and client_secret:
+            _EDALNICE_CLIENT_CACHE.update({"client_id": client_id, "client_secret": client_secret, "expires_at": now + 86400})
+            return client_id, client_secret
+
+    response = requests.get(EDALNICE_INDEX_URL, headers=_edalnice_headers("text/html,application/xhtml+xml"), timeout=20)
+    response.raise_for_status()
+    script_urls = []
+    for src in re.findall(r'<script[^>]+src=["\\\']([^"\\\']+)["\\\']', response.text, flags=re.IGNORECASE):
+        url = urljoin(EDALNICE_INDEX_URL, src)
+        if url not in script_urls:
+            script_urls.append(url)
+
+    patterns = [r'["\\\'](eshop\\.client):([^"\\\']+)["\\\']', r'\\b(eshop\\.client):([A-Za-z0-9._~!*()\\-]+)']
+    for script_url in script_urls[:80]:
+        try:
+            script = requests.get(script_url, headers=_edalnice_headers(), timeout=20)
+            script.raise_for_status()
+            if "auth.edalnice.gov.cz/auth/connect/token" not in script.text and "eshop.client" not in script.text:
+                continue
+            for pattern in patterns:
+                match = re.search(pattern, script.text)
+                if match:
+                    client_id, client_secret = match.group(1), match.group(2)
+                    _EDALNICE_CLIENT_CACHE.update({"client_id": client_id, "client_secret": client_secret, "expires_at": now + 21600})
+                    return client_id, client_secret
+        except requests.RequestException:
+            continue
+    raise RuntimeError("eDálnice: v aktuálním webu nebyl nalezen veřejný OAuth klient.")
+
+
+def _edalnice_token(force: bool = False) -> str:
+    now = time.time()
+    if not force and _EDALNICE_TOKEN_CACHE["token"] and _EDALNICE_TOKEN_CACHE["expires_at"] > now + 60:
+        return _EDALNICE_TOKEN_CACHE["token"]
+    client_id, client_secret = _edalnice_client_credentials(force=force)
+    basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode("ascii")
+    response = requests.post(
+        EDALNICE_TOKEN_URL,
+        data={"grant_type": "client_credentials", "scope": "eshop.api"},
+        headers={"Authorization": f"Basic {basic}", "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json", "User-Agent": _edalnice_headers()["User-Agent"]},
+        timeout=20,
     )
+    response.raise_for_status()
+    payload = response.json()
+    token = str(payload.get("access_token") or "").strip()
+    if not token:
+        raise RuntimeError("eDálnice nevrátila přístupový token.")
+    _EDALNICE_TOKEN_CACHE.update({"token": token, "expires_at": now + max(60, int(payload.get("expires_in") or 300))})
+    return token
 
 
 def _edalnice_check(spz: str) -> dict[str, Any]:
-    client_id, client_secret = _edalnice_credentials()
-    if not client_id or not client_secret:
-        return {"state": "unavailable", "message": "Na serveru nejsou nastavené přihlašovací údaje eDálnice."}
+    plate = re.sub(r"\\s+", "", str(spz or "")).upper()
+    def make_request(token: str):
+        headers = _edalnice_headers()
+        headers.update({"Authorization": f"Bearer {token}", "Origin": EDALNICE_INDEX_URL.rstrip("/")})
+        return requests.get(f"{EDALNICE_CHECK_BASE}/{plate}", headers=headers, timeout=20)
 
-    token_response = requests.post(
-        EDALNICE_TOKEN_URL,
-        data={"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret},
-        timeout=15,
-    )
-    token_response.raise_for_status()
-    token = token_response.json().get("access_token")
-    if not token:
-        raise RuntimeError("eDálnice nevrátila přístupový token.")
-
-    response = requests.get(
-        f"{EDALNICE_CHECK_BASE}/{spz}",
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-        timeout=15,
-    )
-    if response.status_code == 404:
-        return {"state": "missing", "message": "Pro SPZ nebyla nalezena platná dálniční známka."}
+    response = make_request(_edalnice_token())
+    if response.status_code == 401:
+        _EDALNICE_TOKEN_CACHE.update({"token": "", "expires_at": 0.0})
+        response = make_request(_edalnice_token(force=True))
     response.raise_for_status()
     payload = response.json()
 
-    charges = _find_value(payload, {"charges"})
-    if not isinstance(charges, list):
-        charges = payload if isinstance(payload, list) else []
+    now = datetime.now(timezone.utc)
+    intervals = []
+    def collect(node):
+        if isinstance(node, dict):
+            if ("validSince" in node or "valid_since" in node) and ("validUntil" in node or "valid_until" in node):
+                try:
+                    s = datetime.fromisoformat(str(node.get("validSince") or node.get("valid_since")).replace("Z", "+00:00"))
+                    e = datetime.fromisoformat(str(node.get("validUntil") or node.get("valid_until")).replace("Z", "+00:00"))
+                    if s.tzinfo is None: s = s.replace(tzinfo=timezone.utc)
+                    if e.tzinfo is None: e = e.replace(tzinfo=timezone.utc)
+                    intervals.append((s, e))
+                except Exception:
+                    pass
+            for value in node.values(): collect(value)
+        elif isinstance(node, list):
+            for value in node: collect(value)
+    collect(payload)
 
-    today = datetime.now(timezone.utc).date()
-    parsed = []
-    for item in charges:
-        if not isinstance(item, dict):
-            continue
-        since_raw = _find_value(item, {"validSince", "valid_from", "validFrom"})
-        until_raw = _find_value(item, {"validUntil", "valid_to", "validTo"})
-        try:
-            since = datetime.fromisoformat(str(since_raw)[:10]).date() if since_raw else None
-            until = datetime.fromisoformat(str(until_raw)[:10]).date() if until_raw else None
-        except ValueError:
-            continue
-        if until:
-            parsed.append((since, until))
-
-    if parsed:
-        latest = max(parsed, key=lambda x: x[1])
-        since, until = latest
-        state = "valid" if (since is None or since <= today) and until >= today else ("future" if since and since > today else "missing")
-        return {
-            "state": state,
-            "valid_since": since.strftime("%d.%m.%Y") if since else "",
-            "valid_until": until.strftime("%d.%m.%Y"),
-            "message": "Dálniční známka je platná." if state == "valid" else ("Dálniční známka začne platit později." if state == "future" else "Dálniční známka není aktuálně platná."),
-        }
-
-    exempt = bool(_find_value(payload, {"exempt", "isExempt", "exemption"}))
+    exempt = bool(payload.get("isGivenExemption") or payload.get("is_given_exemption")) if isinstance(payload, dict) else False
     if exempt:
         return {"state": "exempt", "message": "Vozidlo je evidováno jako osvobozené."}
+    current = [(s, e) for s, e in intervals if s <= now <= e]
+    future = sorted([(s, e) for s, e in intervals if s > now], key=lambda x: x[0])
+    if current:
+        effective_end = max(e for _, e in current)
+        for s, e in future:
+            if s.date() <= effective_end.date() + timedelta(days=1):
+                effective_end = max(effective_end, e)
+            else:
+                break
+        return {"state": "valid", "valid_until": effective_end.strftime("%d.%m.%Y"), "message": "Dálniční známka je platná."}
+    if future:
+        s, e = future[0]
+        return {"state": "future", "valid_since": s.strftime("%d.%m.%Y"), "valid_until": e.strftime("%d.%m.%Y"), "message": "Dálniční známka začne platit později."}
     return {"state": "missing", "message": "Pro SPZ nebyla nalezena platná dálniční známka."}
 
 

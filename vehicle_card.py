@@ -309,7 +309,8 @@ def install_vehicle_card(app) -> None:
                     vignette = {"state": "unavailable", "message": "eDálnice momentálně neodpovídá."}
                 except RuntimeError as exc:
                     vignette = {"state": "unavailable", "message": str(exc)}
-            ownership = get_ownership(vin, start=True)\n            return jsonify({"ok": True, "vehicle": vehicle, "vignette": vignette, "ownership": ownership})
+            ownership = get_ownership(vin, start=True)
+            return jsonify({"ok": True, "vehicle": vehicle, "vignette": vignette, "ownership": ownership})
         except RuntimeError as exc:
             return jsonify({"ok": False, "message": str(exc)}), 503
 

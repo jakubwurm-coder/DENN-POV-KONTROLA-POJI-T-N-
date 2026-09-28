@@ -11,6 +11,8 @@ from typing import Any
 import requests
 from flask import jsonify, render_template, request
 
+from rsv_owner import get_ownership
+
 KOSTKA_URL = "https://api.dataovozidlech.cz/api/vehicletechnicaldata/v2"
 EDALNICE_INDEX_URL = "https://edalnice.gov.cz/"
 EDALNICE_TOKEN_URL = "https://auth.edalnice.gov.cz/auth/connect/token"
@@ -307,6 +309,14 @@ def install_vehicle_card(app) -> None:
                     vignette = {"state": "unavailable", "message": "eDálnice momentálně neodpovídá."}
                 except RuntimeError as exc:
                     vignette = {"state": "unavailable", "message": str(exc)}
-            return jsonify({"ok": True, "vehicle": vehicle, "vignette": vignette})
+            ownership = get_ownership(vin, start=True)\n            return jsonify({"ok": True, "vehicle": vehicle, "vignette": vignette, "ownership": ownership})
         except RuntimeError as exc:
             return jsonify({"ok": False, "message": str(exc)}), 503
+
+
+    @app.get("/api/vehicle-owner")
+    def vehicle_owner_api():
+        vin = re.sub(r"\s+", "", request.args.get("vin", "")).upper()
+        if not VIN_RE.fullmatch(vin):
+            return jsonify({"ok": False, "message": "Zadejte platný 17místný VIN."}), 400
+        return jsonify({"ok": True, "ownership": get_ownership(vin, start=True)})

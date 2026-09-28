@@ -93,7 +93,14 @@ def _technical_summary(data: dict[str, Any], vin: str) -> dict[str, str]:
     result["spz"] = re.sub(r"\s+", "", result["spz"]).upper()
     result["stk_until"] = _date(result["stk_until"])
     result["inspection_from"] = _date(_find_value(data, {"PREDREGISTRACIPROHLIDKADNE"}))
-    result["inspection_until"] = _date(_find_value(data, {"PREDREGISTRACIPROHLIDKADO", "PREDREGISTRACIPROHLIDKAPLATNOSTDO"}))\n    if not result["inspection_until"] and result["inspection_from"]:\n        try:\n            start = datetime.strptime(result["inspection_from"], "%d.%m.%Y")\n            result["inspection_until"] = start.replace(year=start.year + 2).strftime("%d.%m.%Y")\n        except ValueError:\n            pass\n    result["technical_until"] = result["stk_until"] or result["inspection_until"]
+    result["inspection_until"] = _date(_find_value(data, {"PREDREGISTRACIPROHLIDKADO", "PREDREGISTRACIPROHLIDKAPLATNOSTDO"}))
+    if not result["inspection_until"] and result["inspection_from"]:
+        try:
+            start = datetime.strptime(result["inspection_from"], "%d.%m.%Y")
+            result["inspection_until"] = start.replace(year=start.year + 2).strftime("%d.%m.%Y")
+        except ValueError:
+            pass
+    result["technical_until"] = result["stk_until"] or result["inspection_until"]
     result["fuel"] = {"NM": "Nafta"}.get(result["fuel"].upper(), result["fuel"])
     power = re.match(r"^\s*(\d+(?:[.,]\d+)?)", result["power_kw"])
     result["power_kw"] = power.group(1).replace(",", ".") if power else ""

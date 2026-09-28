@@ -12,8 +12,9 @@ main{max-width:980px;margin:42px auto;padding:0 22px}.hero{margin-bottom:20px}.k
 #msg{margin:14px 2px;color:#64748b}.card{background:white;border:1px solid #dce6ed;border-radius:18px;overflow:hidden;box-shadow:0 12px 35px #17354e0c}
 .head{padding:24px 26px;background:#f9fbfc;border-bottom:1px solid #e6edf2}.head h2{margin:3px 0 0;font-size:25px}.vehicle-kicker{display:flex;align-items:center;gap:10px}.brand-thumb{width:54px;height:30px;object-fit:contain}.vin{font-family:ui-monospace,monospace;color:#64748b;font-size:13px;margin-top:7px}.spz-line{margin-top:5px;font-size:14px}.spz-line strong{font-size:16px}.date-valid{color:#15803d}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e6edf2}.item{background:white;padding:20px}.item small{display:block;color:#7b8d9d;font-size:10px;font-weight:800;letter-spacing:.08em;margin-bottom:7px}.item strong{font-size:16px}
+.ownership{margin:22px 26px 26px;border:1px solid #dce6ed;border-radius:14px;overflow:hidden}.ownership-head{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:14px 16px;background:#f8fbfd;border-bottom:1px solid #e6edf2}.ownership-head small{font-size:10px;font-weight:800;letter-spacing:.08em;color:#64748b}.ownership-head span{font-size:12px;color:#64748b}.ownership-grid{display:grid;grid-template-columns:1fr 1fr}.owner-box{padding:17px 18px;min-height:120px}.owner-box+ .owner-box{border-left:1px solid #e6edf2}.owner-role{font-size:10px;font-weight:800;letter-spacing:.08em;color:#1684d6;margin-bottom:7px}.owner-name{font-size:16px;font-weight:750;color:#17354e}.owner-meta{font-size:13px;color:#64748b;margin-top:6px;line-height:1.45}.owner-empty{padding:18px;color:#64748b;font-size:13px}.owner-loading{color:#1684d6!important}
 .vig{margin:22px 26px 26px;border-radius:14px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:18px;background:#f4f7f9}.vig.valid{background:#e9f7f0;color:#126b49}.vig.missing{background:#fff0f3;color:#a71031}.vig.future{background:#fff8e8;color:#805b00}.vig.exempt{background:#eef5ff;color:#245b91}.vig small{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;margin-bottom:5px}.vig strong{font-size:18px}.pill{white-space:nowrap;font-weight:800;font-size:12px;border:1px solid currentColor;border-radius:999px;padding:7px 10px}
-[hidden]{display:none!important}@media(max-width:700px){.grid{grid-template-columns:1fr 1fr}.search{flex-direction:column}.search button{padding:13px}.head,.vig{align-items:flex-start;flex-direction:column}.hero h1{font-size:28px}}
+[hidden]{display:none!important}@media(max-width:700px){.grid{grid-template-columns:1fr 1fr}.ownership-grid{grid-template-columns:1fr}.owner-box+ .owner-box{border-left:0;border-top:1px solid #e6edf2}.ownership-head{align-items:flex-start;flex-direction:column}.search{flex-direction:column}.search button{padding:13px}.head,.vig{align-items:flex-start;flex-direction:column}.hero h1{font-size:28px}}
 </style>
 </head>
 <body>
@@ -35,11 +36,68 @@ main{max-width:980px;margin:42px auto;padding:0 22px}.hero{margin-bottom:20px}.k
 <div class="item"><small>POČET VLASTNÍKŮ</small><strong id="ownersCount">—</strong></div>
 <div class="item"><small>DÁLNIČNÍ ZNÁMKA</small><strong id="vigPill">—</strong><div id="vigText"></div><div id="vigDates"></div></div>
 </div>
+<div id="ownership" class="ownership"><div class="ownership-head"><small>VLASTNÍK A PROVOZOVATEL</small><span id="ownershipStatus">—</span></div><div id="ownershipRows" class="ownership-grid"><div class="owner-empty">Údaje se načtou spolu s kartou vozidla.</div></div></div>
 </section>
 </main>
 <script>
 const $=id=>document.getElementById(id), form=$("form"), msg=$("msg"), card=$("card");
 const val=v=>v&&String(v).trim()?v:"—";\nfunction isFutureDate(s){const m=String(s||"").match(/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/);if(!m)return false;const d=new Date(+m[3],+m[2]-1,+m[1],23,59,59);return d>new Date();}
+
+let ownershipPollToken=0;
+
+function ownerPeriod(s){
+ const a=s&&s.date_from?s.date_from:'', b=s&&s.date_to?s.date_to:'';
+ if(a&&b)return 'Od '+a+' do '+b;
+ if(a)return 'Od '+a;
+ if(b)return 'Do '+b;
+ return '';
+}
+
+function renderOwnership(o,vin){
+ const status=$('ownershipStatus'), rows=$('ownershipRows');
+ rows.replaceChildren();
+ const state=(o&&o.state)||'unavailable';
+ status.classList.toggle('owner-loading',state==='loading');
+ if(state==='loading'){
+   status.textContent='Načítám z RSV…';
+   const e=document.createElement('div');e.className='owner-empty';e.textContent=(o&&o.message)||'Načítám měsíční výpis RSV…';rows.appendChild(e);
+   return;
+ }
+ status.textContent=state==='ready'?'Načteno':state==='not_found'?'Nenalezeno':'Nedostupné';
+ const subjects=(o&&Array.isArray(o.subjects))?o.subjects:[];
+ if(!subjects.length){
+   const e=document.createElement('div');e.className='owner-empty';e.textContent=(o&&o.message)||'Aktuální vlastník ani provozovatel nebyl zveřejněn.';rows.appendChild(e);return;
+ }
+ subjects.forEach(s=>{
+   const box=document.createElement('div');box.className='owner-box';
+   const role=document.createElement('div');role.className='owner-role';role.textContent=s.relation||'SUBJEKT';box.appendChild(role);
+   const name=document.createElement('div');name.className='owner-name';
+   name.textContent=s.name||(s.subject_type_code==='1'?'Fyzická osoba · údaje nezveřejněny':(s.subject_type||'Subjekt'));box.appendChild(name);
+   const meta=[];
+   if(s.ico)meta.push('IČO: '+s.ico);
+   if(s.address)meta.push(s.address);
+   const period=ownerPeriod(s);if(period)meta.push(period);
+   if(meta.length){const m=document.createElement('div');m.className='owner-meta';m.textContent=meta.join(' · ');box.appendChild(m);}
+   rows.appendChild(box);
+ });
+}
+
+async function pollOwnership(vin,token){
+ for(let i=0;i<60;i++){
+   await new Promise(r=>setTimeout(r,4000));
+   if(token!==ownershipPollToken)return;
+   try{
+     const r=await fetch('/api/vehicle-owner?vin='+encodeURIComponent(vin));
+     const d=await r.json();
+     if(token!==ownershipPollToken)return;
+     renderOwnership(d.ownership||{},vin);
+     if((d.ownership||{}).state!=='loading')return;
+   }catch(_){}
+ }
+ if(token===ownershipPollToken){
+   $('ownershipStatus').textContent='Načítání pokračuje';
+ }
+}
 
 function setBrandThumbnail(make){
  const name=String(make||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();

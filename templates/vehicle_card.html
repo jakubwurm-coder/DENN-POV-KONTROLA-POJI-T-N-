@@ -41,7 +41,8 @@ main{max-width:980px;margin:42px auto;padding:0 22px}.hero{margin-bottom:20px}.k
 </main>
 <script>
 const $=id=>document.getElementById(id), form=$("form"), msg=$("msg"), card=$("card");
-const val=v=>v&&String(v).trim()?v:"—";\nfunction isFutureDate(s){const m=String(s||"").match(/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/);if(!m)return false;const d=new Date(+m[3],+m[2]-1,+m[1],23,59,59);return d>new Date();}
+const val=v=>v&&String(v).trim()?v:"—";
+function isFutureDate(s){const m=String(s||"").match(/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/);if(!m)return false;const d=new Date(+m[3],+m[2]-1,+m[1],23,59,59);return d>new Date();}
 
 let ownershipPollToken=0;
 

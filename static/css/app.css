@@ -3034,3 +3034,30 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 #dataSection td:nth-child(3){font-family:inherit}
+
+
+/* 2026-09-28 · živý indikátor během celé kontroly */
+.connection-visual.running .connection-visual-icon{
+  animation:povLoaderSpin .85s linear infinite!important;
+  transform-origin:50% 50%;
+  will-change:transform;
+}
+.connection-visual.running .connection-ring{
+  animation:povLoaderPulse 1.35s ease-in-out infinite!important;
+}
+.check-running #progressBar{
+  position:relative;
+  overflow:hidden;
+  transition:width .35s ease;
+}
+.check-running #progressBar::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.65),transparent);
+  animation:povProgressSweep 1.25s ease-in-out infinite;
+}
+@keyframes povLoaderSpin{to{transform:rotate(360deg)}}
+@keyframes povLoaderPulse{0%,100%{opacity:.72;transform:scale(.97)}50%{opacity:1;transform:scale(1.03)}}
+@keyframes povProgressSweep{to{transform:translateX(100%)}}

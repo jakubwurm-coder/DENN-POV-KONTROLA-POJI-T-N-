@@ -81,9 +81,9 @@ def _technical_summary(data: dict[str, Any], vin: str) -> dict[str, str]:
         "stk_until": {"PRAVIDELNATECHNICKAPROHLIDKADO", "PRAVIDELNATECHNICKAPROHLIDKADO", "STKDO", "TECHNICKAPROHLIDKADO"},
         "first_registration": {"DATUMPRVNIREGISTRACE", "PRVNIREGISTRACE", "FIRSTREGISTRATIONDATE"},
         "fuel": {"PALIVO", "PALIVONAZEV", "FUEL"},
-        "engine_ccm": {"ZDVIHOVYOBJEM", "ZDVIHOVYOBJEMMOTORU", "OBJEMMOTORU", "OBJEM", "ENGINECAPACITY", "ENGINECAPACITYCCM"},
-        "power_kw": {"MAXIMALNIVYKON", "MAXIMALNIVYKONKW", "NEJVYSSIVYKON", "VYKON", "VYKONKW", "POWERKW"},
-        "color": {"BARVA", "BARVANAZEV", "BARVAVOZIDLA", "BARVAVOZIDLANAZEV", "COLOR"},
+        "engine_ccm": {"MOTORZDVIHOBJEM", "ZDVIHOVYOBJEM", "ZDVIHOVYOBJEMMOTORU", "OBJEMMOTORU", "OBJEM", "ENGINECAPACITY", "ENGINECAPACITYCCM"},
+        "power_kw": {"MOTORMAXVYKON", "MAXIMALNIVYKON", "MAXIMALNIVYKONKW", "NEJVYSSIVYKON", "VYKON", "VYKONKW", "POWERKW"},
+        "color": {"VOZIDLOKAROSERIEBARVA", "BARVA", "BARVANAZEV", "BARVAVOZIDLA", "BARVAVOZIDLANAZEV", "COLOR"},
         "category": {"KATEGORIE", "KATEGORIEVOZIDLA", "VEHICLECATEGORY"},
     }
     result = {"vin": vin}
@@ -92,6 +92,10 @@ def _technical_summary(data: dict[str, Any], vin: str) -> dict[str, str]:
         result[target] = str(value or "").strip()
     result["spz"] = re.sub(r"\s+", "", result["spz"]).upper()
     result["stk_until"] = _date(result["stk_until"])
+    if not result["stk_until"]:
+        prereg = _find_value(data, {"PREDREGISTRACIPROHLIDKADNE"})
+        if prereg:
+            result["stk_until"] = _date(prereg)
     result["first_registration"] = _date(result["first_registration"])
     return result
 

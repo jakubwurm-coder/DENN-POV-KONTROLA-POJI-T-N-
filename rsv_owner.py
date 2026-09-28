@@ -129,10 +129,17 @@ def _csv_rows(url: str):
         },
     )
     response.raise_for_status()
+    total_bytes = int(response.headers.get("Content-Length") or 0)
     response.raw.decode_content = True
     wrapper = io.TextIOWrapper(response.raw, encoding="utf-8-sig", newline="")
     try:
-        yield from csv.DictReader(wrapper)
+        reader = csv.DictReader(wrapper)
+        for row in reader:
+            try:
+                bytes_read = int(response.raw.tell() or 0)
+            except Exception:
+                bytes_read = 0
+            yield row, bytes_read, total_bytes
     finally:
         try:
             wrapper.detach()
@@ -141,13 +148,26 @@ def _csv_rows(url: str):
         response.close()
 
 
-def _set_progress(vin: str, phase: str, rows: int, detail: str = "") -> None:
+def _set_progress(
+    vin: str,
+    phase: str,
+    rows: int,
+    detail: str = "",
+    bytes_read: int = 0,
+    total_bytes: int = 0,
+) -> None:
     with _lock:
         job = _jobs.setdefault(vin, {"state": "loading", "started": time.time()})
         job["state"] = "loading"
         job["phase"] = phase
         job["rows_scanned"] = rows
         job["detail"] = detail
+        job["bytes_read"] = max(0, int(bytes_read or 0))
+        job["total_bytes"] = max(0, int(total_bytes or 0))
+        if total_bytes > 0:
+            job["percent"] = min(99, max(0, round((bytes_read / total_bytes) * 100)))
+        else:
+            job["percent"] = None
         job["updated"] = time.time()
 
 
@@ -155,14 +175,14 @@ def _pcv_for_vin(vin: str) -> str:
     target = _norm(vin)
     rows = 0
     _set_progress(vin, "pcv", 0, "1/2 · Hledám PČV ve výpisu vozidel")
-    for row in _csv_rows(VEHICLES_CSV_URL):
+    for row, bytes_read, total_bytes in _csv_rows(VEHICLES_CSV_URL):
         rows += 1
         if rows % 10000 == 0:
-            _set_progress(vin, "pcv", rows, "1/2 · Hledám PČV ve výpisu vozidel")
+            _set_progress(vin, "pcv", rows, "1/2 · Hledám PČV ve výpisu vozidel", bytes_read, total_bytes)
         row_vin = _norm(_field(row, "VIN"))
         if row_vin == target:
             pcv = _field(row, "PČV", "PCV")
-            _set_progress(vin, "pcv_found", rows, f"1/2 · PČV nalezeno: {pcv}")
+            _set_progress(vin, "pcv_found", rows, f"1/2 · PČV nalezeno: {pcv}", bytes_read, total_bytes)
             return pcv
     _set_progress(vin, "pcv_not_found", rows, "1/2 · PČV nebylo nalezeno")
     return ""
@@ -209,15 +229,15 @@ def _ownership_for_pcv(vin: str, pcv: str) -> list[dict[str, Any]]:
     found_target = False
     rows = 0
     _set_progress(vin, "owner", 0, "2/2 · Hledám vlastníka a provozovatele podle PČV")
-    for row in _csv_rows(OWNERS_CSV_URL):
+    for row, bytes_read, total_bytes in _csv_rows(OWNERS_CSV_URL):
         rows += 1
         if rows % 10000 == 0:
-            _set_progress(vin, "owner", rows, "2/2 · Hledám vlastníka a provozovatele podle PČV")
+            _set_progress(vin, "owner", rows, "2/2 · Hledám vlastníka a provozovatele podle PČV", bytes_read, total_bytes)
         row_pcv = _field(row, "PČV", "PCV")
         if row_pcv != pcv:
             # Exporty RSV bývají seskupené podle PČV. Po nalezení cílového bloku už nemusíme číst zbytek.
             if found_target:
-                _set_progress(vin, "owner_found", rows, "2/2 · Záznam vlastníka/provozovatele nalezen")
+                _set_progress(vin, "owner_found", rows, "2/2 · Záznam vlastníka/provozovatele nalezen", bytes_read, total_bytes)
                 break
             continue
         found_target = True
@@ -305,6 +325,9 @@ def get_ownership(vin: str, start: bool = True) -> dict[str, Any]:
                 "phase": phase,
                 "rows_scanned": rows,
                 "elapsed_seconds": max(0, int(time.time() - float(job.get("started") or time.time()))),
+                "bytes_read": int(job.get("bytes_read") or 0),
+                "total_bytes": int(job.get("total_bytes") or 0),
+                "percent": job.get("percent"),
                 "pcv": "",
                 "subjects": [],
             }

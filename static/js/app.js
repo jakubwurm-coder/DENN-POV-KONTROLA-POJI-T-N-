@@ -243,7 +243,20 @@ function renderProgress(){
   $('progressPercent').textContent=state.error?'!':Math.round(percent)+' %';
   $('progressEta').textContent=state.error?'Chyba':'Probíhá';
   $('progressHeadline').textContent=state.error?'Kontrola se nezdařila':'Kontroluji pojištění';
-  $('progressPhase').textContent=state.error?'Výsledek není úplný. Zkuste kontrolu znovu nebo otevřete stav datových zdrojů.':((state.progress||{}).phase||'Načítám a porovnávám evidenci vozidel.');
+  const progressSteps=[
+    [10,'Připravuji kontrolu'],
+    [20,'Připojuji se k databázi vozidel'],
+    [30,'Načítám aktivní vozidla'],
+    [40,'Kontroluji údaje vozidel'],
+    [50,'Načítám evidenci pojištění'],
+    [60,'Páruji vozidla podle VIN'],
+    [70,'Kontroluji stav pojištění vozidel'],
+    [80,'Vyhodnocuji výjimky a nesrovnalosti'],
+    [90,'Porovnávám a zpracovávám výsledky'],
+    [100,'Ukládám a připravuji výsledky']
+  ];
+  const displayPhase=progressSteps.find(([limit])=>percent<=limit)?.[1]||'Ukládám a připravuji výsledky';
+  $('progressPhase').textContent=state.error?'Výsledek není úplný. Zkuste kontrolu znovu nebo otevřete stav datových zdrojů.':displayPhase;
   $('progressBar').style.width=percent+'%';
   const connectionVisual=$('connectionVisual');
   if(connectionVisual) connectionVisual.style.setProperty('--connection-progress',String(percent));

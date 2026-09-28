@@ -118,6 +118,38 @@ def _cache_save(vin: str, payload: dict[str, Any]) -> None:
         print(f"RSV owner cache save failed: {exc.__class__.__name__}")
 
 
+def _remote_size(url: str) -> int:
+    headers = {
+        "Accept": "text/csv,*/*",
+        "User-Agent": "DENNI-POV/1.0 (+vehicle-card)",
+    }
+    try:
+        head = requests.head(url, allow_redirects=True, timeout=(10, 20), headers=headers)
+        if head.ok:
+            size = int(head.headers.get("Content-Length") or 0)
+            if size > 0:
+                return size
+    except Exception:
+        pass
+    try:
+        range_headers = dict(headers)
+        range_headers["Range"] = "bytes=0-0"
+        probe = requests.get(url, stream=True, timeout=(10, 20), headers=range_headers)
+        try:
+            content_range = str(probe.headers.get("Content-Range") or "")
+            match = re.search(r"/(\\d+)\\s*$", content_range)
+            if match:
+                return int(match.group(1))
+            size = int(probe.headers.get("Content-Length") or 0)
+            if probe.status_code == 206 and size > 1:
+                return size
+        finally:
+            probe.close()
+    except Exception:
+        pass
+    return 0
+
+
 def _csv_rows(url: str):
     response = requests.get(
         url,
@@ -129,7 +161,7 @@ def _csv_rows(url: str):
         },
     )
     response.raise_for_status()
-    total_bytes = int(response.headers.get("Content-Length") or 0)
+    total_bytes = int(response.headers.get("Content-Length") or 0) or _remote_size(url)
     response.raw.decode_content = True
     wrapper = io.TextIOWrapper(response.raw, encoding="utf-8-sig", newline="")
     try:

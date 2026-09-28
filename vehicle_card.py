@@ -272,30 +272,6 @@ def install_vehicle_card(app) -> None:
     def vehicle_card_page():
         return render_template("vehicle_card.html")
 
-    @app.get("/api/vehicle-card-debug-fields")
-    def vehicle_card_debug_fields():
-        vin = re.sub(r"\\s+", "", request.args.get("vin", "")).upper()
-        if not VIN_RE.fullmatch(vin):
-            return jsonify({"ok": False, "message": "Neplatný VIN."}), 400
-        try:
-            raw = _kostka_fetch(vin)
-            fields = {}
-            def walk(node, path=""):
-                if isinstance(node, dict):
-                    for key, value in node.items():
-                        child = f"{path}.{key}" if path else str(key)
-                        if isinstance(value, (dict, list)):
-                            walk(value, child)
-                        else:
-                            fields[child] = value
-                elif isinstance(node, list):
-                    for i, value in enumerate(node[:10]):
-                        walk(value, f"{path}[{i}]")
-            walk(raw)
-            return jsonify({"ok": True, "vin": vin, "fields": fields})
-        except RuntimeError as exc:
-            return jsonify({"ok": False, "message": str(exc)}), 503
-
     @app.get("/api/vehicle-card")
     def vehicle_card_api():
         vin = re.sub(r"\s+", "", request.args.get("vin", "")).upper()

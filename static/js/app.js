@@ -195,7 +195,7 @@ function renderRows(){
   $('rows').innerHTML=rows.map(r=>{
     const index=state.results.indexOf(r);
     const badge=badgeClass({...r,workflow_status:''});
-    const vehicle=r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ');
+    const vehicle=(r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ')||r.obchodni_oznaceni||r.tovarni_znacka||'').trim();
     const workflow=r.workflow_status|| (needsAttention(r)?'Nové':'—');
     const workflowClass=['VYŘEŠENO','V POŘÁDKU'].includes(workflow)?'badge-ok':workflow==='—'?'badge-neutral':'badge-warning';
     const rowClass=(String(r.status_raw||'').toUpperCase()==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ' && String(r.workflow_status||'').toUpperCase()!=='VYŘEŠENO')?'problem-row':'';

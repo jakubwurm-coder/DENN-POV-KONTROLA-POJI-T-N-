@@ -141,12 +141,30 @@ def _csv_rows(url: str):
         response.close()
 
 
+def _set_progress(vin: str, phase: str, rows: int, detail: str = "") -> None:
+    with _lock:
+        job = _jobs.setdefault(vin, {"state": "loading", "started": time.time()})
+        job["state"] = "loading"
+        job["phase"] = phase
+        job["rows_scanned"] = rows
+        job["detail"] = detail
+        job["updated"] = time.time()
+
+
 def _pcv_for_vin(vin: str) -> str:
     target = _norm(vin)
+    rows = 0
+    _set_progress(vin, "pcv", 0, "1/2 · Hledám PČV ve výpisu vozidel")
     for row in _csv_rows(VEHICLES_CSV_URL):
+        rows += 1
+        if rows % 10000 == 0:
+            _set_progress(vin, "pcv", rows, "1/2 · Hledám PČV ve výpisu vozidel")
         row_vin = _norm(_field(row, "VIN"))
         if row_vin == target:
-            return _field(row, "PČV", "PCV")
+            pcv = _field(row, "PČV", "PCV")
+            _set_progress(vin, "pcv_found", rows, f"1/2 · PČV nalezeno: {pcv}")
+            return pcv
+    _set_progress(vin, "pcv_not_found", rows, "1/2 · PČV nebylo nalezeno")
     return ""
 
 
@@ -185,15 +203,21 @@ def _subject_public(row: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _ownership_for_pcv(pcv: str) -> list[dict[str, Any]]:
+def _ownership_for_pcv(vin: str, pcv: str) -> list[dict[str, Any]]:
     current: list[dict[str, Any]] = []
     historical: list[dict[str, Any]] = []
     found_target = False
+    rows = 0
+    _set_progress(vin, "owner", 0, "2/2 · Hledám vlastníka a provozovatele podle PČV")
     for row in _csv_rows(OWNERS_CSV_URL):
+        rows += 1
+        if rows % 10000 == 0:
+            _set_progress(vin, "owner", rows, "2/2 · Hledám vlastníka a provozovatele podle PČV")
         row_pcv = _field(row, "PČV", "PCV")
         if row_pcv != pcv:
             # Exporty RSV bývají seskupené podle PČV. Po nalezení cílového bloku už nemusíme číst zbytek.
             if found_target:
+                _set_progress(vin, "owner_found", rows, "2/2 · Záznam vlastníka/provozovatele nalezen")
                 break
             continue
         found_target = True
@@ -221,7 +245,7 @@ def _build(vin: str) -> dict[str, Any]:
             "pcv": "",
             "subjects": [],
         }
-    subjects = _ownership_for_pcv(pcv)
+    subjects = _ownership_for_pcv(vin, pcv)
     current = [item for item in subjects if item.get("current")]
     return {
         "state": "ready",
@@ -270,9 +294,17 @@ def get_ownership(vin: str, start: bool = True) -> dict[str, Any]:
         if job:
             if job.get("state") in {"ready", "not_found", "unavailable"}:
                 return dict(job.get("payload") or {})
+            rows = int(job.get("rows_scanned") or 0)
+            phase = str(job.get("phase") or "loading")
+            detail = str(job.get("detail") or "Načítám data z RSV…")
+            if rows:
+                detail += f" · prohledáno {rows:,} záznamů".replace(",", " ")
             return {
                 "state": "loading",
-                "message": "Načítám vlastníka a provozovatele z měsíčního výpisu RSV…",
+                "message": detail,
+                "phase": phase,
+                "rows_scanned": rows,
+                "elapsed_seconds": max(0, int(time.time() - float(job.get("started") or time.time()))),
                 "pcv": "",
                 "subjects": [],
             }

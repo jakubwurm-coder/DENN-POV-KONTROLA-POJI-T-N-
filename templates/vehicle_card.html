@@ -10,7 +10,7 @@ main{max-width:980px;margin:42px auto;padding:0 22px}.hero{margin-bottom:20px}.k
 .search{display:flex;gap:10px;background:white;border:1px solid #dce6ed;border-radius:16px;padding:14px;box-shadow:0 8px 28px #17354e0d}
 .search input{flex:1;border:0;outline:0;font-size:17px;text-transform:uppercase;padding:10px}.search button{border:0;border-radius:10px;background:#1684d6;color:white;font-weight:750;padding:0 22px;cursor:pointer}
 #msg{margin:14px 2px;color:#64748b}.card{background:white;border:1px solid #dce6ed;border-radius:18px;overflow:hidden;box-shadow:0 12px 35px #17354e0c}
-.head{display:flex;justify-content:space-between;gap:20px;padding:24px 26px;background:#f9fbfc;border-bottom:1px solid #e6edf2}.head h2{margin:3px 0 0;font-size:25px}.vehicle-heading{display:flex;align-items:center;gap:16px}.brand-thumb{width:64px;height:48px;object-fit:contain;margin-top:8px;margin-left:auto;display:block}.vin{font-family:ui-monospace,monospace;color:#64748b;font-size:13px}.vehicle-id{text-align:right}
+.head{padding:24px 26px;background:#f9fbfc;border-bottom:1px solid #e6edf2}.head h2{margin:3px 0 0;font-size:25px}.vehicle-kicker{display:flex;align-items:center;gap:10px}.brand-thumb{width:54px;height:30px;object-fit:contain}.vin{font-family:ui-monospace,monospace;color:#64748b;font-size:13px;margin-top:7px}.spz-line{margin-top:5px;font-size:14px}.spz-line strong{font-size:16px}.date-valid{color:#15803d}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e6edf2}.item{background:white;padding:20px}.item small{display:block;color:#7b8d9d;font-size:10px;font-weight:800;letter-spacing:.08em;margin-bottom:7px}.item strong{font-size:16px}
 .vig{margin:22px 26px 26px;border-radius:14px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:18px;background:#f4f7f9}.vig.valid{background:#e9f7f0;color:#126b49}.vig.missing{background:#fff0f3;color:#a71031}.vig.future{background:#fff8e8;color:#805b00}.vig.exempt{background:#eef5ff;color:#245b91}.vig small{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;margin-bottom:5px}.vig strong{font-size:18px}.pill{white-space:nowrap;font-weight:800;font-size:12px;border:1px solid currentColor;border-radius:999px;padding:7px 10px}
 [hidden]{display:none!important}@media(max-width:700px){.grid{grid-template-columns:1fr 1fr}.search{flex-direction:column}.search button{padding:13px}.head,.vig{align-items:flex-start;flex-direction:column}.hero h1{font-size:28px}}
@@ -23,7 +23,7 @@ main{max-width:980px;margin:42px auto;padding:0 22px}.hero{margin-bottom:20px}.k
 <form id="form" class="search"><input id="vin" maxlength="17" autocomplete="off" placeholder="VIN · 17 znaků" aria-label="VIN"><button>Načíst kartu</button></form>
 <div id="msg">Připraveno.</div>
 <section id="card" class="card" hidden>
-<div class="head"><div><span class="kicker">VOZIDLO</span><div class="vehicle-heading"><h2 id="title">—</h2></div></div><div class="vehicle-id"><div class="vin" id="vinOut">—</div><img id="brandThumb" class="brand-thumb" alt="" hidden><strong id="spz">—</strong></div></div>
+<div class="head"><div class="vehicle-kicker"><span class="kicker">VOZIDLO</span><img id="brandThumb" class="brand-thumb" alt="" hidden></div><h2 id="title">—</h2><div class="vin" id="vinOut">—</div><div class="spz-line">SPZ: <strong id="spz">—</strong></div></div>
 <div class="grid">
 <div class="item"><small>STAV VOZIDLA</small><strong id="status">—</strong></div>
 <div class="item"><small>TECHNICKÁ PLATNÁ DO</small><strong id="stk">—</strong></div>
@@ -33,14 +33,13 @@ main{max-width:980px;margin:42px auto;padding:0 22px}.hero{margin-bottom:20px}.k
 <div class="item"><small>BARVA</small><strong id="color">—</strong></div>
 <div class="item"><small>KATEGORIE</small><strong id="category">—</strong></div>
 <div class="item"><small>POČET VLASTNÍKŮ</small><strong id="ownersCount">—</strong></div>
-
+<div class="item"><small>DÁLNIČNÍ ZNÁMKA</small><strong id="vigPill">—</strong><div id="vigText"></div><div id="vigDates"></div></div>
 </div>
-<div id="vig" class="vig"><div><small>DÁLNIČNÍ ZNÁMKA</small><strong id="vigText">—</strong><div id="vigDates"></div></div><span id="vigPill" class="pill">—</span></div>
 </section>
 </main>
 <script>
 const $=id=>document.getElementById(id), form=$("form"), msg=$("msg"), card=$("card");
-const val=v=>v&&String(v).trim()?v:"—";
+const val=v=>v&&String(v).trim()?v:"—";\nfunction isFutureDate(s){const m=String(s||"").match(/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/);if(!m)return false;const d=new Date(+m[3],+m[2]-1,+m[1],23,59,59);return d>new Date();}
 
 function setBrandThumbnail(make){
  const name=String(make||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
@@ -52,9 +51,9 @@ function setBrandThumbnail(make){
 
 form.addEventListener("submit",async e=>{e.preventDefault();const vin=$("vin").value.replace(/\s/g,"").toUpperCase();card.hidden=true;msg.textContent="Načítám údaje vozidla…";
 try{const r=await fetch("/api/vehicle-card?vin="+encodeURIComponent(vin));const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.message||"Načtení se nepodařilo.");
-const v=d.vehicle||{}, g=d.vignette||{};$("title").textContent=[v.make,v.model].filter(Boolean).join(" ")||"Vozidlo";$("vinOut").textContent=v.vin||vin;$("spz").textContent=val(v.spz);$("status").textContent=val(v.status);$("stk").textContent=val(v.technical_until||v.stk_until||v.inspection_until);$("fuel").textContent=val(v.fuel);$("ccm").textContent=v.engine_ccm?String(v.engine_ccm)+" cm³":"—";$("power").textContent=v.power_kw?String(v.power_kw)+" kW":"—";$("color").textContent=val(v.color);$("category").textContent=val(v.category);$("ownersCount").textContent=val(v.owners_count);
+const v=d.vehicle||{}, g=d.vignette||{};$("title").textContent=[v.make,v.model].filter(Boolean).join(" ")||"Vozidlo";$("vinOut").textContent=v.vin||vin;$("spz").textContent=val(v.spz);$("status").textContent=val(v.status);const techDate=v.technical_until||v.stk_until||v.inspection_until;$("stk").textContent=val(techDate);$("stk").classList.toggle("date-valid",isFutureDate(techDate));$("fuel").textContent=val(v.fuel);$("ccm").textContent=v.engine_ccm?String(v.engine_ccm)+" cm³":"—";$("power").textContent=v.power_kw?String(v.power_kw)+" kW":"—";$("color").textContent=val(v.color);$("category").textContent=val(v.category);$("ownersCount").textContent=val(v.owners_count);
 setBrandThumbnail(v.make);
-const labels={valid:"PLATNÁ",missing:"NENALEZENA",future:"BUDOUCÍ",exempt:"OSVOBOZENO",unavailable:"NELZE OVĚŘIT"};$("vig").className="vig "+(g.state||"");$("vigText").textContent=g.message||"Bez výsledku";$("vigPill").textContent=labels[g.state]||"STAV";$("vigDates").textContent=g.valid_until?("Platná do "+g.valid_until+(g.valid_since?" · od "+g.valid_since:"")):"";card.hidden=false;msg.textContent="Načteno aktuálně.";
+const labels={valid:"PLATNÁ",missing:"NENALEZENA",future:"BUDOUCÍ",exempt:"OSVOBOZENO",unavailable:"NELZE OVĚŘIT"};$("vigText").textContent=g.message||"Bez výsledku";$("vigPill").textContent=labels[g.state]||"STAV";$("vigPill").classList.toggle("date-valid",g.state==="valid");$("vigDates").textContent=g.valid_until?("Platná do "+g.valid_until):"";$("vigDates").classList.toggle("date-valid",isFutureDate(g.valid_until));card.hidden=false;msg.textContent="Načteno aktuálně.";
 }catch(err){msg.textContent=err.message||"Načtení se nepodařilo.";}}); 
 </script>
 </body></html>

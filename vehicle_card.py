@@ -92,11 +92,13 @@ def _technical_summary(data: dict[str, Any], vin: str) -> dict[str, str]:
         result[target] = str(value or "").strip()
     result["spz"] = re.sub(r"\s+", "", result["spz"]).upper()
     result["stk_until"] = _date(result["stk_until"])
-    if not result["stk_until"]:
-        prereg = _find_value(data, {"PREDREGISTRACIPROHLIDKADNE"})
-        if prereg:
-            result["stk_until"] = _date(prereg)
-    result["first_registration"] = _date(result["first_registration"])
+    result["inspection_from"] = _date(_find_value(data, {"PREDREGISTRACIPROHLIDKADNE"}))
+    result["inspection_until"] = _date(_find_value(data, {"PREDREGISTRACIPROHLIDKADO", "PREDREGISTRACIPROHLIDKAPLATNOSTDO"}))
+    result["fuel"] = {"NM": "Nafta"}.get(result["fuel"].upper(), result["fuel"])
+    power = re.match(r"^\s*(\d+(?:[.,]\d+)?)", result["power_kw"])
+    result["power_kw"] = power.group(1).replace(",", ".") if power else ""
+    if result["engine_ccm"].endswith(".0"):
+        result["engine_ccm"] = result["engine_ccm"][:-2]
     return result
 
 

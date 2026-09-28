@@ -85,6 +85,7 @@ def _technical_summary(data: dict[str, Any], vin: str) -> dict[str, str]:
         "power_kw": {"MOTORMAXVYKON", "MAXIMALNIVYKON", "MAXIMALNIVYKONKW", "NEJVYSSIVYKON", "VYKON", "VYKONKW", "POWERKW"},
         "color": {"VOZIDLOKAROSERIEBARVA", "BARVA", "BARVANAZEV", "BARVAVOZIDLA", "BARVAVOZIDLANAZEV", "COLOR"},
         "category": {"KATEGORIE", "KATEGORIEVOZIDLA", "VEHICLECATEGORY"},
+        "owners_count": {"POCETVLASTNIKU", "POCETVLASTNIK", "OWNERSCOUNT"},
     }
     result = {"vin": vin}
     for target, aliases in fields.items():
@@ -101,7 +102,7 @@ def _technical_summary(data: dict[str, Any], vin: str) -> dict[str, str]:
         except ValueError:
             pass
     result["technical_until"] = result["stk_until"] or result["inspection_until"]
-    result["fuel"] = {"NM": "Nafta"}.get(result["fuel"].upper(), result["fuel"])
+    result["fuel"] = {"NM": "NAFTA"}.get(result["fuel"].upper(), result["fuel"].upper())
     power = re.match(r"^\s*(\d+(?:[.,]\d+)?)", result["power_kw"])
     result["power_kw"] = power.group(1).replace(",", ".") if power else ""
     if result["engine_ccm"].endswith(".0"):

@@ -293,6 +293,10 @@ function render(){
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
   const shown=(value)=>suppressFinalResults?0:(Number(value)||0);
   document.body.classList.toggle('check-running',!!state.running);
+  // Po novém otevření stránky zobrazíme jen hlavní kartu se spuštěním kontroly.
+  // Vyhledávání, filtry, export a tabulka se objeví až po spuštění kontroly.
+  const dataSection=$('dataSection');
+  if(dataSection) dataSection.hidden=waitingFreshPage;
   setText('attentionCount',suppressFinalResults?'—':attention);
   setText('allCount',suppressFinalResults?'—':state.results.length);
   setText('cActive',shown(s.active));setText('cActiveHover',shown(s.active));setText('cActiveOverview',shown(s.active));setText('cOkTotal',shown(s.ok_total));

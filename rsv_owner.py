@@ -330,10 +330,81 @@ def _worker(vin: str) -> None:
             }
 
 
+def _api_ownership(vin: str) -> dict[str, Any] | None:
+    base = os.getenv("RSV_API_URL", "").strip().rstrip("/")
+    if not base:
+        return None
+    headers = {}
+    api_key = os.getenv("RSV_API_KEY", "").strip()
+    if api_key:
+        headers["X-API-Key"] = api_key
+    try:
+        response = requests.get(
+            f"{base}/api/rsv/vin/{vin}",
+            headers=headers,
+            timeout=(5, 15),
+        )
+        if response.status_code == 404:
+            return {
+                "state": "not_found",
+                "message": "VIN nebyl v aktuálním indexu RSV nalezen.",
+                "pcv": "",
+                "subjects": [],
+            }
+        response.raise_for_status()
+        data = response.json()
+        subjects = []
+        relation_labels = {
+            "1": "Vlastník",
+            "2": "Provozovatel",
+            "3": "Spoluvlastník",
+            "4": "Nabyvatel",
+        }
+        subject_labels = {
+            "1": "Fyzická osoba",
+            "2": "Právnická osoba",
+            "3": "Neztotožněný subjekt",
+        }
+        for item in data.get("subjects") or []:
+            code = str(item.get("relation_code") or "")
+            typ = str(item.get("subject_type_code") or "")
+            is_company = typ == "2"
+            subjects.append({
+                "relation_code": code,
+                "relation": relation_labels.get(code, "Vztah k vozidlu"),
+                "subject_type_code": typ,
+                "subject_type": subject_labels.get(typ, "Subjekt"),
+                "current": True,
+                "date_from": "",
+                "date_to": "",
+                "name": str(item.get("name") or "") if is_company else "",
+                "ico": str(item.get("ico") or "") if is_company else "",
+                "address": "",
+            })
+        return {
+            "state": "ready",
+            "message": "Aktuální údaje vlastníka a provozovatele načteny z RSV.",
+            "pcv": str(data.get("pcv") or ""),
+            "subjects": subjects,
+        }
+    except Exception as exc:
+        print(f"RSV API lookup {vin} failed: {exc.__class__.__name__}: {exc}")
+        return {
+            "state": "unavailable",
+            "message": "Lokální RSV API je momentálně nedostupné.",
+            "pcv": "",
+            "subjects": [],
+        }
+
+
 def get_ownership(vin: str, start: bool = True) -> dict[str, Any]:
     vin = _norm(vin)
     if len(vin) != 17:
         return {"state": "unavailable", "message": "Neplatné VIN.", "pcv": "", "subjects": []}
+
+    api_payload = _api_ownership(vin)
+    if api_payload is not None:
+        return api_payload
 
     cached = _cache_get(vin)
     if cached:

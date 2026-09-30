@@ -244,8 +244,8 @@ def get_command() -> dict[str, Any] | None:
 
 def _lookup_vehicle_in_full_tirbazar(query: str, query_type: str) -> dict[str, Any] | None:
     """Samostatné ruční vyhledávání v celé tabulce dbo.Vozidlo bez filtrů POV."""
-    local_app = _load_local_app()
-    config = local_app.load_config()
+    from config import load_config
+    config = load_config()
     needle = "".join(ch for ch in str(query or "").upper() if ch.isalnum())
     if not needle:
         return None

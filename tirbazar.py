@@ -146,24 +146,9 @@ def _is_czech_for_pov(vehicle: TirVehicle) -> bool:
 
 
 def _is_sold_to_vans_renting(vehicle: TirVehicle) -> bool:
-    """Prodej na Vans Renting s.r.o. (IČO 02772833) zůstává v POV kontrole.
-
-    Primárně podporujeme budoucí strukturovaná pole kupujícího; pro starší
-    záznamy TIRBazar používáme i poznámku typu "PRODEJ NA VANS RENTING".
-    """
+    """Prodej na Vans Renting s.r.o. (IČO 02772833) zůstává v POV kontrole."""
     buyer_ico = re.sub(r"\D", "", str(getattr(vehicle, "kupujici_ico", "") or ""))
-    buyer_name = _normalize_state(getattr(vehicle, "kupujici_nazev", ""))
-    note = _normalize_state(getattr(vehicle, "poznamky", ""))
-
-    if buyer_ico == "02772833":
-        return True
-    if "VANS RENTING" in buyer_name:
-        return True
-    if "02772833" in note:
-        return True
-    if "PRODEJ NA VANS RENTING" in note:
-        return True
-    return False
+    return buyer_ico == "02772833"
 
 
 def _is_control_pov_state(value: str) -> bool:
@@ -771,6 +756,7 @@ def load_tirbazar_vehicles(
         v for v in vehicles
         if bool(v.datum_prodeje) or _normalize_state(v.stav) in {"PRODANÉ", "PRODANE"}
     ]
+    sold_to_vans_renting = [v for v in sold if _is_sold_to_vans_renting(v)]
     ignored = [v for v in vehicles if v not in control]
 
     print()
@@ -787,7 +773,9 @@ def load_tirbazar_vehicles(
     print("Prázdná země + česká SPZ ke kontrole:", len(blank_country_czech_spz))
     print("Jiná země + SPZ ke kontrole:", len(other_country_with_spz))
     print("Ke kontrole bez SPZ (CZ, podle VIN):", len(control_without_spz))
-    print("Prodané - kontrola pojištění navíc:", len(sold))
+    print("Prodané celkem:", len(sold))
+    print("Z toho prodej Vans Renting s.r.o. (IČO 02772833) - POV povinné:", len(sold_to_vans_renting))
+    print("Ostatní prodané - kontrola pojištění navíc:", len(sold) - len(sold_to_vans_renting))
     print("Ostatní vozidla mimo pravidla POV - ignorováno:", len(ignored))
     print("Aktivních ke kontrole celkem:", len(control))
     print()

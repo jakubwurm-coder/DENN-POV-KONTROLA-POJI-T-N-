@@ -269,7 +269,7 @@ def _run_check_worker() -> None:
 
         control_vins = [
             vehicle.vin
-            for vehicle in control_vehicles
+            for vehicle in compare_vehicles_input
             if vehicle.vin
         ]
         uniqa = load_uniqa_vehicles(required_vins=control_vins)

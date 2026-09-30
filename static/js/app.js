@@ -565,9 +565,14 @@ async function runTirLookup(event){
   if(!query){box.hidden=false;box.textContent='Zadejte VIN nebo SPZ.';return;}
   button.disabled=true;button.textContent='Hledám…';box.hidden=false;box.textContent='Dotazuji TIRBazar SQL…';
   try{
-    const response=await fetch('/api/vehicle-lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query})});
-    const data=await response.json();
-    if(data.status==='pending'){box.textContent=data.message||'Vyhledávání pokračuje…';return;}
+    let response=await fetch('/api/vehicle-lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query})});
+    let data=await response.json();
+    for(let attempt=0;attempt<18 && data.status==='pending';attempt++){
+      await new Promise(resolve=>setTimeout(resolve,1500));
+      response=await fetch('/api/vehicle-lookup/'+encodeURIComponent(query),{cache:'no-store'});
+      data=await response.json();
+    }
+    if(data.status==='pending'){box.innerHTML='<span class="tir-lookup-message">Agent zatím nevrátil výsledek. Zkuste Hledat znovu.</span>';return;}
     if(data.error){box.innerHTML='<span class="tir-lookup-message error">'+esc(data.error)+'</span>';return;}
     if(!data.found||!data.vehicle){box.innerHTML='<span class="tir-lookup-message">V TIRBazar nebylo nalezeno vozidlo pro <strong>'+esc(query)+'</strong>.</span>';return;}
     const v=data.vehicle||{};

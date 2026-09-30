@@ -1154,6 +1154,7 @@ def agent_lookup_result():
             return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
         data["_vehicle_lookup"] = {
             "id": command_id,
+            "query": str(payload.get("query") or pending.get("query") or "").strip().upper(),
             "vin": str(payload.get("vin") or pending.get("vin") or "").strip().upper(),
             "status": "done" if not payload.get("error") else "error",
             "found": bool(payload.get("found")),

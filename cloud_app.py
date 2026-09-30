@@ -1085,9 +1085,8 @@ def api_vehicle_lookup():
         return jsonify({"ok": False, "message": "Zadejte platný VIN nebo SPZ."}), 400
     with _lock:
         data = _load_state()
-        previous = data.get("_vehicle_lookup") if isinstance(data.get("_vehicle_lookup"), dict) else {}
-        if str(previous.get("query") or "") == query and previous.get("status") in {"done", "error"}:
-            return jsonify({"ok": previous.get("status") == "done", **previous})
+        # Ruční SQL vyhledávání je živý dotaz do celé databáze TIRBazar.
+        # Nikdy nevracíme starý výsledek z cache pro stejné VIN/RZ.
         current_command = data.get("_command") if isinstance(data.get("_command"), dict) else None
         if current_command:
             return jsonify({"ok": False, "status": "busy", "message": "Agent právě zpracovává jiný požadavek. Zkuste to za chvíli."}), 409

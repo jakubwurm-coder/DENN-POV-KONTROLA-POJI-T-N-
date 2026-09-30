@@ -425,8 +425,9 @@ def load_tirbazar_vehicles(
     print("CZ: kontrola i bez SPZ. Jiná země + SPZ: také kontrola.")
     print("Prázdná země + česká SPZ: také kontrola.")
     print("Nepřítomné s výkupem se kontrolují s očekáváním NEPOJIŠTĚNO.")
-    print("Pronajaté, Volné, Parkované, Parkování ukončeno, Prodané, Vrácené z komise")
-    print("a ostatní stavy se nekontrolují; Nepřítomné/rezervace/komise bez výkupu také ne.")
+    print("Pronajaté, Volné, Parkované, Parkování ukončeno a Vrácené z komise se běžně nekontrolují.")
+    print("Prodané se nepočítá mezi aktivní, ale kontroluje se kvůli případnému POJIŠTĚNO NAVÍC.")
+    print("Nepřítomné/rezervace/komise bez výkupu se běžně nekontrolují.")
     print()
 
     try:
@@ -602,7 +603,7 @@ def load_tirbazar_vehicles(
     print("Prázdná země + česká SPZ ke kontrole:", len(blank_country_czech_spz))
     print("Jiná země + SPZ ke kontrole:", len(other_country_with_spz))
     print("Ke kontrole bez SPZ (CZ, podle VIN):", len(control_without_spz))
-    print("Prodané - ignorováno:", len(sold))
+    print("Prodané - kontrola pojištění navíc:", len(sold))
     print("Ostatní vozidla mimo pravidla POV - ignorováno:", len(ignored))
     print("Aktivních ke kontrole celkem:", len(control))
     print()

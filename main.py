@@ -201,9 +201,9 @@ def main() -> None:
     )
 
     print(
-        "PRODANÉ, ALE V UNIQA:",
+        "PRODANÉ, ALE POJIŠTĚNÉ:",
         counts.get(
-            "PRODANÉ, ALE V UNIQA",
+            "PRODANÉ, ALE POJIŠTĚNÉ",
             0,
         ),
     )

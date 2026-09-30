@@ -267,9 +267,13 @@ def _run_check_worker() -> None:
 
         _set_source("uniqa", "loading", "Načítám UNIQA…")
 
+        # Přímé dohledávání jednotlivých VIN v UNIQA provádíme pouze
+        # pro běžná aktivní vozidla. Prodaných vozidel může být v historii
+        # velmi mnoho; u nich stačí průnik s načteným seznamem aktivních
+        # pojistek UNIQA. Jinak by kontrola dělala stovky až tisíce HTTP dotazů.
         control_vins = [
             vehicle.vin
-            for vehicle in compare_vehicles_input
+            for vehicle in control_vehicles
             if vehicle.vin
         ]
         uniqa = load_uniqa_vehicles(required_vins=control_vins)

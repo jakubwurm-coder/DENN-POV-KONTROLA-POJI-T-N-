@@ -511,50 +511,17 @@ function clearFilter(){
 let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return;lastToast=msg;const t=$('toast');t.textContent=msg;t.className='toast'+(error?' error':'');t.hidden=false;setTimeout(()=>{t.hidden=true;lastToast='';},5000);}
 
 
-function urlBase64ToUint8Array(base64String){
-  const padding='='.repeat((4-base64String.length%4)%4);
-  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
-  const raw=atob(base64);
-  return Uint8Array.from([...raw].map(ch=>ch.charCodeAt(0)));
+$('runBtn').addEventListener('click',run);
+const navResultsToggle=$('navResultsToggle');
+const navResultsMenu=$('navResultsMenu');
+function setResultsMenu(open){
+  if(!navResultsToggle||!navResultsMenu)return;
+  navResultsMenu.hidden=!open;
+  navResultsToggle.setAttribute('aria-expanded',String(open));
+  navResultsToggle.classList.toggle('open',open);
 }
-async function refreshPushButton(){
-  const btn=$('pushBtn'); if(!btn)return;
-  if(!('serviceWorker' in navigator)||!('PushManager' in window)){
-    btn.textContent='Notifikace nejsou podporované'; btn.disabled=true; return;
-  }
-  const registration=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
-  const sub=await registration.pushManager.getSubscription();
-  if(Notification.permission==='granted'&&sub){
-    btn.textContent='Notifikace zapnuté'; btn.classList.add('enabled');
-  }else{
-    btn.textContent='Zapnout notifikace'; btn.classList.remove('enabled');
-  }
-}
-async function enablePush(){
-  const btn=$('pushBtn'); if(!btn)return;
-  btn.disabled=true;
-  try{
-    if(!('serviceWorker' in navigator)||!('PushManager' in window))throw new Error('Tento prohlížeč nepodporuje webové notifikace.');
-    const permission=await Notification.requestPermission();
-    if(permission!=='granted')throw new Error('Oznámení nejsou povolená. Povolte je pro tento web v prohlížeči.');
-    const registration=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
-    const keyResponse=await fetch('/api/push/public-key',{cache:'no-store'});
-    const keyData=await keyResponse.json();
-    if(!keyData.ok||!keyData.public_key)throw new Error('Server ještě nemá nastavený klíč notifikací.');
-    let subscription=await registration.pushManager.getSubscription();
-    if(!subscription){
-      subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(keyData.public_key)});
-    }
-    const response=await fetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:subscription.toJSON()})});
-    const data=await response.json();
-    if(!response.ok||!data.ok)throw new Error(data.message||'Aktivace notifikací selhala.');
-    toast('Notifikace jsou zapnuté. Budou chodit ráno a odpoledne.');
-    await refreshPushButton();
-  }catch(error){toast(error.message||'Aktivace notifikací selhala.',true);}
-  finally{btn.disabled=false;}
-}
-
-$('runBtn').addEventListener('click',run);$('pushBtn').addEventListener('click',enablePush);refreshPushButton();$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
+if(navResultsToggle)navResultsToggle.addEventListener('click',()=>setResultsMenu(navResultsMenu.hidden));
+$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 $('csvBtn').addEventListener('click',event=>{if($('csvBtn').getAttribute('aria-disabled')==='true')event.preventDefault();});
 setInterval(refresh,2000);refresh();
 

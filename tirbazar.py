@@ -145,6 +145,27 @@ def _is_czech_for_pov(vehicle: TirVehicle) -> bool:
     return False
 
 
+def _is_sold_to_vans_renting(vehicle: TirVehicle) -> bool:
+    """Prodej na Vans Renting s.r.o. (IČO 02772833) zůstává v POV kontrole.
+
+    Primárně podporujeme budoucí strukturovaná pole kupujícího; pro starší
+    záznamy TIRBazar používáme i poznámku typu "PRODEJ NA VANS RENTING".
+    """
+    buyer_ico = re.sub(r"\D", "", str(getattr(vehicle, "kupujici_ico", "") or ""))
+    buyer_name = _normalize_state(getattr(vehicle, "kupujici_nazev", ""))
+    note = _normalize_state(getattr(vehicle, "poznamky", ""))
+
+    if buyer_ico == "02772833":
+        return True
+    if "VANS RENTING" in buyer_name:
+        return True
+    if "02772833" in note:
+        return True
+    if "PRODEJ NA VANS RENTING" in note:
+        return True
+    return False
+
+
 def _is_control_pov_state(value: str) -> bool:
     return _normalize_state(value) in CONTROL_POV_STATE_VALUES
 
@@ -159,6 +180,12 @@ def _requires_pov_check(vehicle: TirVehicle) -> bool:
         return False
     if not vehicle.vin:
         return False
+
+    # Výjimka: pokud bylo vozidlo prodáno společnosti Vans Renting s.r.o.
+    # (IČO 02772833), stále má být pojištěné a zůstává v běžné POV kontrole.
+    if vehicle.datum_prodeje and _is_sold_to_vans_renting(vehicle):
+        return True
+
     if vehicle.datum_prodeje:
         return False
 

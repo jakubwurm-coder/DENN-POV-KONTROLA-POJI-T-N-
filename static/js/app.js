@@ -66,7 +66,7 @@ function showHowItWorks(){
   const nav=$('navHowItWorks');if(nav)nav.classList.add('active');
   section.scrollIntoView({behavior:'smooth',block:'start'});
 }
-function showData(){hideChanges();hideManualHistory();hideHowItWorks();const section=$('dataSection');if(!section)return;section.hidden=false;section.scrollIntoView({behavior:'smooth',block:'start'});}
+function showData(){hideChanges();hideManualHistory();hideHowItWorks();const section=$('dataSection');if(!section)return;section.dataset.userOpened='1';section.hidden=false;section.scrollIntoView({behavior:'smooth',block:'start'});}
 function showChanges(){
   hideSources();hideBreakdown();hideManualHistory();hideHowItWorks();hideData();
   const section=$('changesSection');if(!section)return;
@@ -309,7 +309,7 @@ function render(){
   // Po novém otevření stránky zobrazíme jen hlavní kartu se spuštěním kontroly.
   // Vyhledávání, filtry, export a tabulka se objeví až po spuštění kontroly.
   const dataSection=$('dataSection');
-  if(dataSection) dataSection.hidden=waitingFreshPage;
+  if(dataSection && !dataSection.dataset.userOpened) dataSection.hidden=true;
   setText('attentionCount',suppressFinalResults?'—':attention);
   setText('allCount',suppressFinalResults?'—':state.results.length);
   setText('cActive',shown(s.active));setText('cActiveHover',shown(s.active));setText('cActiveOverview',shown(s.active));setText('cOkTotal',shown(s.ok_total));
@@ -429,7 +429,7 @@ async function run(){
   state.changes={count:0,items:[]};
   connectionVisualPercent=0;
   state.error=null;
-  setFilter('ATTENTION');
+  activeFilter='ATTENTION';
   render();
   try{const r=await fetch('/api/run',{method:'POST'});const d=await r.json();if(!r.ok)toast(d.message||'Kontrolu se nepodařilo spustit.',true);await refresh();}catch(e){state=previousState;render();toast('Kontrolu se nepodařilo spustit.',true);}}
 
@@ -529,7 +529,7 @@ async function runTirLookup(event){
   event.preventDefault();
   const input=$('tirLookupInput'),button=$('tirLookupBtn'),box=$('tirLookupResult');
   const query=String(input?.value||'').trim().toUpperCase();
-  if(!query){box.hidden=false;box.textContent='Zadejte VIN nebo SPZ.';return;}
+  if(!query){box.hidden=true;box.textContent='';return;}
   button.disabled=true;button.textContent='Hledám…';box.hidden=false;box.textContent='Dotazuji TIRBazar SQL…';
   try{
     let response=await fetch('/api/vehicle-lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query})});

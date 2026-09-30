@@ -1083,22 +1083,29 @@ def api_vehicle_lookup():
     is_vin = bool(re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", query))
     if not is_vin and not re.fullmatch(r"[A-Z0-9]{4,10}", query):
         return jsonify({"ok": False, "message": "Zadejte platný VIN nebo SPZ."}), 400
-    command_id = uuid.uuid4().hex
     with _lock:
         data = _load_state()
-        if isinstance(data.get("_command"), dict):
-            return jsonify({"ok": False, "message": "Agent právě zpracovává jiný požadavek. Zkuste to za chvíli."}), 409
+        previous = data.get("_vehicle_lookup") if isinstance(data.get("_vehicle_lookup"), dict) else {}
+        if str(previous.get("query") or "") == query and previous.get("status") in {"done", "error"}:
+            return jsonify({"ok": previous.get("status") == "done", **previous})
+        current_command = data.get("_command") if isinstance(data.get("_command"), dict) else None
+        if current_command:
+            return jsonify({"ok": False, "status": "busy", "message": "Agent právě zpracovává jiný požadavek. Zkuste to za chvíli."}), 409
+        command_id = uuid.uuid4().hex
         data["_vehicle_lookup"] = {"id": command_id, "query": query, "status": "pending", "found": False, "vehicle": None, "error": ""}
         data["_command"] = {"id": command_id, "action": "lookup_vehicle", "query": query, "query_type": "vin" if is_vin else "spz", "requested_at": _now()}
         _save_state(data)
-    deadline = time.monotonic() + 35
-    while time.monotonic() < deadline:
-        time.sleep(1)
-        with _lock:
-            lookup = (_load_state().get("_vehicle_lookup") or {})
-        if str(lookup.get("id") or "") == command_id and lookup.get("status") in {"done", "error"}:
-            return jsonify({"ok": lookup.get("status") == "done", **lookup})
-    return jsonify({"ok": False, "status": "pending", "message": "Vyhledávání pokračuje. Zkuste Hledat znovu za několik sekund."}), 202
+    return jsonify({"ok": True, "id": command_id, "query": query, "status": "pending", "message": "Požadavek byl odeslán do TIRBazar."}), 202
+
+
+@app.get("/api/vehicle-lookup/<query>")
+def api_vehicle_lookup_status(query: str):
+    query = re.sub(r"\s+", "", str(query or "")).upper()
+    with _lock:
+        lookup = (_load_state().get("_vehicle_lookup") or {})
+    if str(lookup.get("query") or "") != query:
+        return jsonify({"ok": False, "status": "unknown", "message": "Požadavek nebyl nalezen."}), 404
+    return jsonify({"ok": lookup.get("status") == "done", **lookup})
 
 
 @app.post("/api/run")

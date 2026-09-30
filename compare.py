@@ -208,27 +208,53 @@ def compare_vehicles(
 
         if vehicle.datum_prodeje:
 
+            # Prodané vozidlo už nemá být pojištěné. Nezahazujeme ho ale
+            # před porovnáním: pokud zůstalo v UNIQA nebo Allianz, jde o
+            # pojištění navíc a musí se zobrazit jako případ ke kontrole.
             if uniqa_available and uniqa_vehicle:
-
                 results.append(
                     ComparisonResult(
                         oid=vehicle.oid,
                         vin=vin,
                         tir_spz=tir_spz,
-                        uniqa_spz=normalize_spz(
-                            uniqa_vehicle.spz
-                        ),
-                        status="PRODANÉ, ALE V UNIQA",
+                        uniqa_spz=normalize_spz(uniqa_vehicle.spz),
+                        status="PRODANÉ, ALE POJIŠTĚNÉ",
                         detail=(
-                            "Vozidlo má v TIRBazar DatumProdeje, "
-                            "ale VIN je stále veden mezi aktivními "
-                            "vozidly UNIQA."
+                            "Vozidlo má v TIRBazar evidovaný prodej, "
+                            "ale VIN je stále veden mezi aktivními vozidly UNIQA. "
+                            "Pojištění je vedeno navíc."
+                        ),
+                        datum_vykupu=vehicle.datum_vykupu,
+                        datum_prodeje=vehicle.datum_prodeje,
+                    )
+                )
+                continue
+
+            allianz_vehicle = None
+            if allianz_available:
+                allianz_vehicle = allianz_by_vin.get(vin)
+                if allianz_vehicle is None and tir_spz:
+                    allianz_vehicle = allianz_by_spz.get(tir_spz)
+
+            if allianz_vehicle is not None:
+                results.append(
+                    ComparisonResult(
+                        oid=vehicle.oid,
+                        vin=vin,
+                        tir_spz=tir_spz,
+                        uniqa_spz="",
+                        status="PRODANÉ, ALE POJIŠTĚNÉ",
+                        detail=(
+                            "Vozidlo má v TIRBazar evidovaný prodej, "
+                            "ale je stále vedeno mezi aktivně pojištěnými vozidly ALLIANZ. "
+                            "Pojištění je vedeno navíc."
                         ),
                         datum_vykupu=vehicle.datum_vykupu,
                         datum_prodeje=vehicle.datum_prodeje,
                     )
                 )
 
+            # Prodané a nepojištěné vozidlo je správně a nevytváří problém.
             continue
 
         # ====================================================
@@ -517,7 +543,7 @@ def compare_vehicles(
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ": 2,
         "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ": 9,
         "NEPOJIŠTĚNO, ALE DEPOZIT": 3,
-        "PRODANÉ, ALE V UNIQA": 3,
+        "PRODANÉ, ALE POJIŠTĚNÉ": 3,
         "SPZ NESOUHLASÍ": 4,
         "NAVÍC V UNIQA": 5,
         "NELZE OVĚŘIT": 6,

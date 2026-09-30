@@ -3,6 +3,9 @@ from __future__ import annotations
 import hmac
 import json
 import os
+import re
+import time
+import uuid
 from typing import Any, Callable
 
 from flask import Response, jsonify, request
@@ -11,6 +14,7 @@ from flask import Response, jsonify, request
 def install_mcp_api(
     app,
     load_state: Callable[[], dict[str, Any]],
+    save_state: Callable[[dict[str, Any]], Any],
     public_state: Callable[[dict[str, Any]], dict[str, Any]],
     lock,
 ) -> None:
@@ -127,13 +131,76 @@ def install_mcp_api(
                             "destructiveHint": False,
                             "openWorldHint": False,
                         },
+                    }, {
+                        "name": "lookup_vehicle",
+                        "title": "Vyhledat vozidlo v TIRBazar",
+                        "description": (
+                            "Read-only vyhledání libovolného VIN přímo v interní databázi TIRBazar "
+                            "přes kancelářského Windows agenta."
+                        ),
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "vin": {"type": "string", "description": "VIN vozidla, přesně 17 znaků."}
+                            },
+                            "required": ["vin"],
+                            "additionalProperties": False,
+                        },
+                        "annotations": {
+                            "readOnlyHint": True,
+                            "destructiveHint": False,
+                            "openWorldHint": False,
+                        },
                     }]
                 },
             })
 
         if method == "tools/call":
             params = body.get("params") if isinstance(body.get("params"), dict) else {}
-            if params.get("name") != "get_insurance_status":
+            tool_name = str(params.get("name") or "")
+            if tool_name == "lookup_vehicle":
+                arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+                vin = re.sub(r"\s+", "", str(arguments.get("vin") or "")).upper()
+                if not re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", vin):
+                    return jsonify({
+                        "jsonrpc": "2.0", "id": rpc_id,
+                        "error": {"code": -32602, "message": "VIN musí mít 17 platných znaků."},
+                    }), 400
+                command_id = uuid.uuid4().hex
+                with lock:
+                    state = load_state()
+                    state["_vehicle_lookup"] = {
+                        "id": command_id, "vin": vin, "status": "pending",
+                        "found": False, "vehicle": None, "error": "", "requested_at": time.time(),
+                    }
+                    state["_command"] = {
+                        "id": command_id, "action": "lookup_vehicle", "vin": vin,
+                    }
+                    save_state(state)
+                deadline = time.monotonic() + 110
+                result = None
+                while time.monotonic() < deadline:
+                    time.sleep(2)
+                    with lock:
+                        state = load_state()
+                        lookup = state.get("_vehicle_lookup") if isinstance(state.get("_vehicle_lookup"), dict) else {}
+                    if str(lookup.get("id") or "") == command_id and lookup.get("status") in {"done", "error"}:
+                        result = dict(lookup)
+                        break
+                if result is None:
+                    result = {
+                        "id": command_id, "vin": vin, "status": "pending", "found": False,
+                        "vehicle": None, "error": "Kancelářský agent zatím nevrátil výsledek.",
+                    }
+                return jsonify({
+                    "jsonrpc": "2.0", "id": rpc_id,
+                    "result": {
+                        "content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}],
+                        "structuredContent": result,
+                        "isError": bool(result.get("error")) and result.get("status") == "error",
+                    },
+                })
+            if tool_name != "get_insurance_status":
                 return jsonify({
                     "jsonrpc": "2.0",
                     "id": rpc_id,

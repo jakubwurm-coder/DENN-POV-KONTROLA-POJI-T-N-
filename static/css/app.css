@@ -3066,3 +3066,13 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
 .push-btn:hover{background:#f5f9fc}
 .push-btn.enabled{border-color:#b9e4cf;background:#edf9f3;color:#0b8755}
 .push-btn:disabled{opacity:.55;cursor:default}
+
+.tir-lookup-section{margin:0 0 18px;padding:14px 16px;border:1px solid #dbe6ee;border-radius:14px;background:#fff;box-shadow:0 3px 14px rgba(22,50,77,.04)}
+.tir-lookup-form{display:flex;align-items:center;gap:12px}.tir-lookup-copy{min-width:150px}.tir-lookup-copy strong{display:block;margin-top:3px;color:#17364f;font-size:14px}
+.tir-lookup-control{position:relative;flex:1;display:flex;align-items:center;min-width:220px}.tir-lookup-control .search-icon{position:absolute;left:12px;color:#7890a3;pointer-events:none}
+.tir-lookup-control input{width:100%;min-height:40px;padding:9px 12px 9px 34px;border:1px solid #cad9e4;border-radius:10px;background:#f9fbfc;color:#17364f;font:inherit;font-size:13px;text-transform:uppercase}
+.tir-lookup-control input:focus{outline:3px solid rgba(35,136,217,.15);border-color:#2388d9;background:#fff}
+.tir-lookup-result{margin-top:13px;padding-top:13px;border-top:1px solid #e6edf2}.tir-lookup-message{display:block;color:#60798d;font-size:12px}.tir-lookup-message.error{color:#c31738}
+.tir-lookup-result-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}.tir-lookup-result-head>div>strong{display:block;margin-top:3px;color:#153650;font-size:16px}
+.tir-lookup-result-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tir-lookup-result-grid>div{padding:10px 11px;border:1px solid #e0e9ef;border-radius:9px;background:#fafcfd}.tir-lookup-result-grid span{display:block;color:#7c91a3;font-size:8px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.tir-lookup-result-grid strong{display:block;margin-top:3px;color:#213f57;font-size:11px;overflow-wrap:anywhere}
+@media(max-width:800px){.tir-lookup-form{flex-wrap:wrap}.tir-lookup-copy{width:100%}.tir-lookup-control{min-width:0}.tir-lookup-result-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){.tir-lookup-control{width:100%;flex-basis:100%}.tir-lookup-form button{width:100%}.tir-lookup-result-grid{grid-template-columns:1fr}}

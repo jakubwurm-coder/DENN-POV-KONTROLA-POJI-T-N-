@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261001manual1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261001navonly1">
 </head>
 <body>
   <div class="app-shell">
@@ -447,7 +447,7 @@
           </div>
         </section>
 
-        <section id="dataSection" class="data-section">
+        <section id="dataSection" class="data-section" hidden>
           <div class="data-toolbar">
             <div class="view-switch" aria-label="Zobrazení vozidel"><button type="button" data-filter="ATTENTION" aria-pressed="true">K řešení <span id="attentionCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
             <div class="data-tools">

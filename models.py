@@ -15,6 +15,8 @@ class TirVehicle:
     poznamky: str = ""
     znacka: str = ""
     model: str = ""
+    kupujici_ico: str = ""
+    kupujici_nazev: str = ""
 
 
 @dataclass

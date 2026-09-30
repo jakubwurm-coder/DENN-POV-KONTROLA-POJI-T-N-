@@ -76,6 +76,8 @@ def _display_status(result) -> str:
         return "NEPŘÍTOMNÉ, ALE POJIŠTĚNO"
     if status == "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ":
         return "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNO"
+    if status == "PRODANÉ, ALE POJIŠTĚNÉ":
+        return "POJIŠTĚNO NAVÍC"
     if status == "OK":
         return "POJIŠTĚNÍ V POŘÁDKU"
     return status
@@ -131,7 +133,7 @@ def _summary(results, active_count: int) -> dict[str, int]:
         "absent_insured": counts.get("NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", 0),
         "absent_uninsured": counts.get("NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ", 0),
         "deposit": deposit,
-        "sold_uniqa": counts.get("PRODANÉ, ALE V UNIQA", 0),
+        "sold_uniqa": counts.get("PRODANÉ, ALE POJIŠTĚNÉ", 0),
         "extra_uniqa": counts.get("NAVÍC V UNIQA", 0),
         "spz_mismatch": counts.get("SPZ NESOUHLASÍ", 0),
         "unverified": counts.get("NELZE OVĚŘIT", 0),
@@ -165,7 +167,7 @@ def _snapshot() -> dict[str, Any]:
 
         visible_statuses = {
             "CHYBÍ V UNIQA",
-            "PRODANÉ, ALE V UNIQA",
+            "PRODANÉ, ALE POJIŠTĚNÉ",
             "NAVÍC V UNIQA",
             "NEPOJIŠTĚNO, ALE DEPOZIT",
             "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
@@ -222,10 +224,26 @@ def _run_check_worker() -> None:
             vehicle for vehicle in eligible_vehicles if not _is_deposit_vehicle(vehicle)
         ]
 
+        sold_vehicles = [
+            vehicle
+            for vehicle in vehicles
+            if bool(getattr(vehicle, "datum_prodeje", ""))
+        ]
+
+        # Do běžného aktivního počtu prodaná vozidla nepatří, ale musí projít
+        # porovnáním s pojišťovnami. Jen tak odhalíme pojištění vedené navíc.
+        compare_vehicles_input = control_vehicles + [
+            vehicle for vehicle in sold_vehicles
+            if vehicle not in control_vehicles and not _is_deposit_vehicle(vehicle)
+        ]
+
         ignored_vehicles = [
             vehicle
             for vehicle in vehicles
-            if not _requires_pov_check(vehicle) or _is_deposit_vehicle(vehicle)
+            if (
+                (not _requires_pov_check(vehicle) and vehicle not in sold_vehicles)
+                or _is_deposit_vehicle(vehicle)
+            )
         ]
 
         ignored_vins = {
@@ -289,7 +307,7 @@ def _run_check_worker() -> None:
         ]
 
         results = compare_vehicles(
-            tir=control_vehicles,
+            tir=compare_vehicles_input,
             uniqa=uniqa_for_compare,
             uniqa_available=uniqa.available,
             uniqa_error=uniqa.error,
@@ -302,7 +320,7 @@ def _run_check_worker() -> None:
 
         vehicle_by_oid = {
             vehicle.oid: vehicle
-            for vehicle in [*control_vehicles, *deposit_vehicles]
+            for vehicle in [*compare_vehicles_input, *deposit_vehicles]
         }
         for result in results:
             source_vehicle = vehicle_by_oid.get(getattr(result, "oid", None))

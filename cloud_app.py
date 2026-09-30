@@ -1074,6 +1074,33 @@ def api_result_meta():
         "message": "Status a poznámka byly trvale uloženy a jsou sdílené mezi počítači.",
     })
 
+@app.post("/api/vehicle-lookup")
+def api_vehicle_lookup():
+    payload = request.get_json(silent=True) or {}
+    query = re.sub(r"\s+", "", str(payload.get("query") or "")).upper()
+    if not query:
+        return jsonify({"ok": False, "message": "Zadejte VIN nebo SPZ."}), 400
+    is_vin = bool(re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", query))
+    if not is_vin and not re.fullmatch(r"[A-Z0-9]{4,10}", query):
+        return jsonify({"ok": False, "message": "Zadejte platný VIN nebo SPZ."}), 400
+    command_id = uuid.uuid4().hex
+    with _lock:
+        data = _load_state()
+        if isinstance(data.get("_command"), dict):
+            return jsonify({"ok": False, "message": "Agent právě zpracovává jiný požadavek. Zkuste to za chvíli."}), 409
+        data["_vehicle_lookup"] = {"id": command_id, "query": query, "status": "pending", "found": False, "vehicle": None, "error": ""}
+        data["_command"] = {"id": command_id, "action": "lookup_vehicle", "query": query, "query_type": "vin" if is_vin else "spz", "requested_at": _now()}
+        _save_state(data)
+    deadline = time.monotonic() + 35
+    while time.monotonic() < deadline:
+        time.sleep(1)
+        with _lock:
+            lookup = (_load_state().get("_vehicle_lookup") or {})
+        if str(lookup.get("id") or "") == command_id and lookup.get("status") in {"done", "error"}:
+            return jsonify({"ok": lookup.get("status") == "done", **lookup})
+    return jsonify({"ok": False, "status": "pending", "message": "Vyhledávání pokračuje. Zkuste Hledat znovu za několik sekund."}), 202
+
+
 @app.post("/api/run")
 def api_run():
     with _lock:

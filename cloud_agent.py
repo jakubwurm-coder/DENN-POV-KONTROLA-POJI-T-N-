@@ -244,15 +244,19 @@ def get_command() -> dict[str, Any] | None:
 
 def lookup_vehicle(command: dict[str, Any]) -> None:
     command_id = str(command.get("id") or "").strip()
-    vin = str(command.get("vin") or "").strip().upper()
-    payload: dict[str, Any] = {"id": command_id, "vin": vin, "found": False, "vehicle": None, "error": ""}
+    query = str(command.get("query") or command.get("vin") or "").replace(" ", "").strip().upper()
+    query_type = str(command.get("query_type") or ("vin" if len(query) == 17 else "spz")).lower()
+    payload: dict[str, Any] = {"id": command_id, "query": query, "found": False, "vehicle": None, "error": ""}
     try:
-        if not command_id or len(vin) != 17:
-            raise ValueError("Neplatný VIN požadavku.")
+        if not command_id or not query:
+            raise ValueError("Neplatný požadavek na vyhledání.")
         local_app = _load_local_app()
         config = local_app.load_config()
         vehicles, _ = local_app.load_tirbazar_vehicles(config)
-        vehicle = next((item for item in vehicles if str(getattr(item, "vin", "") or "").strip().upper() == vin), None)
+        if query_type == "vin":
+            vehicle = next((item for item in vehicles if str(getattr(item, "vin", "") or "").replace(" ", "").strip().upper() == query), None)
+        else:
+            vehicle = next((item for item in vehicles if str(getattr(item, "spz", "") or "").replace(" ", "").strip().upper() == query), None)
         if vehicle is not None:
             payload["found"] = True
             payload["vehicle"] = {

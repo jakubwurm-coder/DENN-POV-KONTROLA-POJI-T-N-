@@ -3076,3 +3076,89 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
 .tir-lookup-result-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}.tir-lookup-result-head>div>strong{display:block;margin-top:3px;color:#153650;font-size:16px}
 .tir-lookup-result-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tir-lookup-result-grid>div{padding:10px 11px;border:1px solid #e0e9ef;border-radius:9px;background:#fafcfd}.tir-lookup-result-grid span{display:block;color:#7c91a3;font-size:8px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.tir-lookup-result-grid strong{display:block;margin-top:3px;color:#213f57;font-size:11px;overflow-wrap:anywhere}
 @media(max-width:800px){.tir-lookup-form{flex-wrap:wrap}.tir-lookup-copy{width:100%}.tir-lookup-control{min-width:0}.tir-lookup-result-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){.tir-lookup-control{width:100%;flex-basis:100%}.tir-lookup-form button{width:100%}.tir-lookup-result-grid{grid-template-columns:1fr}}
+
+
+/* 2026-10-01 · compact secondary overview — visually aligned with main dashboard */
+#breakdownSection .section-heading{
+  margin-bottom:14px;
+}
+#breakdownSection .section-heading h2{
+  font-size:21px;
+  line-height:1.2;
+}
+#breakdownSection .section-heading p{
+  margin-top:4px!important;
+  font-size:11px!important;
+  color:#7890a6!important;
+}
+#breakdownSection .overview-group{
+  margin-top:12px;
+  padding:12px;
+  border-radius:12px;
+  box-shadow:0 2px 10px rgba(22,50,77,.025);
+}
+#breakdownSection .overview-group-head{
+  margin-bottom:9px;
+  gap:12px;
+}
+#breakdownSection .overview-group-kicker{
+  margin-bottom:4px;
+  font-size:8px;
+  letter-spacing:.14em;
+}
+#breakdownSection .overview-group-head h3{
+  font-size:14px;
+  line-height:1.2;
+}
+#breakdownSection .overview-group-badge{
+  padding:5px 9px;
+  font-size:8px;
+}
+#breakdownSection .metric-grid-group{
+  gap:8px;
+}
+#breakdownSection .metric-card{
+  min-height:82px;
+  padding:11px 13px;
+  border-radius:10px;
+  box-shadow:none;
+}
+#breakdownSection .metric-card:hover{
+  transform:none;
+  box-shadow:0 5px 14px rgba(29,72,107,.07);
+}
+#breakdownSection .metric-label{
+  gap:6px;
+  font-size:9px;
+}
+#breakdownSection .metric-card strong{
+  margin-top:5px;
+  font-size:23px;
+  line-height:1;
+}
+#breakdownSection .metric-card small{
+  display:block;
+  margin-top:5px;
+  font-size:8px;
+  line-height:1.35;
+}
+#breakdownSection .overview-group-attention{
+  border-color:#f0d4da;
+  background:#fff;
+}
+#breakdownSection .overview-group-ok{
+  border-color:#d1eadf;
+  background:#fff;
+}
+#breakdownSection .overview-group-attention .metric-card{
+  border-color:#f0d9de;
+  background:#fffafb;
+}
+#breakdownSection .overview-group-ok .metric-card{
+  border-color:#d4ebdf;
+  background:#fbfefc;
+}
+@media(max-width:680px){
+  #breakdownSection .overview-group{padding:10px}
+  #breakdownSection .metric-card{min-height:76px}
+}

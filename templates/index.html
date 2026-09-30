@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261001sidebar1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261001manual1">
 </head>
 <body>
   <div class="app-shell">
@@ -138,93 +138,152 @@
 
         </section>
 
-        <section id="howItWorksSection" class="how-it-works-section" aria-labelledby="howItWorksTitle" hidden>
+        <section id="howItWorksSection" class="how-it-works-section manual-section" aria-labelledby="howItWorksTitle" hidden>
           <div class="how-head">
             <div>
-              <span class="section-kicker">Jak systém pracuje</span>
-              <h2 id="howItWorksTitle">Jak kontrola pojištění funguje</h2>
-              <p>Systém nejdříve určí, která vozidla podle interní evidence mají být pojištěná, a teprve potom jejich stav porovná s evidencí pojištění.</p>
+              <span class="section-kicker">MANUÁL SYSTÉMU</span>
+              <h2 id="howItWorksTitle">Jak DENNÍ POV funguje</h2>
+              <p>DENNÍ POV porovnává interní evidenci vozidel s aktivním pojištěním. Neřeší pouze to, zda pojištění existuje, ale hlavně zda skutečný stav pojištění odpovídá tomu, co má podle TIRBazar u konkrétního vozidla platit.</p>
             </div>
             <div class="how-principle">
               <span>HLAVNÍ IDENTIFIKÁTOR</span>
               <strong>VIN</strong>
-              <small>SPZ slouží jako doplňkový údaj.</small>
+              <small>SPZ je doplňkový identifikátor.</small>
+            </div>
+          </div>
+
+          <div class="manual-summary">
+            <div class="manual-summary-main">
+              <strong>Základní princip</strong>
+              <p><b>TIRBazar</b> určí, zda má být vozidlo pojištěné. <b>UNIQA a Allianz</b> ověří, zda pojištěné skutečně je. DENNÍ POV obě informace porovná a upozorní na rozdíl mezi očekávaným a skutečným stavem.</p>
+            </div>
+            <div class="manual-flow-inline" aria-label="Zjednodušený průběh kontroly">
+              <span>TIRBazar</span><i>→</i><span>UNIQA</span><i>→</i><span>Allianz</span><i>→</i><span>Depozit</span><i>→</i><span>Výsledek</span>
             </div>
           </div>
 
           <div class="how-flow" aria-label="Postup kontroly">
             <article class="how-step">
               <span class="how-step-number">1</span>
-              <div><small>INTERNÍ EVIDENCE</small><strong>TIRBazar SQL</strong><p>Načtou se vozidla, VIN, SPZ, stav, výkup, prodej, země původu a interní poznámka.</p></div>
+              <div><small>INTERNÍ EVIDENCE</small><strong>TIRBazar SQL</strong><p>Načtou se všechna nesmazaná vozidla a jejich VIN, SPZ, stav, výkup, prodej, země původu, poznámka, značka a model.</p></div>
             </article>
             <article class="how-step">
               <span class="how-step-number">2</span>
-              <div><small>FILTRACE</small><strong>Která vozidla kontrolovat</strong><p>Podle stavu vozidla se určí, zda má být pojištěné, nepojištěné, nebo se do kontroly vůbec nezařadí.</p></div>
+              <div><small>VÝBĚR VOZIDEL</small><strong>Určení očekávaného stavu</strong><p>Podle stavu vozidla systém určí, zda má být pojištěné, nepojištěné, nebo se do standardní POV kontroly nezařadí.</p></div>
             </article>
             <article class="how-step">
               <span class="how-step-number">3</span>
-              <div><small>OVĚŘENÍ POJIŠTĚNÍ</small><strong>UNIQA → Allianz</strong><p>Nejdříve se hledá aktivní pojištění podle VIN v UNIQA, poté v Allianz podle VIN a případně SPZ.</p></div>
+              <div><small>OVĚŘENÍ POJIŠTĚNÍ</small><strong>UNIQA → Allianz</strong><p>Nejdříve se hledá aktivní pojištění v UNIQA podle VIN. Pokud není nalezeno, pokračuje se do Allianz podle VIN a případně SPZ.</p></div>
             </article>
             <article class="how-step">
               <span class="how-step-number">4</span>
-              <div><small>VÝSLEDEK</small><strong>Automatické vyhodnocení</strong><p>Systém rozliší správný stav, chybějící pojištění, pojištění navíc, depozit, nesoulad SPZ nebo nemožnost ověření.</p></div>
+              <div><small>VYHODNOCENÍ</small><strong>Automatický výsledek</strong><p>Systém rozliší správný stav, chybějící nebo nadbytečné pojištění, depozit, nesoulad SPZ a technicky neověřitelný stav.</p></div>
             </article>
           </div>
 
           <div class="how-source-grid">
             <article class="how-source-card">
               <div class="how-source-icon">SQL</div>
-              <div><small>ZDROJ VOZIDEL</small><strong>TIRBazar</strong><p>Interní databáze Vans Centre. Je výchozím zdrojem pro určení, které vozidlo má být v daném okamžiku pojištěné.</p></div>
+              <div><small>ZDROJ VOZIDEL</small><strong>TIRBazar</strong><p>Hlavní interní zdroj. Určuje, jaký stav pojištění má mít konkrétní vozidlo.</p></div>
             </article>
             <article class="how-source-card">
               <div class="how-source-icon">U</div>
-              <div><small>PRVNÍ KONTROLA</small><strong>UNIQA · Denní POV</strong><p>Načítá se seznam aktivních pojistek. Porovnání probíhá primárně podle VIN; chybějící VIN se ověřují ještě samostatným vyhledáním.</p></div>
+              <div><small>PRVNÍ KONTROLA</small><strong>UNIQA · Denní POV</strong><p>Seznam aktivních pojistek. Porovnání probíhá primárně podle VIN a kontroluje se také případný rozdíl SPZ.</p></div>
             </article>
             <article class="how-source-card">
               <div class="how-source-icon">A</div>
-              <div><small>DRUHÁ KONTROLA</small><strong>Allianz</strong><p>Flotilový přehled pojištění. Vozidlo se hledá nejdříve podle VIN a následně podle SPZ, pokud je v přehledu vedeno pouze registrační značkou.</p></div>
+              <div><small>DRUHÁ KONTROLA</small><strong>Allianz</strong><p>Pokud vozidlo není v UNIQA, hledá se v Allianz nejdříve podle VIN a následně případně podle SPZ.</p></div>
             </article>
           </div>
 
-          <div class="how-details-grid">
+          <div class="manual-accordion">
             <details class="how-details" open>
-              <summary>
-                <span><small>PRAVIDLA VÝBĚRU</small><strong>Která vozidla vstupují do kontroly</strong></span>
-                <span class="how-details-plus">+</span>
-              </summary>
+              <summary><span><small>1 · FILTRACE VOZIDEL</small><strong>Která vozidla vstupují do kontroly</strong></span><span class="how-details-plus">+</span></summary>
               <div class="how-details-body">
-                <div class="logic-row"><strong>Vykoupené</strong><span>Kontroluje se vždy. Očekávaný stav: <b>pojištěno</b>.</span></div>
+                <div class="logic-row"><strong>Vykoupené</strong><span>Kontroluje se vždy. Očekávaný stav je <b>POJIŠTĚNO</b>.</span></div>
                 <div class="logic-row"><strong>Rezervované</strong><span>Kontroluje se pouze tehdy, pokud má evidovaný výkup.</span></div>
                 <div class="logic-row"><strong>V komisi</strong><span>Kontroluje se až po evidovaném vykoupení z komise.</span></div>
-                <div class="logic-row"><strong>Nepřítomné</strong><span>Pokud má evidovaný výkup, zůstává v kontrole, ale očekávaný stav je <b>nepojištěno</b>.</span></div>
-                <div class="logic-row"><strong>Depozit</strong><span>Pokud poznámka obsahuje „DEPOZIT“, vozidlo je výjimkou z běžné POV kontroly a zobrazí se jako <b>Depozit – vozidlo nepojištěno</b>.</span></div>
-                <div class="logic-row"><strong>Vyřazené stavy</strong><span>Prodané, Vrácené z komise, Pronajaté, Volné, Parkované, Parkování ukončeno a další nesplňující podmínky se běžně nekontrolují.</span></div>
-                <div class="logic-row"><strong>Bez VIN</strong><span>Bez VIN nelze spolehlivě provést hlavní porovnání, proto takové vozidlo do standardní kontroly nevstupuje.</span></div>
-                <div class="logic-row"><strong>Země a SPZ</strong><span>České vozidlo se kontroluje i bez SPZ. Při chybějící zemi může český formát SPZ rozhodnout o zařazení vozidla do kontroly.</span></div>
+                <div class="logic-row"><strong>Nepřítomné</strong><span>Pokud má evidovaný výkup, zůstává v kontrole, ale správný očekávaný stav je <b>NEPOJIŠTĚNO</b>.</span></div>
+                <div class="logic-row"><strong>Prodané</strong><span>Standardně už pojištěné být nemá. Systém ale ověří, zda pojistka po prodeji nezůstala aktivní.</span></div>
+                <div class="logic-row"><strong>Prodej na Vans Renting</strong><span>Pokud je kupujícím Vans Renting s.r.o., IČO 02772833, vozidlo zůstává v běžné POV kontrole a má být pojištěné.</span></div>
+                <div class="logic-row"><strong>Bez VIN</strong><span>Bez VIN se vozidlo do standardní kontroly nezařadí, protože VIN je hlavní identifikátor.</span></div>
               </div>
             </details>
 
-            <details class="how-details" open>
-              <summary>
-                <span><small>VÝZNAM VÝSLEDKŮ</small><strong>Jak číst jednotlivé stavy</strong></span>
-                <span class="how-details-plus">+</span>
-              </summary>
+            <details class="how-details">
+              <summary><span><small>2 · ZEMĚ A SPZ</small><strong>Jak se rozhoduje o zařazení vozidla</strong></span><span class="how-details-plus">+</span></summary>
+              <div class="how-details-body">
+                <div class="logic-row"><strong>Česká země původu</strong><span>Vozidlo se kontroluje i bez SPZ, pokud má použitelné VIN.</span></div>
+                <div class="logic-row"><strong>Prázdná země původu</strong><span>Pokud SPZ odpovídá běžnému českému formátu, může vozidlo do kontroly vstoupit.</span></div>
+                <div class="logic-row"><strong>Jiná země původu</strong><span>Pokud má vozidlo evidovanou SPZ, aktuální logika ho může do kontroly zahrnout.</span></div>
+                <div class="logic-row"><strong>VIN vs. SPZ</strong><span>VIN má vždy přednost. SPZ může být změněna, proto slouží pouze jako doplňkový identifikátor.</span></div>
+              </div>
+            </details>
+
+            <details class="how-details">
+              <summary><span><small>3 · POŘADÍ KONTROLY</small><strong>Jak systém hledá aktivní pojištění</strong></span><span class="how-details-plus">+</span></summary>
+              <div class="how-details-body">
+                <div class="logic-row"><strong>1. TIRBazar</strong><span>Určí očekávaný stav vozidla a zda má být vůbec kontrolováno.</span></div>
+                <div class="logic-row"><strong>2. UNIQA</strong><span>Hledá se aktivní pojištění podle VIN. Při shodě VIN se kontroluje také SPZ.</span></div>
+                <div class="logic-row"><strong>3. Allianz</strong><span>Pokud vozidlo není v UNIQA, hledá se podle VIN a případně podle SPZ.</span></div>
+                <div class="logic-row"><strong>4. Depozit</strong><span>Pokud pojištění není nalezeno ani v UNIQA, ani Allianz, kontroluje se poznámka TIRBazar na text <b>DEPOZIT</b>.</span></div>
+                <div class="logic-row"><strong>5. Chybí pojištění</strong><span>Pokud má být vozidlo pojištěné, není v žádné pojišťovně a není v depozitu, zobrazí se jako chybějící pojištění.</span></div>
+              </div>
+            </details>
+
+            <details class="how-details">
+              <summary><span><small>4 · VÝZNAM VÝSLEDKŮ</small><strong>Jak číst jednotlivé stavy</strong></span><span class="how-details-plus">+</span></summary>
               <div class="how-details-body status-legend">
-                <div class="logic-row"><strong><i class="logic-dot ok"></i>Pojištění v pořádku</strong><span>Vozidlo má být pojištěné a aktivní pojištění bylo nalezeno.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot bad"></i>Chybí pojištění</strong><span>Vozidlo má být pojištěné, ale není nalezeno ani v UNIQA, ani v Allianz.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot ok"></i>Pojištění v pořádku</strong><span>Vozidlo má být pojištěné a aktivní pojištění bylo nalezeno v UNIQA nebo Allianz.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot bad"></i>Chybí pojištění</strong><span>Vozidlo má být pojištěné, ale nebylo nalezeno ani v UNIQA, ani Allianz a nemá depozit.</span></div>
                 <div class="logic-row"><strong><i class="logic-dot bad"></i>Nepřítomné, ale pojištěno</strong><span>Vozidlo má být nepojištěné, přesto bylo nalezeno aktivní pojištění.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot ok"></i>Nepřítomné, ale nepojištěno</strong><span>Správný stav pro nepřítomné vozidlo s evidovaným výkupem.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot deposit"></i>Depozit</strong><span>Vozidlo je evidované jako depozit a není považováno za chybějící POV.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot warn"></i>SPZ nesouhlasí</strong><span>Pojištění bylo nalezeno podle VIN, ale SPZ v obou evidencích se liší. VIN má přednost.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot warn"></i>Nelze ověřit</strong><span>Některý zdroj nebyl dostupný. Systém proto nevytvoří falešné hlášení o chybějícím pojištění.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot bad"></i>Pojištění navíc</strong><span>Aktivní pojištění bylo nalezeno u vozidla, které podle interní evidence nemá být v aktuální pojištěné skupině.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot ok"></i>Nepřítomné, ale nepojištěno</strong><span>Správný stav pro nepřítomné vykoupené vozidlo.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot bad"></i>Prodané, ale pojištěno</strong><span>V TIRBazar je evidovaný prodej, ale pojištění zůstalo aktivní.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot deposit"></i>Depozit</strong><span>Vozidlo není pojištěné a poznámka v TIRBazar obsahuje DEPOZIT. Nejde o chybu.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot warn"></i>SPZ nesouhlasí</strong><span>Pojištění bylo nalezeno podle VIN, ale SPZ v evidencích se liší. VIN má přednost.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot warn"></i>Nelze ověřit</strong><span>Některý zdroj nebyl dostupný. Systém proto vozidlo automaticky neoznačí jako nepojištěné.</span></div>
+                <div class="logic-row"><strong><i class="logic-dot bad"></i>Pojištění navíc</strong><span>Aktivní pojistka existuje u vozidla, které podle interní evidence nemá být v aktuální pojištěné skupině.</span></div>
+              </div>
+            </details>
+
+            <details class="how-details">
+              <summary><span><small>5 · POJIŠTĚNÍ NAVÍC</small><strong>Jak systém hledá nadbytečné pojistky</strong></span><span class="how-details-plus">+</span></summary>
+              <div class="how-details-body">
+                <div class="logic-row"><strong>Prodané vozidlo</strong><span>Pokud je po prodeji stále v UNIQA nebo Allianz, jde o případ k řešení.</span></div>
+                <div class="logic-row"><strong>Nepřítomné vozidlo</strong><span>Pokud má být nepojištěné, ale pojištění zůstalo aktivní, zobrazí se jako problém.</span></div>
+                <div class="logic-row"><strong>VIN navíc v UNIQA</strong><span>Pokud je VIN mezi aktivními pojistkami UNIQA, ale systém k němu nenajde odpovídající vozidlo v interní evidenci pro POV kontrolu, zobrazí ho jako pojištění navíc.</span></div>
+              </div>
+            </details>
+
+            <details class="how-details">
+              <summary><span><small>6 · PROČ SE NAČÍTAJÍ I OSTATNÍ VOZIDLA</small><strong>Ochrana proti falešnému „pojištění navíc“</strong></span><span class="how-details-plus">+</span></summary>
+              <div class="how-details-body">
+                <p>TIRBazar se nenačítá jen jako seznam vozidel, která mají být právě pojištěná. Systém potřebuje znát i vozidla prodaná, nepřítomná, pronajatá nebo jinak vyřazená, aby aktivní pojistku správně přiřadil ke skutečnému vozidlu a nevytvořil falešný problém.</p>
+              </div>
+            </details>
+
+            <details class="how-details">
+              <summary><span><small>7 · RUČNÍ STAV ŘEŠENÍ</small><strong>Automatický výsledek a práce uživatele</strong></span><span class="how-details-plus">+</span></summary>
+              <div class="how-details-body">
+                <div class="logic-row"><strong>Automatický výsledek</strong><span>Například „Chybí pojištění“ nebo „Nepřítomné, ale pojištěno“ zůstává zachován jako původní výsledek kontroly.</span></div>
+                <div class="logic-row"><strong>Stav řešení</strong><span>Uživatel může případ označit jako Kontrola, Řeší se nebo Vyřešeno.</span></div>
+                <div class="logic-row"><strong>Interní poznámka</strong><span>K vozidlu lze uložit poznámku, například že bylo zadáno ukončení pojistky a čeká se na potvrzení.</span></div>
+              </div>
+            </details>
+
+            <details class="how-details">
+              <summary><span><small>8 · HISTORIE A TECHNICKÉ ÚDAJE</small><strong>Co systém uchovává a zobrazuje navíc</strong></span><span class="how-details-plus">+</span></summary>
+              <div class="how-details-body">
+                <div class="logic-row"><strong>Denní změny</strong><span>Systém zaznamenává nové vozidlo, zmizení vozidla, změnu výsledku a změnu SPZ.</span></div>
+                <div class="logic-row"><strong>Ruční historie</strong><span>Uchovávají se změny statusů a interních poznámek.</span></div>
+                <div class="logic-row"><strong>Technické údaje</strong><span>V detailu vozidla lze zobrazit stav v registru, tovární značku, obchodní označení a datum technické prohlídky z Datové kostky.</span></div>
               </div>
             </details>
           </div>
 
           <div class="how-safety-note">
             <span class="how-safety-icon">✓</span>
-            <div><strong>Technická chyba se nepovažuje za chybějící pojištění.</strong><p>Pokud se některý zdroj nepodaří načíst, výsledek je „Nelze ověřit“. Vozidlo se neoznačí jako nepojištěné pouze proto, že některý systém právě neodpověděl.</p></div>
+            <div><strong>Technická chyba se nikdy automaticky nepovažuje za chybějící pojištění.</strong><p>Pokud se některý potřebný zdroj nepodaří načíst, výsledek je „Nelze ověřit“. Systém tím omezuje falešná upozornění způsobená výpadkem UNIQA, Allianz nebo připojení.</p></div>
           </div>
         </section>
 

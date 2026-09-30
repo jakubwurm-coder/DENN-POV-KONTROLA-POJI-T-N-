@@ -557,3 +557,23 @@ async function enablePush(){
 $('runBtn').addEventListener('click',run);$('pushBtn').addEventListener('click',enablePush);refreshPushButton();$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 $('csvBtn').addEventListener('click',event=>{if($('csvBtn').getAttribute('aria-disabled')==='true')event.preventDefault();});
 setInterval(refresh,2000);refresh();
+
+async function runTirLookup(event){
+  event.preventDefault();
+  const input=$('tirLookupInput'),button=$('tirLookupBtn'),box=$('tirLookupResult');
+  const query=String(input?.value||'').trim().toUpperCase();
+  if(!query){box.hidden=false;box.textContent='Zadejte VIN nebo SPZ.';return;}
+  button.disabled=true;button.textContent='Hledám…';box.hidden=false;box.textContent='Dotazuji TIRBazar SQL…';
+  try{
+    const response=await fetch('/api/vehicle-lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query})});
+    const data=await response.json();
+    if(data.status==='pending'){box.textContent=data.message||'Vyhledávání pokračuje…';return;}
+    if(data.error){box.innerHTML='<span class="tir-lookup-message error">'+esc(data.error)+'</span>';return;}
+    if(!data.found||!data.vehicle){box.innerHTML='<span class="tir-lookup-message">V TIRBazar nebylo nalezeno vozidlo pro <strong>'+esc(query)+'</strong>.</span>';return;}
+    const v=data.vehicle||{};
+    const item=(label,value)=>'<div><span>'+esc(label)+'</span><strong>'+esc(value||'—')+'</strong></div>';
+    box.innerHTML='<div class="tir-lookup-result-head"><div><span class="section-kicker">NALEZENO V TIRBAZAR</span><strong>'+esc([v.znacka,v.model].filter(Boolean).join(' ')||v.spz||v.vin||'Vozidlo')+'</strong></div><span class="status-badge badge-ok">SQL</span></div><div class="tir-lookup-result-grid">'+item('VIN',v.vin)+item('SPZ',v.spz)+item('OID',v.oid)+item('Stav',v.stav)+item('Datum výkupu',v.datum_vykupu)+item('Datum prodeje',v.datum_prodeje)+item('Země původu',v.zeme_puvodu)+item('Poznámka',v.poznamky)+'</div>';
+  }catch(e){box.innerHTML='<span class="tir-lookup-message error">Vyhledání se nepodařilo. Zkuste to znovu.</span>';}
+  finally{button.disabled=false;button.textContent='Hledat';}
+}
+if($('tirLookupForm'))$('tirLookupForm').addEventListener('submit',runTirLookup);

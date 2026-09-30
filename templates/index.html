@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260930lookup1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261001sidebar1">
 </head>
 <body>
   <div class="app-shell">
@@ -22,18 +22,26 @@
 
       <nav class="nav" aria-label="Filtry vozidel">
         <button class="nav-item active" type="button" data-filter="ATTENTION"><span class="nav-icon">!</span><span>K řešení</span></button>
-        <button id="navAllVehicles" class="nav-item" type="button">
-          <span class="nav-icon">▦</span><span>Všechna vozidla</span>
+
+        <button id="navResultsToggle" class="nav-item nav-toggle" type="button" aria-expanded="false">
+          <span class="nav-icon">▦</span><span>Výsledky kontroly</span><span class="nav-chevron">›</span>
         </button>
-        <button class="nav-item" type="button" data-filter="MISSING">
-          <span class="nav-icon">!</span><span>Chybí pojištění</span>
-        </button>
-        <button class="nav-item" type="button" data-filter="UNWANTED_INSURANCE">
-          <span class="nav-icon">+</span><span>Pojištění navíc</span><strong id="navExtraCount" class="nav-count">0</strong>
-        </button>
-        <button id="navOthers" class="nav-item" type="button">
-          <span class="nav-icon">▤</span><span>Ostatní přehledy</span>
-        </button>
+        <div id="navResultsMenu" class="nav-submenu" hidden>
+          <button id="navAllVehicles" class="nav-subitem" type="button"><span>Všechna vozidla</span></button>
+          <button class="nav-subitem" type="button" data-filter="MISSING"><span>Chybí pojištění</span></button>
+          <button class="nav-subitem" type="button" data-filter="UNWANTED_INSURANCE"><span>Pojištění navíc</span><strong id="navExtraCount" class="nav-count">0</strong></button>
+          <button id="navOthers" class="nav-subitem" type="button"><span>Ostatní stavy</span></button>
+        </div>
+
+        <div class="sidebar-lookup">
+          <span class="sidebar-lookup-label">TIRBAZAR SQL</span>
+          <form id="tirLookupForm" class="sidebar-lookup-form">
+            <input id="tirLookupInput" autocomplete="off" spellcheck="false" maxlength="20" placeholder="VIN nebo SPZ…" aria-label="VIN nebo SPZ">
+            <button id="tirLookupBtn" type="submit" aria-label="Hledat">⌕</button>
+          </form>
+          <div id="tirLookupResult" class="tir-lookup-result sidebar-lookup-result" hidden></div>
+        </div>
+
         <button id="navHowItWorks" class="nav-item" type="button">
           <span class="nav-icon">?</span><span>Jak kontrola funguje</span>
         </button>
@@ -66,7 +74,6 @@
         </div>
 
         <div class="top-actions top-actions-meta">
-          <button id="pushBtn" class="push-btn" type="button">Zapnout notifikace</button>
           <div class="header-last-check">
             <span>POSLEDNÍ KONTROLA</span>
             <strong id="lastCheck">Načítám…</strong>
@@ -381,15 +388,6 @@
           </div>
         </section>
 
-        <section id="tirLookupSection" class="tir-lookup-section" aria-label="Vyhledání vozidla v TIRBazar">
-          <form id="tirLookupForm" class="tir-lookup-form">
-            <div class="tir-lookup-copy"><span class="section-kicker">TIRBAZAR SQL</span><strong>Vyhledat vozidlo</strong></div>
-            <div class="tir-lookup-control"><span class="search-icon">⌕</span><input id="tirLookupInput" autocomplete="off" spellcheck="false" maxlength="20" placeholder="VIN nebo SPZ…" aria-label="VIN nebo SPZ"></div>
-            <button id="tirLookupBtn" class="btn btn-secondary btn-small" type="submit">Hledat</button>
-          </form>
-          <div id="tirLookupResult" class="tir-lookup-result" hidden></div>
-        </section>
-
         <section id="dataSection" class="data-section">
           <div class="data-toolbar">
             <div class="view-switch" aria-label="Zobrazení vozidel"><button type="button" data-filter="ATTENTION" aria-pressed="true">K řešení <span id="attentionCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
@@ -423,6 +421,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260930lookup1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261001sidebar1"></script>
 </body>
 </html>

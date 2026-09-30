@@ -3238,3 +3238,26 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
 .sidebar-lookup-result{margin-top:9px;padding:9px!important;border-radius:8px!important;font-size:11px!important;max-height:280px;overflow:auto}
 .sidebar-lookup-result .tir-lookup-result-grid{grid-template-columns:1fr!important}
 .sidebar-lookup-result .tir-lookup-result-head{display:block!important}
+
+
+/* 2026-10-01: hlavní stavová karta není tlačítko */
+.overview-sticky #overallCard,
+.overview-sticky #overallCard:hover,
+.overview-sticky #overallCard:focus,
+.overview-sticky #overallCard:focus-within{
+  transform:none !important;
+  box-shadow:0 3px 14px #16324d08 !important;
+  cursor:default !important;
+}
+.overview-sticky #overallCard:hover{
+  border-color:inherit !important;
+}
+.overview-sticky #overallCard .summary-copy,
+.overview-sticky #overallCard .summary-icon,
+.overview-sticky #overallCard .overall-counts{
+  pointer-events:none;
+}
+.overview-sticky #overallCard .run-check-cta{
+  pointer-events:auto;
+  cursor:pointer;
+}

@@ -3162,3 +3162,58 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
   #breakdownSection .overview-group{padding:10px}
   #breakdownSection .metric-card{min-height:76px}
 }
+
+
+/* 2026-10-01 · secondary overview palette aligned with primary DENNI POV dashboard */
+#breakdownSection .overview-group{
+  background:#fff;
+  border-color:#dbe6ee;
+}
+#breakdownSection .overview-group-attention,
+#breakdownSection .overview-group-ok,
+#breakdownSection .overview-group-info{
+  background:#fff;
+  border-color:#dbe6ee;
+}
+#breakdownSection .overview-group-attention .metric-card,
+#breakdownSection .overview-group-ok .metric-card,
+#breakdownSection .overview-group-info .metric-card{
+  background:#fff;
+  border-color:#dbe6ee;
+}
+#breakdownSection .overview-group-kicker,
+#breakdownSection .overview-group-attention .overview-group-kicker,
+#breakdownSection .overview-group-ok .overview-group-kicker,
+#breakdownSection .overview-group-info .overview-group-kicker{
+  color:#2f8ed1;
+}
+#breakdownSection .overview-group-head h3{
+  color:#16324d;
+}
+#breakdownSection .metric-label{
+  color:#617b93;
+}
+#breakdownSection .metric-card strong{
+  color:#16324d;
+}
+#breakdownSection .metric-card small{
+  color:#8799a9;
+}
+#breakdownSection .overview-group-badge{
+  color:#617b93;
+  background:#f4f8fb;
+  border-color:#dbe6ee;
+}
+#breakdownSection .overview-group-badge.danger{
+  color:#c8173a;
+  background:#fff3f5;
+  border-color:#f0cbd2;
+}
+#breakdownSection .overview-group-badge.success{
+  color:#12865a;
+  background:#f0faf5;
+  border-color:#cce9dc;
+}
+/* Semantická barva jen na čísle / tečce, ne na celé ploše karty. */
+#breakdownSection .metric-card.metric-success strong{color:#12945f}
+#breakdownSection .metric-card.metric-danger strong{color:#d21b3e}

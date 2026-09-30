@@ -416,9 +416,12 @@ ORDER BY v.OID;';
 EXEC sp_executesql @metaSql;
 GO
 
--- Kupující u prodeje: strukturované načtení IČO/názvu přes vazbu dbo.Prodej.
--- Schéma TIRBazar se může mezi verzemi lišit, proto se vazba i sloupce
--- hledají dynamicky v systémovém katalogu a databáze zůstává pouze pro čtení.
+-- Kupující u prodeje: strukturované načtení IČO/názvu.
+-- Podporujeme dvě běžné varianty schématu:
+-- 1) IČO/název je přímo v dbo.Prodej
+-- 2) dbo.Prodej má vazbu na tabulku zákazníka/subjektu.
+DECLARE @directIcoCol SYSNAME = NULL;
+DECLARE @directNameCol SYSNAME = NULL;
 DECLARE @buyerFkCol SYSNAME = NULL;
 DECLARE @buyerTable SYSNAME = NULL;
 DECLARE @buyerRefCol SYSNAME = NULL;
@@ -426,89 +429,132 @@ DECLARE @buyerIcoCol SYSNAME = NULL;
 DECLARE @buyerNameCol SYSNAME = NULL;
 DECLARE @buyerSql NVARCHAR(MAX) = NULL;
 
-SELECT TOP 1
-    @buyerFkCol = pc.name,
-    @buyerTable = rt.name,
-    @buyerRefCol = rc.name
-FROM sys.foreign_key_columns fkc
-JOIN sys.columns pc
-    ON pc.object_id = fkc.parent_object_id
-   AND pc.column_id = fkc.parent_column_id
-JOIN sys.tables rt
-    ON rt.object_id = fkc.referenced_object_id
-JOIN sys.columns rc
-    ON rc.object_id = fkc.referenced_object_id
-   AND rc.column_id = fkc.referenced_column_id
-WHERE fkc.parent_object_id = OBJECT_ID('dbo.Prodej')
+SELECT TOP 1 @directIcoCol = c.name
+FROM sys.columns c
+WHERE c.object_id = OBJECT_ID('dbo.Prodej')
   AND (
-      UPPER(pc.name) LIKE '%KUP%'
-      OR UPPER(pc.name) LIKE '%ODBER%'
-      OR UPPER(pc.name) LIKE '%ZAKAZ%'
-      OR UPPER(pc.name) LIKE '%KLIENT%'
-      OR UPPER(pc.name) LIKE '%PARTNER%'
-      OR UPPER(pc.name) LIKE '%SUBJEKT%'
-      OR UPPER(pc.name) LIKE '%FIRMA%'
+      UPPER(c.name) IN ('ICO','IČO','IC','ICZ','KUPUJICIICO','KUPUJÍCÍIČO','ODBERATELICO')
+      OR UPPER(c.name) LIKE '%KUP%ICO%'
+      OR UPPER(c.name) LIKE '%ODBER%ICO%'
   )
 ORDER BY
-    CASE
-        WHEN UPPER(pc.name) LIKE '%KUP%' THEN 1
-        WHEN UPPER(pc.name) LIKE '%ODBER%' THEN 2
-        WHEN UPPER(pc.name) LIKE '%ZAKAZ%' THEN 3
-        ELSE 9
-    END;
+    CASE WHEN UPPER(c.name) IN ('KUPUJICIICO','KUPUJÍCÍIČO','ODBERATELICO') THEN 1 ELSE 9 END,
+    c.column_id;
 
-IF @buyerTable IS NOT NULL
-BEGIN
-    SELECT TOP 1 @buyerIcoCol = c.name
-    FROM sys.columns c
-    JOIN sys.tables t ON t.object_id = c.object_id
-    WHERE t.name = @buyerTable
-      AND (
-          UPPER(c.name) IN ('ICO','IČO','IC','ICZ')
-          OR UPPER(c.name) LIKE '%ICO%'
-          OR UPPER(c.name) LIKE '%IDENTIFIKACNI%CISLO%'
-      )
-    ORDER BY
-        CASE WHEN UPPER(c.name) IN ('ICO','IČO') THEN 1 ELSE 9 END,
-        c.column_id;
+SELECT TOP 1 @directNameCol = c.name
+FROM sys.columns c
+WHERE c.object_id = OBJECT_ID('dbo.Prodej')
+  AND (
+      UPPER(c.name) IN ('KUPUJICI','KUPUJÍCÍ','ODBERATEL','ODBERATELNAZEV','KUPUJICINAZEV','KUPUJÍCÍNÁZEV')
+      OR UPPER(c.name) LIKE '%KUP%NAZEV%'
+      OR UPPER(c.name) LIKE '%ODBER%NAZEV%'
+  )
+ORDER BY c.column_id;
 
-    SELECT TOP 1 @buyerNameCol = c.name
-    FROM sys.columns c
-    JOIN sys.tables t ON t.object_id = c.object_id
-    WHERE t.name = @buyerTable
-      AND (
-          UPPER(c.name) IN ('NAZEV','NÁZEV','OBCHODNIJMENO','OBCHODNÍJMÉNO','FIRMA','JMENO','JMÉNO')
-          OR UPPER(c.name) LIKE '%NAZEV%'
-          OR UPPER(c.name) LIKE '%OBCHOD%'
-      )
-    ORDER BY
-        CASE
-            WHEN UPPER(c.name) IN ('NAZEV','NÁZEV') THEN 1
-            WHEN UPPER(c.name) LIKE '%OBCHOD%' THEN 2
-            ELSE 9
-        END,
-        c.column_id;
-END;
-
-IF @buyerTable IS NOT NULL AND @buyerIcoCol IS NOT NULL
+IF @directIcoCol IS NOT NULL
 BEGIN
     SET @buyerSql = N'
     SELECT
         ''__SALE_BUYER__|'' + CAST(p.Vozidlo AS VARCHAR(20)) + ''|'' +
-        ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(NVARCHAR(100), b.' + QUOTENAME(@buyerIcoCol) + N'))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
+        ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(NVARCHAR(100), p.' + QUOTENAME(@directIcoCol) + N'))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
         ' + CASE
-            WHEN @buyerNameCol IS NOT NULL THEN
-                N'ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(NVARCHAR(300), b.' + QUOTENAME(@buyerNameCol) + N'))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''')'
+            WHEN @directNameCol IS NOT NULL THEN
+                N'ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(NVARCHAR(300), p.' + QUOTENAME(@directNameCol) + N'))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''')'
             ELSE N'''''' 
           END + N'
     FROM dbo.Prodej p
-    LEFT JOIN dbo.' + QUOTENAME(@buyerTable) + N' b
-      ON p.' + QUOTENAME(@buyerFkCol) + N' = b.' + QUOTENAME(@buyerRefCol) + N'
     WHERE p.GCRecord IS NULL
       AND p.DatumProdeje IS NOT NULL
       AND p.Vozidlo IS NOT NULL;';
 
     EXEC sp_executesql @buyerSql;
+END
+ELSE
+BEGIN
+    SELECT TOP 1
+        @buyerFkCol = pc.name,
+        @buyerTable = rt.name,
+        @buyerRefCol = rc.name
+    FROM sys.foreign_key_columns fkc
+    JOIN sys.columns pc
+        ON pc.object_id = fkc.parent_object_id
+       AND pc.column_id = fkc.parent_column_id
+    JOIN sys.tables rt
+        ON rt.object_id = fkc.referenced_object_id
+    JOIN sys.columns rc
+        ON rc.object_id = fkc.referenced_object_id
+       AND rc.column_id = fkc.referenced_column_id
+    WHERE fkc.parent_object_id = OBJECT_ID('dbo.Prodej')
+      AND (
+          UPPER(pc.name) LIKE '%KUP%'
+          OR UPPER(pc.name) LIKE '%ODBER%'
+          OR UPPER(pc.name) LIKE '%ZAKAZ%'
+          OR UPPER(pc.name) LIKE '%KLIENT%'
+          OR UPPER(pc.name) LIKE '%PARTNER%'
+          OR UPPER(pc.name) LIKE '%SUBJEKT%'
+          OR UPPER(pc.name) LIKE '%FIRMA%'
+      )
+    ORDER BY
+        CASE
+            WHEN UPPER(pc.name) LIKE '%KUP%' THEN 1
+            WHEN UPPER(pc.name) LIKE '%ODBER%' THEN 2
+            WHEN UPPER(pc.name) LIKE '%ZAKAZ%' THEN 3
+            ELSE 9
+        END;
+
+    IF @buyerTable IS NOT NULL
+    BEGIN
+        SELECT TOP 1 @buyerIcoCol = c.name
+        FROM sys.columns c
+        JOIN sys.tables t ON t.object_id = c.object_id
+        WHERE t.name = @buyerTable
+          AND (
+              UPPER(c.name) IN ('ICO','IČO','IC','ICZ')
+              OR UPPER(c.name) LIKE '%ICO%'
+              OR UPPER(c.name) LIKE '%IDENTIFIKACNI%CISLO%'
+          )
+        ORDER BY
+            CASE WHEN UPPER(c.name) IN ('ICO','IČO') THEN 1 ELSE 9 END,
+            c.column_id;
+
+        SELECT TOP 1 @buyerNameCol = c.name
+        FROM sys.columns c
+        JOIN sys.tables t ON t.object_id = c.object_id
+        WHERE t.name = @buyerTable
+          AND (
+              UPPER(c.name) IN ('NAZEV','NÁZEV','OBCHODNIJMENO','OBCHODNÍJMÉNO','FIRMA','JMENO','JMÉNO')
+              OR UPPER(c.name) LIKE '%NAZEV%'
+              OR UPPER(c.name) LIKE '%OBCHOD%'
+          )
+        ORDER BY
+            CASE
+                WHEN UPPER(c.name) IN ('NAZEV','NÁZEV') THEN 1
+                WHEN UPPER(c.name) LIKE '%OBCHOD%' THEN 2
+                ELSE 9
+            END,
+            c.column_id;
+    END;
+
+    IF @buyerTable IS NOT NULL AND @buyerIcoCol IS NOT NULL
+    BEGIN
+        SET @buyerSql = N'
+        SELECT
+            ''__SALE_BUYER__|'' + CAST(p.Vozidlo AS VARCHAR(20)) + ''|'' +
+            ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(NVARCHAR(100), b.' + QUOTENAME(@buyerIcoCol) + N'))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
+            ' + CASE
+                WHEN @buyerNameCol IS NOT NULL THEN
+                    N'ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(NVARCHAR(300), b.' + QUOTENAME(@buyerNameCol) + N'))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''')'
+                ELSE N'''''' 
+              END + N'
+        FROM dbo.Prodej p
+        LEFT JOIN dbo.' + QUOTENAME(@buyerTable) + N' b
+          ON p.' + QUOTENAME(@buyerFkCol) + N' = b.' + QUOTENAME(@buyerRefCol) + N'
+        WHERE p.GCRecord IS NULL
+          AND p.DatumProdeje IS NOT NULL
+          AND p.Vozidlo IS NOT NULL;';
+
+        EXEC sp_executesql @buyerSql;
+    END;
 END;
 GO
 

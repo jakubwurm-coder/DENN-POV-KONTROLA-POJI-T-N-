@@ -4,6 +4,7 @@ from typing import Any
 
 from models import ComparisonResult, TirVehicle, UniqaVehicle
 from normalize import normalize_spz, normalize_vin
+from tirbazar import _is_sold_to_vans_renting
 
 
 def _build_allianz_indexes(
@@ -206,7 +207,7 @@ def compare_vehicles(
         # PRODANÉ
         # ====================================================
 
-        if vehicle.datum_prodeje:
+        if vehicle.datum_prodeje and not _is_sold_to_vans_renting(vehicle):
 
             # Prodané vozidlo už nemá být pojištěné. Nezahazujeme ho ale
             # před porovnáním: pokud zůstalo v UNIQA nebo Allianz, jde o

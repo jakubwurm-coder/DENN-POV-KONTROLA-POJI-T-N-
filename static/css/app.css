@@ -3280,3 +3280,15 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
   .manual-summary{grid-template-columns:1fr}
   .manual-accordion{grid-template-columns:1fr}
 }
+
+
+/* 2026-10-01: zrušení tmavého hover zvýraznění panelů */
+.nav-item:hover,
+.nav-subitem:hover,
+.sidebar-lookup:hover,
+.sidebar-company:hover,
+.sidebar-status:hover{
+  background:inherit !important;
+  filter:none !important;
+  box-shadow:none !important;
+}

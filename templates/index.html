@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260927progress1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260930lookup1">
 </head>
 <body>
   <div class="app-shell">
@@ -381,6 +381,15 @@
           </div>
         </section>
 
+        <section id="tirLookupSection" class="tir-lookup-section" aria-label="Vyhledání vozidla v TIRBazar">
+          <form id="tirLookupForm" class="tir-lookup-form">
+            <div class="tir-lookup-copy"><span class="section-kicker">TIRBAZAR SQL</span><strong>Vyhledat vozidlo</strong></div>
+            <div class="tir-lookup-control"><span class="search-icon">⌕</span><input id="tirLookupInput" autocomplete="off" spellcheck="false" maxlength="20" placeholder="VIN nebo SPZ…" aria-label="VIN nebo SPZ"></div>
+            <button id="tirLookupBtn" class="btn btn-secondary btn-small" type="submit">Hledat</button>
+          </form>
+          <div id="tirLookupResult" class="tir-lookup-result" hidden></div>
+        </section>
+
         <section id="dataSection" class="data-section">
           <div class="data-toolbar">
             <div class="view-switch" aria-label="Zobrazení vozidel"><button type="button" data-filter="ATTENTION" aria-pressed="true">K řešení <span id="attentionCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
@@ -414,6 +423,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260930push1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260930lookup1"></script>
 </body>
 </html>

@@ -217,6 +217,7 @@ def _default_state() -> dict[str, Any]:
         "csv_available": False,
         "synced_at": None,
         "_command": None,
+        "_vehicle_lookup": None,
     }
 
 
@@ -1102,6 +1103,35 @@ def agent_command():
         data = _load_state()
         command = data.get("_command")
     return jsonify({"ok": True, "command": command})
+
+
+@app.post("/api/agent/lookup-result")
+def agent_lookup_result():
+    if not _authorized(): return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "message": "Neplatná data."}), 400
+    command_id = str(payload.get("id") or "").strip()
+    if not command_id:
+        return jsonify({"ok": False, "message": "Chybí ID požadavku."}), 400
+    with _lock:
+        data = _load_state()
+        pending = data.get("_vehicle_lookup") if isinstance(data.get("_vehicle_lookup"), dict) else {}
+        if str(pending.get("id") or "") != command_id:
+            return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
+        data["_vehicle_lookup"] = {
+            "id": command_id,
+            "vin": str(payload.get("vin") or pending.get("vin") or "").strip().upper(),
+            "status": "done" if not payload.get("error") else "error",
+            "found": bool(payload.get("found")),
+            "vehicle": payload.get("vehicle") if isinstance(payload.get("vehicle"), dict) else None,
+            "error": str(payload.get("error") or ""),
+            "finished_at": _now(),
+        }
+        if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:
+            data["_command"] = None
+        _save_state(data)
+    return jsonify({"ok": True})
 
 
 @app.post("/api/sync")

@@ -15,7 +15,7 @@ if ONLINE_MODE:
     app = _cloud.app
     install_cloud_annotations(app, _cloud)
     install_assistant_api(app, _cloud._load_state, _cloud._public_state, _cloud._lock)
-    install_mcp_api(app, _cloud._load_state, _cloud._public_state, _cloud._lock)
+    install_mcp_api(app, _cloud._load_state, _cloud._save_state, _cloud._public_state, _cloud._lock)
 else:
     import local_app as _local
 

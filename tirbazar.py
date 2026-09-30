@@ -543,6 +543,45 @@ BEGIN
 END;
 GO
 
+-- Speciální robustní fallback pro Vans Renting s.r.o.:
+-- pokud databáze nemá deklarovaný FK, projdeme pouze sloupce dbo.Prodej,
+-- které názvem vypadají jako kupující/odběratel/zákazník, a spojíme je
+-- s tabulkami obsahujícími OID + IČO. Hledáme výhradně IČO 02772833.
+DECLARE @vansScanSql NVARCHAR(MAX) = N'';
+
+SELECT @vansScanSql = @vansScanSql +
+    CASE WHEN LEN(@vansScanSql) > 0 THEN N' UNION ALL ' ELSE N'' END +
+    N'SELECT ''__SALE_BUYER__|'' + CAST(p.Vozidlo AS VARCHAR(20)) + ''|02772833|Vans Renting s.r.o.'' ' +
+    N'FROM dbo.Prodej p JOIN ' + QUOTENAME(SCHEMA_NAME(t.schema_id)) + N'.' + QUOTENAME(t.name) + N' b ' +
+    N'ON TRY_CONVERT(BIGINT, p.' + QUOTENAME(pc.name) + N') = TRY_CONVERT(BIGINT, b.' + QUOTENAME(oidc.name) + N') ' +
+    N'WHERE p.GCRecord IS NULL AND p.DatumProdeje IS NOT NULL AND p.Vozidlo IS NOT NULL ' +
+    N'AND REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(NVARCHAR(100), b.' + QUOTENAME(icoc.name) + N'))), '' '', ''''), ''-'', ''''), ''/'', ''''), ''.'', '''') = ''02772833'''
+FROM sys.columns pc
+CROSS JOIN sys.tables t
+JOIN sys.columns oidc
+    ON oidc.object_id = t.object_id
+   AND UPPER(oidc.name) IN ('OID','ID')
+JOIN sys.columns icoc
+    ON icoc.object_id = t.object_id
+   AND (
+       UPPER(icoc.name) IN ('ICO','IČO')
+       OR UPPER(icoc.name) LIKE '%ICO%'
+   )
+WHERE pc.object_id = OBJECT_ID('dbo.Prodej')
+  AND (
+      UPPER(pc.name) LIKE '%KUP%'
+      OR UPPER(pc.name) LIKE '%ODBER%'
+      OR UPPER(pc.name) LIKE '%ZAKAZ%'
+      OR UPPER(pc.name) LIKE '%KLIENT%'
+      OR UPPER(pc.name) LIKE '%PARTNER%'
+      OR UPPER(pc.name) LIKE '%SUBJEKT%'
+      OR UPPER(pc.name) LIKE '%FIRMA%'
+  );
+
+IF LEN(@vansScanSql) > 0
+    EXEC sp_executesql @vansScanSql;
+GO
+
 SELECT '__FINISHED__';
 GO
 

@@ -3261,3 +3261,22 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
   pointer-events:auto;
   cursor:pointer;
 }
+
+
+/* 2026-10-01: podrobný manuál DENNÍ POV */
+.manual-section{max-width:1180px}
+.manual-summary{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(320px,.9fr);gap:14px;margin:18px 0 22px}
+.manual-summary-main{padding:18px 20px;border:1px solid #d9e6ef;border-radius:14px;background:#fff;box-shadow:0 4px 16px rgba(23,52,77,.04)}
+.manual-summary-main strong{display:block;color:#17364f;font-size:15px;margin-bottom:5px}
+.manual-summary-main p{margin:0;color:#5f7486;line-height:1.6;font-size:13px}
+.manual-flow-inline{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:7px;padding:14px;border:1px solid #d9e6ef;border-radius:14px;background:#f8fbfd}
+.manual-flow-inline span{padding:7px 9px;border-radius:8px;background:#fff;border:1px solid #dce7ee;color:#26475f;font-size:11px;font-weight:800}
+.manual-flow-inline i{font-style:normal;color:#7b95a8;font-weight:800}
+.manual-accordion{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.manual-accordion .how-details{margin:0}
+.manual-accordion .how-details[open]{grid-column:span 1}
+.manual-accordion .how-details-body>p{margin:0;color:#5f7486;line-height:1.65;font-size:13px}
+@media(max-width:980px){
+  .manual-summary{grid-template-columns:1fr}
+  .manual-accordion{grid-template-columns:1fr}
+}

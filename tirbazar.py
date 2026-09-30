@@ -355,7 +355,8 @@ OUTER APPLY (
     FROM dbo.Prodej p
     WHERE p.Vozidlo = v.OID
       AND p.DatumProdeje IS NOT NULL
-      AND p.GCRecord IS NULL
+    -- Historický prodej je rozhodující i tehdy, když má řádek Prodej vyplněný GCRecord.
+    -- Jinak starší prodaná vozidla chybně propadnou do kontroly aktivního POV.
 ) prodej
 WHERE
     v.GCRecord IS NULL

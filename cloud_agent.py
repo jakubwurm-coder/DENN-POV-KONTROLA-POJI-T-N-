@@ -164,7 +164,7 @@ def _send_result_email(snapshot: dict[str, Any]) -> bool:
     extra_uniqa = int(summary.get("extra_uniqa") or 0)
     spz_mismatch = int(summary.get("spz_mismatch") or 0)
     unverified = int(summary.get("unverified") or 0)
-    problem_statuses = {"CHYBÍ V UNIQA", "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", "PRODANÉ, ALE V UNIQA", "NAVÍC V UNIQA", "SPZ NESOUHLASÍ", "NELZE OVĚŘIT"}
+    problem_statuses = {"CHYBÍ V UNIQA", "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", "PRODANÉ, ALE POJIŠTĚNÉ", "NAVÍC V UNIQA", "SPZ NESOUHLASÍ", "NELZE OVĚŘIT"}
     problems = 0
     for row in email_snapshot.get("results") or []:
         raw = str(row.get("status_raw") or "").upper()

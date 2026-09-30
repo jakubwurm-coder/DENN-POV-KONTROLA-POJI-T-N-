@@ -242,6 +242,37 @@ def get_command() -> dict[str, Any] | None:
     return command if isinstance(command, dict) else None
 
 
+def lookup_vehicle(command: dict[str, Any]) -> None:
+    command_id = str(command.get("id") or "").strip()
+    vin = str(command.get("vin") or "").strip().upper()
+    payload: dict[str, Any] = {"id": command_id, "vin": vin, "found": False, "vehicle": None, "error": ""}
+    try:
+        if not command_id or len(vin) != 17:
+            raise ValueError("Neplatný VIN požadavku.")
+        local_app = _load_local_app()
+        config = local_app.load_config()
+        vehicles, _ = local_app.load_tirbazar_vehicles(config)
+        vehicle = next((item for item in vehicles if str(getattr(item, "vin", "") or "").strip().upper() == vin), None)
+        if vehicle is not None:
+            payload["found"] = True
+            payload["vehicle"] = {
+                "oid": getattr(vehicle, "oid", None),
+                "vin": getattr(vehicle, "vin", "") or "",
+                "spz": getattr(vehicle, "spz", "") or "",
+                "stav": getattr(vehicle, "stav", "") or "",
+                "datum_vykupu": getattr(vehicle, "datum_vykupu", "") or "",
+                "datum_prodeje": getattr(vehicle, "datum_prodeje", "") or "",
+                "zeme_puvodu": getattr(vehicle, "zeme_puvodu", "") or "",
+                "poznamky": getattr(vehicle, "poznamky", "") or "",
+                "znacka": getattr(vehicle, "znacka", "") or "",
+                "model": getattr(vehicle, "model", "") or "",
+            }
+    except Exception as exc:
+        payload["error"] = str(exc).strip() or exc.__class__.__name__
+    response = requests.post(f"{CLOUD_URL}/api/agent/lookup-result", headers=_headers(), json=payload, timeout=30)
+    response.raise_for_status()
+
+
 def _error_snapshot(exc: Exception) -> dict[str, Any]:
     message = str(exc).strip() or exc.__class__.__name__
     now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
@@ -298,8 +329,12 @@ def main() -> int:
             command_id = str((command or {}).get("id", ""))
             if command_id and command_id != last_command_id:
                 last_command_id = command_id
-                run_and_sync("požadavek z online webu")
-                next_auto = time.monotonic() + AUTO_SYNC_SECONDS
+                action = str((command or {}).get("action") or "run_check")
+                if action == "lookup_vehicle":
+                    lookup_vehicle(command or {})
+                else:
+                    run_and_sync("požadavek z online webu")
+                    next_auto = time.monotonic() + AUTO_SYNC_SECONDS
             elif time.monotonic() >= next_auto:
                 run_and_sync("automatická kontrola 2× denně")
                 next_auto = time.monotonic() + AUTO_SYNC_SECONDS

@@ -416,6 +416,102 @@ ORDER BY v.OID;';
 EXEC sp_executesql @metaSql;
 GO
 
+-- Kupující u prodeje: strukturované načtení IČO/názvu přes vazbu dbo.Prodej.
+-- Schéma TIRBazar se může mezi verzemi lišit, proto se vazba i sloupce
+-- hledají dynamicky v systémovém katalogu a databáze zůstává pouze pro čtení.
+DECLARE @buyerFkCol SYSNAME = NULL;
+DECLARE @buyerTable SYSNAME = NULL;
+DECLARE @buyerRefCol SYSNAME = NULL;
+DECLARE @buyerIcoCol SYSNAME = NULL;
+DECLARE @buyerNameCol SYSNAME = NULL;
+DECLARE @buyerSql NVARCHAR(MAX) = NULL;
+
+SELECT TOP 1
+    @buyerFkCol = pc.name,
+    @buyerTable = rt.name,
+    @buyerRefCol = rc.name
+FROM sys.foreign_key_columns fkc
+JOIN sys.columns pc
+    ON pc.object_id = fkc.parent_object_id
+   AND pc.column_id = fkc.parent_column_id
+JOIN sys.tables rt
+    ON rt.object_id = fkc.referenced_object_id
+JOIN sys.columns rc
+    ON rc.object_id = fkc.referenced_object_id
+   AND rc.column_id = fkc.referenced_column_id
+WHERE fkc.parent_object_id = OBJECT_ID('dbo.Prodej')
+  AND (
+      UPPER(pc.name) LIKE '%KUP%'
+      OR UPPER(pc.name) LIKE '%ODBER%'
+      OR UPPER(pc.name) LIKE '%ZAKAZ%'
+      OR UPPER(pc.name) LIKE '%KLIENT%'
+      OR UPPER(pc.name) LIKE '%PARTNER%'
+      OR UPPER(pc.name) LIKE '%SUBJEKT%'
+      OR UPPER(pc.name) LIKE '%FIRMA%'
+  )
+ORDER BY
+    CASE
+        WHEN UPPER(pc.name) LIKE '%KUP%' THEN 1
+        WHEN UPPER(pc.name) LIKE '%ODBER%' THEN 2
+        WHEN UPPER(pc.name) LIKE '%ZAKAZ%' THEN 3
+        ELSE 9
+    END;
+
+IF @buyerTable IS NOT NULL
+BEGIN
+    SELECT TOP 1 @buyerIcoCol = c.name
+    FROM sys.columns c
+    JOIN sys.tables t ON t.object_id = c.object_id
+    WHERE t.name = @buyerTable
+      AND (
+          UPPER(c.name) IN ('ICO','IČO','IC','ICZ')
+          OR UPPER(c.name) LIKE '%ICO%'
+          OR UPPER(c.name) LIKE '%IDENTIFIKACNI%CISLO%'
+      )
+    ORDER BY
+        CASE WHEN UPPER(c.name) IN ('ICO','IČO') THEN 1 ELSE 9 END,
+        c.column_id;
+
+    SELECT TOP 1 @buyerNameCol = c.name
+    FROM sys.columns c
+    JOIN sys.tables t ON t.object_id = c.object_id
+    WHERE t.name = @buyerTable
+      AND (
+          UPPER(c.name) IN ('NAZEV','NÁZEV','OBCHODNIJMENO','OBCHODNÍJMÉNO','FIRMA','JMENO','JMÉNO')
+          OR UPPER(c.name) LIKE '%NAZEV%'
+          OR UPPER(c.name) LIKE '%OBCHOD%'
+      )
+    ORDER BY
+        CASE
+            WHEN UPPER(c.name) IN ('NAZEV','NÁZEV') THEN 1
+            WHEN UPPER(c.name) LIKE '%OBCHOD%' THEN 2
+            ELSE 9
+        END,
+        c.column_id;
+END;
+
+IF @buyerTable IS NOT NULL AND @buyerIcoCol IS NOT NULL
+BEGIN
+    SET @buyerSql = N'
+    SELECT
+        ''__SALE_BUYER__|'' + CAST(p.Vozidlo AS VARCHAR(20)) + ''|'' +
+        ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(NVARCHAR(100), b.' + QUOTENAME(@buyerIcoCol) + N'))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
+        ' + CASE
+            WHEN @buyerNameCol IS NOT NULL THEN
+                N'ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(NVARCHAR(300), b.' + QUOTENAME(@buyerNameCol) + N'))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''')'
+            ELSE N'''''' 
+          END + N'
+    FROM dbo.Prodej p
+    LEFT JOIN dbo.' + QUOTENAME(@buyerTable) + N' b
+      ON p.' + QUOTENAME(@buyerFkCol) + N' = b.' + QUOTENAME(@buyerRefCol) + N'
+    WHERE p.GCRecord IS NULL
+      AND p.DatumProdeje IS NOT NULL
+      AND p.Vozidlo IS NOT NULL;';
+
+    EXEC sp_executesql @buyerSql;
+END;
+GO
+
 SELECT '__FINISHED__';
 GO
 
@@ -486,6 +582,7 @@ def load_tirbazar_vehicles(
     without_vin_sql = 0
     raw_rows: list[TirVehicle] = []
     vehicle_meta: dict[int, tuple[str, str]] = {}
+    sale_buyer_meta: dict[int, tuple[str, str]] = {}
 
     for original in stdout.splitlines():
         line = original.strip()
@@ -521,6 +618,17 @@ def load_tirbazar_vehicles(
                 try:
                     meta_oid = int(parts[1].strip())
                     vehicle_meta[meta_oid] = (parts[2].strip(), parts[3].strip())
+                except ValueError:
+                    pass
+            continue
+
+        if "__SALE_BUYER__|" in line:
+            value = line[line.find("__SALE_BUYER__|"):]
+            parts = value.split("|", 3)
+            if len(parts) == 4:
+                try:
+                    vehicle_oid = int(parts[1].strip())
+                    sale_buyer_meta[vehicle_oid] = (parts[2].strip(), parts[3].strip())
                 except ValueError:
                     pass
             continue
@@ -567,6 +675,9 @@ def load_tirbazar_vehicles(
         raw_brand, raw_model = vehicle_meta.get(vehicle.oid, ("", ""))
         vehicle.znacka = _clean_vehicle_brand(raw_brand)
         vehicle.model = _simple_vehicle_model(vehicle.znacka, raw_model)
+        buyer_ico, buyer_name = sale_buyer_meta.get(vehicle.oid, ("", ""))
+        vehicle.kupujici_ico = buyer_ico
+        vehicle.kupujici_nazev = buyer_name
 
     without_vin = [v for v in raw_rows if not v.vin]
     comparable = [v for v in raw_rows if v.vin]

@@ -3061,3 +3061,8 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
 @keyframes povLoaderSpin{to{transform:rotate(360deg)}}
 @keyframes povLoaderPulse{0%,100%{opacity:.72;transform:scale(.97)}50%{opacity:1;transform:scale(1.03)}}
 @keyframes povProgressSweep{to{transform:translateX(100%)}}
+
+.push-btn{border:1px solid #cbdbe7;background:#fff;color:#24455f;border-radius:10px;padding:9px 12px;font:inherit;font-size:12px;font-weight:750;cursor:pointer;white-space:nowrap}
+.push-btn:hover{background:#f5f9fc}
+.push-btn.enabled{border-color:#b9e4cf;background:#edf9f3;color:#0b8755}
+.push-btn:disabled{opacity:.55;cursor:default}

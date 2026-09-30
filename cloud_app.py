@@ -900,59 +900,65 @@ def api_push_subscribe():
         return jsonify({"ok": False, "message": "Notifikaci se nepodařilo uložit."}), 503
 
 
+def _send_push_for_state(data: dict[str, Any], tag: str = "denni-pov-check") -> dict[str, int]:
+    """Send the current check result to every registered browser."""
+    public = _public_state(data)
+    summary = public.get("summary") or {}
+    active = int(summary.get("active") or 0)
+    missing = int(summary.get("missing") or 0)
+    unwanted = int(summary.get("absent_insured") or 0) + int(summary.get("sold_uniqa") or 0) + int(summary.get("extra_uniqa") or 0)
+    body = f"Aktivní vozidla: {active} · chybí pojištění: {missing} · pojištění navíc: {unwanted}"
+    payload = json.dumps({
+        "title": "DENNÍ POV · Kontrola dokončena",
+        "body": body,
+        "url": "/",
+        "tag": tag,
+    }, ensure_ascii=False)
+
+    with _db_connect() as conn:
+        with conn.cursor() as cur:
+            _db_init(cur)
+            cur.execute("SELECT endpoint, subscription FROM denni_pov_push_subscriptions")
+            subscriptions = cur.fetchall()
+            conn.commit()
+
+    sent = 0
+    expired = []
+    for endpoint, subscription in subscriptions:
+        try:
+            webpush(
+                subscription_info=subscription,
+                data=payload,
+                vapid_private_key=os.getenv("VAPID_PRIVATE_KEY", "").strip(),
+                vapid_claims={"sub": os.getenv("VAPID_SUBJECT", "mailto:jakubwurm@gmail.com").strip()},
+                ttl=3600,
+            )
+            sent += 1
+        except WebPushException as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status in (404, 410):
+                expired.append(endpoint)
+            else:
+                print(f"Web Push failed ({status or 'unknown'}): {exc}")
+    if expired:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM denni_pov_push_subscriptions WHERE endpoint = ANY(%s)", (expired,))
+                conn.commit()
+    return {"sent": sent, "subscriptions": len(subscriptions)}
+
+
 @app.post("/api/push/send-scheduled")
 def api_push_send_scheduled():
     expected = os.getenv("PUSH_CRON_SECRET", "").strip()
     supplied = request.headers.get("X-Push-Secret", "").strip()
     if not expected or not hmac.compare_digest(expected, supplied):
         return jsonify({"ok": False, "message": "Unauthorized"}), 401
-
     try:
         with _lock:
-            data = _public_state(_load_state())
-        summary = data.get("summary") or {}
-        active = int(summary.get("active") or 0)
-        missing = int(summary.get("missing") or 0)
-        unwanted = int(summary.get("absent_insured") or 0) + int(summary.get("sold_uniqa") or 0) + int(summary.get("extra_uniqa") or 0)
-        body = f"Aktivní vozidla: {active} · chybí pojištění: {missing} · pojištění navíc: {unwanted}"
-        payload = json.dumps({
-            "title": "DENNÍ POV · Přehled pojištění",
-            "body": body,
-            "url": "/",
-            "tag": "denni-pov-scheduled",
-        }, ensure_ascii=False)
-
-        with _db_connect() as conn:
-            with conn.cursor() as cur:
-                _db_init(cur)
-                cur.execute("SELECT endpoint, subscription FROM denni_pov_push_subscriptions")
-                subscriptions = cur.fetchall()
-                conn.commit()
-
-        sent = 0
-        expired = []
-        for endpoint, subscription in subscriptions:
-            try:
-                webpush(
-                    subscription_info=subscription,
-                    data=payload,
-                    vapid_private_key=os.getenv("VAPID_PRIVATE_KEY", "").strip(),
-                    vapid_claims={"sub": os.getenv("VAPID_SUBJECT", "mailto:jakubwurm@gmail.com").strip()},
-                    ttl=3600,
-                )
-                sent += 1
-            except WebPushException as exc:
-                status = getattr(getattr(exc, "response", None), "status_code", None)
-                if status in (404, 410):
-                    expired.append(endpoint)
-                else:
-                    print(f"Web Push failed ({status or 'unknown'}): {exc}")
-        if expired:
-            with _db_connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("DELETE FROM denni_pov_push_subscriptions WHERE endpoint = ANY(%s)", (expired,))
-                    conn.commit()
-        return jsonify({"ok": True, "sent": sent, "subscriptions": len(subscriptions)})
+            data = _load_state()
+        result = _send_push_for_state(data, "denni-pov-scheduled")
+        return jsonify({"ok": True, **result})
     except Exception as exc:
         print(f"Scheduled push failed: {exc}")
         return jsonify({"ok": False, "message": str(exc)}), 500
@@ -1154,6 +1160,11 @@ def api_sync():
 
     if final_run and not data.get("error"):
         _kostka_start(data.get("results") or [])
+        try:
+            push_result = _send_push_for_state(data, "denni-pov-check")
+            alert_sent = push_result.get("sent", 0) > 0
+        except Exception as exc:
+            print(f"Push after completed check failed: {exc}")
 
     return jsonify({"ok": True, "message": "Data byla synchronizována na Render.", "alert_sent": alert_sent})
 

@@ -261,75 +261,61 @@ def _lookup_vehicle_in_full_tirbazar(query: str, query_type: str) -> dict[str, A
     if not tsql.exists():
         raise RuntimeError(f"Chybí {tsql}")
 
-    lookup_expr = (
-        "UPPER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(ISNULL(v.VIN, ''))), ' ', ''), '-', ''), '.', ''))"
-        if query_type == "vin"
-        else """UPPER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(ISNULL(
-            CASE WHEN v.NovaRegistracniZnacka IS NOT NULL
-                      AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> ''
-                 THEN v.NovaRegistracniZnacka
-                 ELSE v.RegistracniZnacka END, ''
-        ))), ' ', ''), '-', ''), '.', ''))"""
-    )
+    # Hledání je přímo v dbo.Vozidlo. Není zde GCRecord IS NULL ani žádný
+    # filtr stavu, země, výkupu/prodeje nebo pravidel kontroly pojištění.
+    if query_type == "vin":
+        where_sql = (
+            "UPPER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(ISNULL(v.VIN, ''))), "
+            "' ', ''), '-', ''), '.', '')) = '" + needle + "'"
+        )
+    else:
+        where_sql = (
+            "UPPER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(ISNULL(CASE "
+            "WHEN v.NovaRegistracniZnacka IS NOT NULL AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> '' "
+            "THEN v.NovaRegistracniZnacka ELSE v.RegistracniZnacka END, ''))), "
+            "' ', ''), '-', ''), '.', '')) = '" + needle + "'"
+        )
 
     sql = f"""
 USE TIRBazar;
 GO
 SET NOCOUNT ON;
 GO
-DECLARE @brandExpr NVARCHAR(4000) = N'CONVERT(NVARCHAR(200), NULL)';
-DECLARE @modelExpr NVARCHAR(4000) = N'CONVERT(NVARCHAR(300), NULL)';
-
-IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'TovarniZnacka' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.TovarniZnacka)';
-ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Znacka' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.Znacka)';
-ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Vyrobce' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.Vyrobce)';
-ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'VyrobceVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.VyrobceVozidla)';
-
-IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'ObchodniOznaceni' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.ObchodniOznaceni)';
-ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Model' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.Model)';
-ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'ModelVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.ModelVozidla)';
-ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'TypVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.TypVozidla)';
-ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'NazevVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.NazevVozidla)';
-ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Nazev' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
-    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.Nazev)';
-
-DECLARE @lookupSql NVARCHAR(MAX) = N'
 SELECT TOP 1
-    ''__LOOKUP__|'' + CAST(v.OID AS VARCHAR(20)) + ''|'' +
-    ISNULL(REPLACE(REPLACE(LTRIM(RTRIM(v.VIN)), CHAR(13), ''''), CHAR(10), ''''), '''') + ''|'' +
-    ISNULL(REPLACE(REPLACE(LTRIM(RTRIM(CASE WHEN v.NovaRegistracniZnacka IS NOT NULL AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> '''' THEN v.NovaRegistracniZnacka ELSE v.RegistracniZnacka END)), CHAR(13), ''''), CHAR(10), ''''), '''') + ''|'' +
-    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Stav)), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
-    ISNULL(CONVERT(VARCHAR(19), normalni_vykup.DatumVykupu, 120), '''') + ''|'' +
-    ISNULL(CONVERT(VARCHAR(19), prodej.DatumProdeje, 120), '''') + ''|'' +
-    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(COALESCE(NULLIF(stat_puvodu.PopisStatu COLLATE DATABASE_DEFAULT, ''''), NULLIF(v.ZemePuvodu COLLATE DATABASE_DEFAULT, ''''), v.ZemePuvoduKod COLLATE DATABASE_DEFAULT, ''''))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
-    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Poznamky)), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
-    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(' + @brandExpr + N')), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
-    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(' + @modelExpr + N')), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''')
+    '__LOOKUP__|' +
+    CAST(v.OID AS VARCHAR(20)) + '|' +
+    ISNULL(REPLACE(REPLACE(LTRIM(RTRIM(v.VIN)), CHAR(13), ''), CHAR(10), ''), '') + '|' +
+    ISNULL(REPLACE(REPLACE(LTRIM(RTRIM(CASE
+        WHEN v.NovaRegistracniZnacka IS NOT NULL AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> ''
+        THEN v.NovaRegistracniZnacka ELSE v.RegistracniZnacka END)), CHAR(13), ''), CHAR(10), ''), '') + '|' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Stav)), CHAR(13), ' '), CHAR(10), ' '), '|', '/'), '') + '|' +
+    ISNULL(CONVERT(VARCHAR(19), normalni_vykup.DatumVykupu, 120), '') + '|' +
+    ISNULL(CONVERT(VARCHAR(19), prodej.DatumProdeje, 120), '') + '|' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(COALESCE(
+        NULLIF(stat_puvodu.PopisStatu COLLATE DATABASE_DEFAULT, ''),
+        NULLIF(v.ZemePuvodu COLLATE DATABASE_DEFAULT, ''),
+        v.ZemePuvoduKod COLLATE DATABASE_DEFAULT, ''
+    ))), CHAR(13), ' '), CHAR(10), ' '), '|', '/'), '') + '|' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Poznamky)), CHAR(13), ' '), CHAR(10), ' '), '|', '/'), '')
 FROM dbo.Vozidlo v
 OUTER APPLY (
     SELECT TOP 1 LTRIM(RTRIM(s.PopisStatu)) COLLATE DATABASE_DEFAULT AS PopisStatu
     FROM dbo.CL_StatPuvodu s
-    WHERE LTRIM(RTRIM(s.KodStatu)) COLLATE DATABASE_DEFAULT = LTRIM(RTRIM(v.ZemePuvoduKod)) COLLATE DATABASE_DEFAULT
+    WHERE LTRIM(RTRIM(s.KodStatu)) COLLATE DATABASE_DEFAULT =
+          LTRIM(RTRIM(v.ZemePuvoduKod)) COLLATE DATABASE_DEFAULT
 ) stat_puvodu
 OUTER APPLY (
-    SELECT MAX(vv.DatumVykupu) AS DatumVykupu FROM dbo.VykupVozidla vv WHERE vv.Vozidlo = v.OID
+    SELECT MAX(vv.DatumVykupu) AS DatumVykupu
+    FROM dbo.VykupVozidla vv
+    WHERE vv.Vozidlo = v.OID
 ) normalni_vykup
 OUTER APPLY (
-    SELECT MAX(p.DatumProdeje) AS DatumProdeje FROM dbo.Prodej p WHERE p.Vozidlo = v.OID
+    SELECT MAX(p.DatumProdeje) AS DatumProdeje
+    FROM dbo.Prodej p
+    WHERE p.Vozidlo = v.OID
 ) prodej
-WHERE ' + N'{lookup_expr}' + N' = ''{needle}''
-ORDER BY CASE WHEN v.GCRecord IS NULL THEN 0 ELSE 1 END, v.OID DESC;';
-
-EXEC sp_executesql @lookupSql;
+WHERE {where_sql}
+ORDER BY CASE WHEN v.GCRecord IS NULL THEN 0 ELSE 1 END, v.OID DESC;
 GO
 exit
 """
@@ -353,16 +339,16 @@ exit
         line = original.strip()
         if "__LOOKUP__|" not in line:
             continue
-        parts = line[line.find("__LOOKUP__|"):].split("|", 10)
-        if len(parts) != 11:
+        parts = line[line.find("__LOOKUP__|"):].split("|", 8)
+        if len(parts) != 9:
             continue
-        _, oid, vin, spz, stav, datum_vykupu, datum_prodeje, zeme_puvodu, poznamky, znacka, model = parts
+        _, oid, vin, spz, stav, datum_vykupu, datum_prodeje, zeme_puvodu, poznamky = parts
         return {
             "oid": int(oid.strip()) if oid.strip().isdigit() else oid.strip(),
             "vin": vin.strip(), "spz": spz.strip(), "stav": stav.strip(),
             "datum_vykupu": datum_vykupu.strip(), "datum_prodeje": datum_prodeje.strip(),
             "zeme_puvodu": zeme_puvodu.strip(), "poznamky": poznamky.strip(),
-            "znacka": znacka.strip(), "model": model.strip(),
+            "znacka": "", "model": "",
         }
     return None
 

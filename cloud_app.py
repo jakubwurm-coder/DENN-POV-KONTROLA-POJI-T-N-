@@ -792,7 +792,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     issue_statuses = {
         "CHYBÍ V UNIQA",
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-        "PRODANÉ, ALE V UNIQA",
+        "PRODANÉ, ALE POJIŠTĚNÉ",
         "NAVÍC V UNIQA",
     }
 
@@ -836,7 +836,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     )
     summary["sold_uniqa"] = sum(
         1 for row in rows
-        if str(row.get("status_raw") or "").upper() == "PRODANÉ, ALE V UNIQA"
+        if str(row.get("status_raw") or "").upper() == "PRODANÉ, ALE POJIŠTĚNÉ"
         and str(row.get("workflow_status") or "").upper() not in resolved_statuses
     )
     summary["extra_uniqa"] = sum(
@@ -1327,7 +1327,7 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
         "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ": ("E9F7F0", green),
         "CHYBÍ V UNIQA": ("FFF0F3", red),
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ": ("FFF0F3", red),
-        "PRODANÉ, ALE V UNIQA": ("F4F0FF", "7256B8"),
+        "PRODANÉ, ALE POJIŠTĚNÉ": ("F4F0FF", "7256B8"),
         "NEPOJIŠTĚNO, ALE DEPOZIT": ("E9F7F0", green),
         "NAVÍC V UNIQA": ("EAF7FA", "16849B"),
         "SPZ NESOUHLASÍ": ("FFF7E7", "A87512"),

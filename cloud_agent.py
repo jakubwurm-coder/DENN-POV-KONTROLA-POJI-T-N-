@@ -242,35 +242,144 @@ def get_command() -> dict[str, Any] | None:
     return command if isinstance(command, dict) else None
 
 
+def _lookup_vehicle_in_full_tirbazar(query: str, query_type: str) -> dict[str, Any] | None:
+    """Samostatné ruční vyhledávání v celé tabulce dbo.Vozidlo bez filtrů POV."""
+    local_app = _load_local_app()
+    config = local_app.load_config()
+    needle = "".join(ch for ch in str(query or "").upper() if ch.isalnum())
+    if not needle:
+        return None
+
+    import tirbazar
+
+    password = tirbazar.get_password()
+    base_dir = Path(__file__).resolve().parent
+    freetds_conf = base_dir / "freetds.conf"
+    tsql = tirbazar.Path("/opt/homebrew/bin/tsql")
+    if not freetds_conf.exists():
+        raise RuntimeError(f"Chybí {freetds_conf}")
+    if not tsql.exists():
+        raise RuntimeError(f"Chybí {tsql}")
+
+    lookup_expr = (
+        "UPPER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(ISNULL(v.VIN, ''))), ' ', ''), '-', ''), '.', ''))"
+        if query_type == "vin"
+        else """UPPER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(ISNULL(
+            CASE WHEN v.NovaRegistracniZnacka IS NOT NULL
+                      AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> ''
+                 THEN v.NovaRegistracniZnacka
+                 ELSE v.RegistracniZnacka END, ''
+        ))), ' ', ''), '-', ''), '.', ''))"""
+    )
+
+    sql = f"""
+USE TIRBazar;
+GO
+SET NOCOUNT ON;
+GO
+DECLARE @brandExpr NVARCHAR(4000) = N'CONVERT(NVARCHAR(200), NULL)';
+DECLARE @modelExpr NVARCHAR(4000) = N'CONVERT(NVARCHAR(300), NULL)';
+
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'TovarniZnacka' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.TovarniZnacka)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Znacka' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.Znacka)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Vyrobce' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.Vyrobce)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'VyrobceVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @brandExpr = N'CONVERT(NVARCHAR(200), v.VyrobceVozidla)';
+
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'ObchodniOznaceni' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.ObchodniOznaceni)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Model' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.Model)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'ModelVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.ModelVozidla)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'TypVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.TypVozidla)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'NazevVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.NazevVozidla)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Nazev' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.Nazev)';
+
+DECLARE @lookupSql NVARCHAR(MAX) = N'
+SELECT TOP 1
+    ''__LOOKUP__|'' + CAST(v.OID AS VARCHAR(20)) + ''|'' +
+    ISNULL(REPLACE(REPLACE(LTRIM(RTRIM(v.VIN)), CHAR(13), ''''), CHAR(10), ''''), '''') + ''|'' +
+    ISNULL(REPLACE(REPLACE(LTRIM(RTRIM(CASE WHEN v.NovaRegistracniZnacka IS NOT NULL AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> '''' THEN v.NovaRegistracniZnacka ELSE v.RegistracniZnacka END)), CHAR(13), ''''), CHAR(10), ''''), '''') + ''|'' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Stav)), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
+    ISNULL(CONVERT(VARCHAR(19), normalni_vykup.DatumVykupu, 120), '''') + ''|'' +
+    ISNULL(CONVERT(VARCHAR(19), prodej.DatumProdeje, 120), '''') + ''|'' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(COALESCE(NULLIF(stat_puvodu.PopisStatu COLLATE DATABASE_DEFAULT, ''''), NULLIF(v.ZemePuvodu COLLATE DATABASE_DEFAULT, ''''), v.ZemePuvoduKod COLLATE DATABASE_DEFAULT, ''''))), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Poznamky)), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(' + @brandExpr + N')), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''') + ''|'' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(' + @modelExpr + N')), CHAR(13), '' ''), CHAR(10), '' ''), ''|'', ''/''), '''')
+FROM dbo.Vozidlo v
+OUTER APPLY (
+    SELECT TOP 1 LTRIM(RTRIM(s.PopisStatu)) COLLATE DATABASE_DEFAULT AS PopisStatu
+    FROM dbo.CL_StatPuvodu s
+    WHERE LTRIM(RTRIM(s.KodStatu)) COLLATE DATABASE_DEFAULT = LTRIM(RTRIM(v.ZemePuvoduKod)) COLLATE DATABASE_DEFAULT
+) stat_puvodu
+OUTER APPLY (
+    SELECT MAX(vv.DatumVykupu) AS DatumVykupu FROM dbo.VykupVozidla vv WHERE vv.Vozidlo = v.OID
+) normalni_vykup
+OUTER APPLY (
+    SELECT MAX(p.DatumProdeje) AS DatumProdeje FROM dbo.Prodej p WHERE p.Vozidlo = v.OID
+) prodej
+WHERE ' + N'{lookup_expr}' + N' = ''{needle}''
+ORDER BY CASE WHEN v.GCRecord IS NULL THEN 0 ELSE 1 END, v.OID DESC;';
+
+EXEC sp_executesql @lookupSql;
+GO
+exit
+"""
+    tirbazar.validate_read_only(sql)
+
+    env = os.environ.copy()
+    env["FREETDSCONF"] = str(freetds_conf)
+    env["TDSVER"] = "7.2"
+    try:
+        result = tirbazar.subprocess.run(
+            [str(tsql), "-S", "tirbazar", "-U", config.username, "-P", password],
+            input=sql, capture_output=True, text=True, env=env, timeout=120,
+        )
+    finally:
+        password = ""
+
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or result.stdout or "").strip())
+
+    for original in (result.stdout or "").splitlines():
+        line = original.strip()
+        if "__LOOKUP__|" not in line:
+            continue
+        parts = line[line.find("__LOOKUP__|"):].split("|", 10)
+        if len(parts) != 11:
+            continue
+        _, oid, vin, spz, stav, datum_vykupu, datum_prodeje, zeme_puvodu, poznamky, znacka, model = parts
+        return {
+            "oid": int(oid.strip()) if oid.strip().isdigit() else oid.strip(),
+            "vin": vin.strip(), "spz": spz.strip(), "stav": stav.strip(),
+            "datum_vykupu": datum_vykupu.strip(), "datum_prodeje": datum_prodeje.strip(),
+            "zeme_puvodu": zeme_puvodu.strip(), "poznamky": poznamky.strip(),
+            "znacka": znacka.strip(), "model": model.strip(),
+        }
+    return None
+
+
 def lookup_vehicle(command: dict[str, Any]) -> None:
     command_id = str(command.get("id") or "").strip()
-    query = str(command.get("query") or command.get("vin") or "").replace(" ", "").strip().upper()
+    raw_query = str(command.get("query") or command.get("vin") or "").strip().upper()
+    query = "".join(ch for ch in raw_query if ch.isalnum())
     query_type = str(command.get("query_type") or ("vin" if len(query) == 17 else "spz")).lower()
     payload: dict[str, Any] = {"id": command_id, "query": query, "found": False, "vehicle": None, "error": ""}
     try:
         if not command_id or not query:
             raise ValueError("Neplatný požadavek na vyhledání.")
-        local_app = _load_local_app()
-        config = local_app.load_config()
-        vehicles, _ = local_app.load_tirbazar_vehicles(config)
-        if query_type == "vin":
-            vehicle = next((item for item in vehicles if str(getattr(item, "vin", "") or "").replace(" ", "").strip().upper() == query), None)
-        else:
-            vehicle = next((item for item in vehicles if str(getattr(item, "spz", "") or "").replace(" ", "").strip().upper() == query), None)
+        vehicle = _lookup_vehicle_in_full_tirbazar(query, query_type)
         if vehicle is not None:
             payload["found"] = True
-            payload["vehicle"] = {
-                "oid": getattr(vehicle, "oid", None),
-                "vin": getattr(vehicle, "vin", "") or "",
-                "spz": getattr(vehicle, "spz", "") or "",
-                "stav": getattr(vehicle, "stav", "") or "",
-                "datum_vykupu": getattr(vehicle, "datum_vykupu", "") or "",
-                "datum_prodeje": getattr(vehicle, "datum_prodeje", "") or "",
-                "zeme_puvodu": getattr(vehicle, "zeme_puvodu", "") or "",
-                "poznamky": getattr(vehicle, "poznamky", "") or "",
-                "znacka": getattr(vehicle, "znacka", "") or "",
-                "model": getattr(vehicle, "model", "") or "",
-            }
+            payload["vehicle"] = vehicle
     except Exception as exc:
         payload["error"] = str(exc).strip() or exc.__class__.__name__
     response = requests.post(f"{CLOUD_URL}/api/agent/lookup-result", headers=_headers(), json=payload, timeout=30)

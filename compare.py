@@ -68,6 +68,13 @@ def _is_absent_purchased(vehicle: TirVehicle) -> bool:
     )
 
 
+def _is_sold(vehicle: TirVehicle) -> bool:
+    """Prodané poznáme podle historie prodeje i podle aktuálního stavu TIRBazar."""
+    return bool(getattr(vehicle, "datum_prodeje", "")) or (
+        _normalize_state(getattr(vehicle, "stav", "")) in {"PRODANÉ", "PRODANE"}
+    )
+
+
 def compare_vehicles(
     tir: list[TirVehicle],
     uniqa: list[UniqaVehicle],
@@ -207,7 +214,7 @@ def compare_vehicles(
         # PRODANÉ
         # ====================================================
 
-        if vehicle.datum_prodeje and not _is_sold_to_vans_renting(vehicle):
+        if _is_sold(vehicle) and not _is_sold_to_vans_renting(vehicle):
 
             # Prodané vozidlo už nemá být pojištěné. Nezahazujeme ho ale
             # před porovnáním: pokud zůstalo v UNIQA nebo Allianz, jde o

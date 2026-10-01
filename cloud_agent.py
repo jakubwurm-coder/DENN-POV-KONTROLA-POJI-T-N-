@@ -391,7 +391,6 @@ def _lookup_filter_reason(vehicle: dict[str, Any]) -> dict[str, str]:
     """Stejná pravidla v lidské podobě pro ruční SQL vyhledávání."""
     state = str(vehicle.get("stav") or "").strip().upper()
     purchase = bool(str(vehicle.get("datum_vykupu") or "").strip())
-    sold = bool(str(vehicle.get("datum_prodeje") or "").strip())
     country = str(vehicle.get("zeme_puvodu") or "").strip().upper()
     spz = str(vehicle.get("spz") or "").strip()
     vin = str(vehicle.get("vin") or "").strip()
@@ -399,9 +398,8 @@ def _lookup_filter_reason(vehicle: dict[str, Any]) -> dict[str, str]:
 
     if not vin:
         return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": "Vozidlo nemá VIN, který je hlavním identifikátorem kontroly."}
-    if (sold or state in {"PRODANÉ", "PRODANE"}) and state not in {"VYKOUPENÉ", "VYKOUPENE"}:
-        reason = "Stav TIRBazar je PRODANÉ" if state in {"PRODANÉ", "PRODANE"} else "Je evidovaný prodej"
-        return {"decision": "KONTROLA POJIŠTĚNÍ NAVÍC", "expected": "NEPOJIŠTĚNO", "reason": reason + "; systém pouze ověřuje, zda pojištění nezůstalo aktivní."}
+    if state in {"PRODANÉ", "PRODANE"}:
+        return {"decision": "KONTROLA POJIŠTĚNÍ NAVÍC", "expected": "NEPOJIŠTĚNO", "reason": "Aktuální stav TIRBazar je PRODANÉ; systém pouze ověřuje, zda pojištění nezůstalo aktivní."}
     if state in {"VYKOUPENÉ", "VYKOUPENE"}:
         return {"decision": "ZAŘAZENO DO POV", "expected": "POJIŠTĚNO", "reason": "Vykoupené vozidlo má být pojištěné vždy."}
     if state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}:

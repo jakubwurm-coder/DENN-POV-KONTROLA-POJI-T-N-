@@ -20,7 +20,7 @@ function badgeClass(r){
   }
   if(workflow==='VYŘEŠENO'||workflow==='V POŘÁDKU') return 'badge-ok';
   if(workflow==='ŘEŠÍ SE'||workflow==='KONTROLA') return 'badge-warning';
-  return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'badge-error','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'badge-ok','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-ok','PRODANÉ, ALE V UNIQA':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
+  return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'badge-error','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'badge-ok','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-ok','PRODANÉ, ALE POJIŠTĚNÉ':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
 }
 function visibleSystemText(value){
   return String(value??'');
@@ -122,7 +122,7 @@ async function showManualHistory(){
   }
 }
 
-const problemStatuses=['CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE V UNIQA','NAVÍC V UNIQA','SPZ NESOUHLASÍ','NELZE OVĚŘIT'];
+const problemStatuses=['CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE POJIŠTĚNÉ','NAVÍC V UNIQA','SPZ NESOUHLASÍ','NELZE OVĚŘIT'];
 function needsAttention(r){
   const raw=String(r.status_raw||'').toUpperCase();
   const workflow=String(r.workflow_status||'').toUpperCase();
@@ -130,7 +130,7 @@ function needsAttention(r){
   return problemStatuses.includes(raw)&&!resolved;
 }
 function resultLabel(r){
-  return ({'OK':'Pojištění v pořádku','CHYBÍ V UNIQA':'Chybí pojištění','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'Nepřítomné · pojištěno','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'Nepřítomné · nepojištěno','PRODANÉ, ALE V UNIQA':'Prodané · pojištěno','NAVÍC V UNIQA':'Pojištění navíc','NEPOJIŠTĚNO, ALE DEPOZIT':'Depozit','SPZ NESOUHLASÍ':'SPZ nesouhlasí','NELZE OVĚŘIT':'Nelze ověřit'}[r.status_raw]||r.original_status||r.status_raw||r.status||'—');
+  return ({'OK':'Pojištění v pořádku','CHYBÍ V UNIQA':'Chybí pojištění','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'Nepřítomné · pojištěno','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'Nepřítomné · nepojištěno','PRODANÉ, ALE POJIŠTĚNÉ':'Prodané · pojištěno','NAVÍC V UNIQA':'Pojištění navíc','NEPOJIŠTĚNO, ALE DEPOZIT':'Depozit','SPZ NESOUHLASÍ':'SPZ nesouhlasí','NELZE OVĚŘIT':'Nelze ověřit'}[r.status_raw]||r.original_status||r.status_raw||r.status||'—');
 }
 filterNames.ATTENTION='K řešení';
 function matches(r){
@@ -152,12 +152,12 @@ function matches(r){
   if(activeFilter==='ABSENT_INSURED')return r.status_raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ';
   if(activeFilter==='ABSENT_UNINSURED')return r.status_raw==='NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ';
   if(activeFilter==='DEPOSIT')return r.status_raw==='NEPOJIŠTĚNO, ALE DEPOZIT';
-  if(activeFilter==='SOLD_UNIQA')return r.status_raw==='PRODANÉ, ALE V UNIQA';
+  if(activeFilter==='SOLD_UNIQA')return r.status_raw==='PRODANÉ, ALE POJIŠTĚNÉ';
   if(activeFilter==='EXTRA_UNIQA'){
     return r.status_raw==='NAVÍC V UNIQA';
   }
   if(activeFilter==='UNWANTED_INSURANCE'){
-    return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE V UNIQA'].includes(r.status_raw)&&needsAttention(r);
+    return ['NAVÍC V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE POJIŠTĚNÉ'].includes(r.status_raw)&&needsAttention(r);
   }
   return true;
 }
@@ -296,7 +296,7 @@ function render(){
   const attention=(state.results||[]).filter(needsAttention).length;
   const sourceError=Object.values(state.sources||{}).some(source=>source&&source.state==='error');
   const absentBreakdown=categoryBreakdown('NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ');
-  const soldBreakdown=categoryBreakdown('PRODANÉ, ALE V UNIQA');
+  const soldBreakdown=categoryBreakdown('PRODANÉ, ALE POJIŠTĚNÉ');
   const extraBreakdown=categoryBreakdown('NAVÍC V UNIQA');
   const extraProblemCount=extraBreakdown.open;
 

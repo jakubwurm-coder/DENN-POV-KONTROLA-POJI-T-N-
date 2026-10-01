@@ -353,6 +353,73 @@ exit
     return None
 
 
+def _lookup_insurance_context(vin: str, spz: str) -> dict[str, Any]:
+    """Vrátí poslední známý výsledek POV pro nalezené vozidlo z webového snapshotu."""
+    vin_n = "".join(ch for ch in str(vin or "").upper() if ch.isalnum())
+    spz_n = "".join(ch for ch in str(spz or "").upper() if ch.isalnum())
+    try:
+        response = requests.get(f"{CLOUD_URL}/api/state", timeout=20)
+        response.raise_for_status()
+        state = response.json()
+        for row in state.get("results") or []:
+            row_vin = "".join(ch for ch in str(row.get("vin") or "").upper() if ch.isalnum())
+            row_spz = "".join(ch for ch in str(row.get("spz_tir") or row.get("spz_uniqa") or "").upper() if ch.isalnum())
+            if (vin_n and row_vin == vin_n) or (spz_n and row_spz == spz_n):
+                return {
+                    "in_last_check": True,
+                    "status": row.get("status") or row.get("status_raw") or "",
+                    "status_raw": row.get("status_raw") or "",
+                    "detail": row.get("detail") or "",
+                    "insurer": row.get("insurer") or row.get("pojistovna") or "",
+                    "spz_insurance": row.get("spz_uniqa") or "",
+                    "last_check": state.get("finished_at") or state.get("synced_at") or "",
+                }
+        return {
+            "in_last_check": False,
+            "status": "",
+            "status_raw": "",
+            "detail": "",
+            "insurer": "",
+            "spz_insurance": "",
+            "last_check": state.get("finished_at") or state.get("synced_at") or "",
+        }
+    except Exception:
+        return {"in_last_check": False, "status": "", "status_raw": "", "detail": "", "insurer": "", "spz_insurance": "", "last_check": ""}
+
+
+def _lookup_filter_reason(vehicle: dict[str, Any]) -> dict[str, str]:
+    """Stejná pravidla v lidské podobě pro ruční SQL vyhledávání."""
+    state = str(vehicle.get("stav") or "").strip().upper()
+    purchase = bool(str(vehicle.get("datum_vykupu") or "").strip())
+    sold = bool(str(vehicle.get("datum_prodeje") or "").strip())
+    country = str(vehicle.get("zeme_puvodu") or "").strip().upper()
+    spz = str(vehicle.get("spz") or "").strip()
+    vin = str(vehicle.get("vin") or "").strip()
+    note = str(vehicle.get("poznamky") or "").upper()
+
+    if not vin:
+        return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": "Vozidlo nemá VIN, který je hlavním identifikátorem kontroly."}
+    if sold and state not in {"VYKOUPENÉ", "VYKOUPENE"}:
+        return {"decision": "KONTROLA POJIŠTĚNÍ NAVÍC", "expected": "NEPOJIŠTĚNO", "reason": "Je evidovaný prodej; systém ověřuje, zda pojištění nezůstalo aktivní."}
+    if state in {"VYKOUPENÉ", "VYKOUPENE"}:
+        return {"decision": "ZAŘAZENO DO POV", "expected": "POJIŠTĚNO", "reason": "Vykoupené vozidlo má být pojištěné vždy."}
+    if state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}:
+        if purchase:
+            return {"decision": "ZAŘAZENO DO POV", "expected": "NEPOJIŠTĚNO", "reason": "Nepřítomné vozidlo s evidovaným výkupem má být nepojištěné."}
+        return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": "Nepřítomné vozidlo bez evidovaného výkupu se nekontroluje."}
+    if state in {"REZERVOVANÉ", "REZERVOVANE", "V KOMISI"}:
+        if purchase:
+            return {"decision": "ZAŘAZENO DO POV", "expected": "POJIŠTĚNO", "reason": "Rezervace / komise má evidovaný výkup, proto vstupuje do POV kontroly."}
+        return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": "Rezervace / komise bez evidovaného výkupu neznamená povinnost POV."}
+    if "DEPOZIT" in note:
+        return {"decision": "FILTROVÁNO / DEPOZIT", "expected": "NEPOJIŠTĚNO", "reason": "Poznámka TIRBazar obsahuje DEPOZIT."}
+    if state in {"PRONAJATÉ", "PRONAJATE", "VOLNÉ", "VOLNE", "PARKOVANÉ", "PARKOVANE", "PARKOVÁNÍ UKONČENO", "PARKOVANI UKONCENO", "VRÁCENÉ Z KOMISE", "VRACENE Z KOMISE"}:
+        return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": f"Stav {vehicle.get('stav') or 'vozidla'} se podle pravidel běžně do POV kontroly nezařazuje."}
+    if country and country not in {"CZ", "ČR", "CESKA REPUBLIKA", "ČESKÁ REPUBLIKA"} and not spz:
+        return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": "Vozidlo je z jiné země a nemá evidovanou registrační značku."}
+    return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": "Aktuální stav vozidla nesplňuje pravidla pro standardní POV kontrolu."}
+
+
 def lookup_vehicle(command: dict[str, Any]) -> None:
     command_id = str(command.get("id") or "").strip()
     raw_query = str(command.get("query") or command.get("vin") or "").strip().upper()
@@ -364,6 +431,8 @@ def lookup_vehicle(command: dict[str, Any]) -> None:
             raise ValueError("Neplatný požadavek na vyhledání.")
         vehicle = _lookup_vehicle_in_full_tirbazar(query, query_type)
         if vehicle is not None:
+            vehicle["filter"] = _lookup_filter_reason(vehicle)
+            vehicle["insurance"] = _lookup_insurance_context(vehicle.get("vin", ""), vehicle.get("spz", ""))
             payload["found"] = True
             payload["vehicle"] = vehicle
     except Exception as exc:

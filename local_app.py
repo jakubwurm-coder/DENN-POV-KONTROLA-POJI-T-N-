@@ -227,7 +227,11 @@ def _run_check_worker() -> None:
         sold_vehicles = [
             vehicle
             for vehicle in vehicles
-            if bool(getattr(vehicle, "datum_prodeje", ""))
+            if (
+                bool(getattr(vehicle, "datum_prodeje", ""))
+                or " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
+                   in {"PRODANÉ", "PRODANE"}
+            )
         ]
 
         # Do běžného aktivního počtu prodaná vozidla nepatří, ale musí projít

@@ -173,7 +173,7 @@ Write-Host "=============================================="
 Write-Host ("Sluzba: " + $taskName)
 Write-Host ("Stav: " + $task.State)
 Write-Host "Python: portable, bez instalace do Windows"
-Write-Host "Automaticka kontrola: kazdych 15 minut"
+Write-Host "Automaticka kontrola: kazdou 1 hodinu"
 Write-Host "Online tlacitko: kontrola pozadavku kazdych 15 sekund"
 Write-Host "Online web: https://denni-pov-kontrola.onrender.com"
 Write-Host ("Log: " + (Join-Path $credentialDir "online-agent.log"))

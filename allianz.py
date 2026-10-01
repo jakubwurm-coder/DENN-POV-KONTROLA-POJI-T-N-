@@ -4,7 +4,7 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 
-from normalize import normalize_spz, normalize_vin, vin_looks_standard
+from normalize import normalize_spz, normalize_vin, vin_looks_standard, vin_looks_standard
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -49,15 +49,18 @@ def load_allianz_vehicles() -> AllianzLoadResult:
             for row in reader:
                 if not row:
                     continue
-
                 raw = clean_text(row[0]).upper()
                 if not raw:
                     continue
 
                 normalized = normalize_vin(raw)
-                if not normalized or normalized in seen:
+                if not normalized:
                     continue
-                seen.add(normalized)
+
+                key = normalized
+                if key in seen:
+                    continue
+                seen.add(key)
 
                 if vin_looks_standard(normalized):
                     vin = normalized

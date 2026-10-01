@@ -768,10 +768,20 @@ def load_tirbazar_vehicles(
     duplicates: list[list[TirVehicle]] = []
 
     for _, group in groups.items():
+        # Duplicitní VIN nesmíme řešit pouze nejvyšším OID. Starší záznam může
+        # obsahovat prodej/výkup, který je pro POV rozhodující. Sloučíme proto
+        # historii do aktuálního (nejvyššího OID) záznamu.
         group = sorted(group, key=lambda x: x.oid, reverse=True)
-        vehicles.append(group[0])
+        current = group[0]
         if len(group) > 1:
             duplicates.append(group)
+            if not current.datum_prodeje:
+                current.datum_prodeje = next((v.datum_prodeje for v in group if v.datum_prodeje), "")
+            if not current.datum_vykupu:
+                current.datum_vykupu = next((v.datum_vykupu for v in group if v.datum_vykupu), "")
+            if not current.poznamky:
+                current.poznamky = next((v.poznamky for v in group if v.poznamky), "")
+        vehicles.append(current)
 
     vehicles.sort(key=lambda x: x.oid)
 

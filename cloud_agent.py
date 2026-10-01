@@ -33,7 +33,7 @@ _configure_stdio()
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
 SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "OPYnDYQG4X5oVQPsKPE7qB25pw1YV9KUZWzFXcFrygfSvx1aKhkH_-MunoSx7Zof")
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
-AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "43200"))
+AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "3600"))
 SERVICE_MODE = os.getenv("DENNI_POV_SERVICE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -485,7 +485,7 @@ def main() -> int:
     args = parser.parse_args()
     print("DENNI POV - kancelářský agent")
     print("Online web:", CLOUD_URL)
-    print("Automatická kontrola: každých 12 hodin (2× denně).")
+    print("Automatická kontrola: každou 1 hodinu.")
     print("Tento proces musí běžet na počítači, který vidí TIRBazar SQL a má přístup do UNIQA.")
     if args.once:
         run_and_sync("ruční jednorázová synchronizace"); return 0
@@ -505,7 +505,7 @@ def main() -> int:
                     run_and_sync("požadavek z online webu")
                     next_auto = time.monotonic() + AUTO_SYNC_SECONDS
             elif time.monotonic() >= next_auto:
-                run_and_sync("automatická kontrola 2× denně")
+                run_and_sync("automatická kontrola každou 1 hodinu")
                 next_auto = time.monotonic() + AUTO_SYNC_SECONDS
         except KeyboardInterrupt:
             print("\nAgent ukončen."); return 0

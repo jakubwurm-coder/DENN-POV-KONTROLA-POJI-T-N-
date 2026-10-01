@@ -27,6 +27,7 @@ $txtVehicle = U "Vm96aWRsbw=="
 $txtMoreFormat = U "KyBkYWzFocOtIHswfQ=="
 $txtBalloonRequires = U "REVOTsONIFBPViAtIFZ5xb5hZHVqZSBrb250cm9sdQ=="
 $txtBalloonError = U "REVOTsONIFBPViAtIENoeWJh"
+$txtBalloonOk = "DENNI POV - Kontrola dokoncena"
 $txtCannotLoad = U "U3RhdjogTmVsemUgbmHEjcOtc3Q="
 $txtServerUnavailable = U "U2VydmVyIERFTk7DjSBQT1YgbmVuw60gZG9zdHVwbsO9"
 $txtCannotLoadTitle = U "REVOTsONIFBPViAtIG5lbHplIG5hxI3DrXN0"
@@ -89,7 +90,8 @@ function Update-DenniPov {
 
         $issueKeys = @()
         foreach ($issue in @($data.issues)) { $issueKeys += (($issue.vin + "|" + $issue.spz + "|" + $issue.status).ToUpper()) }
-        $signature = ($status + "|" + $requires + "|" + (($issueKeys | Sort-Object) -join ";"))
+        $lastCheck = [string]$data.last_check
+        $signature = ($lastCheck + "|" + $status + "|" + $requires + "|" + (($issueKeys | Sort-Object) -join ";"))
         $previous = Get-PreviousSignature
 
         if ($previous -and $signature -ne $previous) {
@@ -103,6 +105,9 @@ function Update-DenniPov {
                 Show-Balloon $txtBalloonRequires (($lines -join [Environment]::NewLine) + $extra) ([System.Windows.Forms.ToolTipIcon]::Warning)
             } elseif ($status -eq "error") {
                 Show-Balloon $txtBalloonError ([string]$data.error) ([System.Windows.Forms.ToolTipIcon]::Error)
+            } elseif ($status -eq "ok") {
+                $okText = "Aktivni vozidla: $active | V poradku: $ok | Ke kontrole: 0"
+                Show-Balloon $txtBalloonOk $okText ([System.Windows.Forms.ToolTipIcon]::Info)
             }
         }
         Save-Signature $signature
@@ -120,7 +125,7 @@ $checkItem.add_Click({ Update-DenniPov })
 $exitItem.add_Click({ $notify.Visible = $false; $timer.Stop(); [System.Windows.Forms.Application]::Exit() })
 
 $timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 300000
+$timer.Interval = 30000
 $timer.add_Tick({ Update-DenniPov })
 $timer.Start()
 Update-DenniPov

@@ -399,8 +399,9 @@ def _lookup_filter_reason(vehicle: dict[str, Any]) -> dict[str, str]:
 
     if not vin:
         return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": "Vozidlo nemá VIN, který je hlavním identifikátorem kontroly."}
-    if sold and state not in {"VYKOUPENÉ", "VYKOUPENE"}:
-        return {"decision": "KONTROLA POJIŠTĚNÍ NAVÍC", "expected": "NEPOJIŠTĚNO", "reason": "Je evidovaný prodej; systém ověřuje, zda pojištění nezůstalo aktivní."}
+    if (sold or state in {"PRODANÉ", "PRODANE"}) and state not in {"VYKOUPENÉ", "VYKOUPENE"}:
+        reason = "Stav TIRBazar je PRODANÉ" if state in {"PRODANÉ", "PRODANE"} else "Je evidovaný prodej"
+        return {"decision": "KONTROLA POJIŠTĚNÍ NAVÍC", "expected": "NEPOJIŠTĚNO", "reason": reason + "; systém pouze ověřuje, zda pojištění nezůstalo aktivní."}
     if state in {"VYKOUPENÉ", "VYKOUPENE"}:
         return {"decision": "ZAŘAZENO DO POV", "expected": "POJIŠTĚNO", "reason": "Vykoupené vozidlo má být pojištěné vždy."}
     if state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}:

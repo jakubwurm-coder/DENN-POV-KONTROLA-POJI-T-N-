@@ -3292,3 +3292,16 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
   filter:none !important;
   box-shadow:none !important;
 }
+
+/* Hlavní výsledek ručního VIN/SPZ vyhledávání */
+.lookup-main-panel{margin:0 0 20px;background:#fff;border:1px solid #dce6ed;border-radius:18px;box-shadow:0 10px 30px rgba(13,39,64,.08);overflow:hidden}
+.lookup-main-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding:24px 26px 18px;border-bottom:1px solid #e8eef3}
+.lookup-main-head h2{margin:4px 0 3px;font-size:25px;color:#0d2740}.lookup-main-ident{font-size:13px;color:#6c8195;font-weight:700;letter-spacing:.02em}
+.lookup-main-close{border:0;background:#f1f5f8;color:#526b80;width:34px;height:34px;border-radius:50%;font-size:22px;cursor:pointer}
+.lookup-main-status-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:20px 26px 0}.lookup-status-card{border-radius:14px;padding:17px 18px;border:1px solid #dce6ed;background:#f8fafc}
+.lookup-status-card span{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;color:#6c8195;margin-bottom:5px}.lookup-status-card strong{display:block;font-size:17px;color:#17354e}.lookup-status-card small{display:block;margin-top:6px;line-height:1.4;color:#60788d}
+.lookup-state-ok{background:#edf9f3;border-color:#ccebdd}.lookup-state-ok strong{color:#13764d}.lookup-state-bad{background:#fff1f3;border-color:#ffd1d9}.lookup-state-bad strong{color:#c61236}.lookup-state-warn{background:#fff8e8;border-color:#f4dfaa}.lookup-state-neutral{background:#f4f7f9}
+.lookup-main-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:20px 26px}.lookup-main-grid article{border:1px solid #e1e9ef;border-radius:14px;padding:18px}.lookup-main-grid h3{margin:0 0 14px;color:#17354e;font-size:14px}
+.lookup-main-items{display:grid;grid-template-columns:1fr 1fr;gap:13px 18px}.lookup-main-item span{display:block;font-size:10px;color:#7a8d9d;text-transform:uppercase;font-weight:700;margin-bottom:3px}.lookup-main-item strong{display:block;color:#17354e;font-size:13px;word-break:break-word}
+.lookup-main-note{margin:0 26px 24px;padding:14px 16px;background:#f5f8fa;border-radius:12px}.lookup-main-note span{display:block;font-size:10px;color:#7a8d9d;font-weight:800;margin-bottom:4px}.lookup-main-note strong{font-size:13px;color:#334f65}
+@media(max-width:800px){.lookup-main-status-row,.lookup-main-grid{grid-template-columns:1fr}.lookup-main-items{grid-template-columns:1fr}.lookup-main-head,.lookup-main-status-row,.lookup-main-grid{padding-left:16px;padding-right:16px}.lookup-main-note{margin-left:16px;margin-right:16px}}

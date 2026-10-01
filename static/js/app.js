@@ -525,6 +525,36 @@ $('search').addEventListener('input',renderRows);$('clearBtn').addEventListener(
 $('csvBtn').addEventListener('click',event=>{if($('csvBtn').getAttribute('aria-disabled')==='true')event.preventDefault();});
 setInterval(refresh,2000);refresh();
 
+function lookupStatusClass(text){
+  const s=String(text||'').toUpperCase();
+  if(s.includes('CHYBÍ')||s.includes('NAVÍC')||s.includes('POJIŠTĚNÉ')&&s.includes('NEPŘÍTOMNÉ'))return 'lookup-state-bad';
+  if(s.includes('FILTROVÁNO')||s.includes('DEPOZIT')||s.includes('MIMO POV'))return 'lookup-state-neutral';
+  if(s.includes('POŘÁDKU')||s==='OK'||s.includes('ZAŘAZENO'))return 'lookup-state-ok';
+  return 'lookup-state-warn';
+}
+function renderLookupMain(v){
+  const panel=$('lookupVehiclePanel'),content=$('lookupVehicleContent');
+  if(!panel||!content)return;
+  hideSources();hideBreakdown();hideChanges();hideManualHistory();hideHowItWorks();hideData();
+  const filter=v.filter||{},ins=v.insurance||{};
+  const title=[v.znacka,v.model].filter(Boolean).join(' ')||v.spz||v.vin||'Vozidlo';
+  const insuranceStatus=ins.in_last_check?(ins.status||ins.status_raw||'Výsledek nalezen'):(filter.expected==='MIMO POV'?'Nekontrolováno – mimo POV':'Není v posledním výsledku');
+  const item=(label,value)=>'<div class="lookup-main-item"><span>'+esc(label)+'</span><strong>'+esc(value||'—')+'</strong></div>';
+  content.innerHTML=
+    '<div class="lookup-main-head"><div><span class="section-kicker">VYHLEDÁNÍ V TIRBAZAR SQL</span><h2>'+esc(title)+'</h2><div class="lookup-main-ident">'+esc(v.spz||'Bez SPZ')+' · '+esc(v.vin||'Bez VIN')+'</div></div><button type="button" class="lookup-main-close" id="lookupMainClose">×</button></div>'+
+    '<div class="lookup-main-status-row">'+
+      '<div class="lookup-status-card '+lookupStatusClass(filter.decision)+'"><span>ZAŘAZENÍ DO KONTROLY</span><strong>'+esc(filter.decision||'Neurčeno')+'</strong><small>'+esc(filter.reason||'')+'</small></div>'+
+      '<div class="lookup-status-card '+lookupStatusClass(insuranceStatus)+'"><span>POJIŠTĚNÍ</span><strong>'+esc(insuranceStatus)+'</strong><small>'+esc(ins.detail||(ins.last_check?'Poslední kontrola: '+ins.last_check:'V poslední kontrole není k dispozici výsledek.'))+'</small></div>'+
+    '</div>'+
+    '<div class="lookup-main-grid">'+
+      '<article><h3>Vozidlo</h3><div class="lookup-main-items">'+item('VIN',v.vin)+item('SPZ',v.spz)+item('Stav v TIRBazar',v.stav)+item('OID',v.oid)+item('Země původu',v.zeme_puvodu)+'</div></article>'+
+      '<article><h3>Evidence</h3><div class="lookup-main-items">'+item('Datum výkupu',v.datum_vykupu)+item('Datum prodeje',v.datum_prodeje)+item('Očekávaný stav POV',filter.expected)+item('Pojišťovna',ins.insurer)+item('SPZ v pojištění',ins.spz_insurance)+'</div></article>'+
+    '</div>'+
+    (v.poznamky?'<div class="lookup-main-note"><span>POZNÁMKA TIRBAZAR</span><strong>'+esc(v.poznamky)+'</strong></div>':'');
+  panel.hidden=false;
+  const close=$('lookupMainClose');if(close)close.addEventListener('click',()=>{panel.hidden=true;});
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
 async function runTirLookup(event){
   event.preventDefault();
   const input=$('tirLookupInput'),button=$('tirLookupBtn'),box=$('tirLookupResult');
@@ -542,9 +572,8 @@ async function runTirLookup(event){
     if(data.status==='pending'){box.innerHTML='<span class="tir-lookup-message">Agent zatím nevrátil výsledek. Zkuste Hledat znovu.</span>';return;}
     if(data.error){box.innerHTML='<span class="tir-lookup-message error">'+esc(data.error)+'</span>';return;}
     if(!data.found||!data.vehicle){box.innerHTML='<span class="tir-lookup-message">V TIRBazar nebylo nalezeno vozidlo pro <strong>'+esc(query)+'</strong>.</span>';return;}
-    const v=data.vehicle||{};
-    const item=(label,value)=>'<div><span>'+esc(label)+'</span><strong>'+esc(value||'—')+'</strong></div>';
-    box.innerHTML='<div class="tir-lookup-result-head"><div><span class="section-kicker">NALEZENO V TIRBAZAR</span><strong>'+esc([v.znacka,v.model].filter(Boolean).join(' ')||v.spz||v.vin||'Vozidlo')+'</strong></div><span class="status-badge badge-ok">SQL</span></div><div class="tir-lookup-result-grid">'+item('VIN',v.vin)+item('SPZ',v.spz)+item('OID',v.oid)+item('Stav',v.stav)+item('Datum výkupu',v.datum_vykupu)+item('Datum prodeje',v.datum_prodeje)+item('Země původu',v.zeme_puvodu)+item('Poznámka',v.poznamky)+'</div>';
+    box.innerHTML='<span class="tir-lookup-message">Nalezeno · detail zobrazen na hlavní stránce.</span>';
+    renderLookupMain(data.vehicle);
   }catch(e){box.innerHTML='<span class="tir-lookup-message error">Vyhledání se nepodařilo. Zkuste to znovu.</span>';}
   finally{button.disabled=false;button.textContent='Hledat';}
 }

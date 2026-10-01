@@ -68,7 +68,11 @@ def main() -> None:
     active_count = sum(
         1
         for vehicle in control_vehicles
-        if not vehicle.datum_prodeje
+        if (
+            not vehicle.datum_prodeje
+            and " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
+                not in {"PRODANÉ", "PRODANE"}
+        )
     )
 
     print(

@@ -166,15 +166,22 @@ def _requires_pov_check(vehicle: TirVehicle) -> bool:
     if not vehicle.vin:
         return False
 
-    # Výjimka: pokud bylo vozidlo prodáno společnosti Vans Renting s.r.o.
-    # (IČO 02772833), stále má být pojištěné a zůstává v běžné POV kontrole.
+    state = _normalize_state(vehicle.stav)
+
+    # Stav PRODANÉ je autoritativní i tehdy, když se nepodaří dohledat
+    # historický řádek dbo.Prodej / DatumProdeje. Tím zabráníme falešnému
+    # "CHYBÍ POJIŠTĚNÍ" u prodaného vozidla.
+    if state in {"PRODANÉ", "PRODANE"}:
+        # Jediná výjimka: prodej přímo Vans Renting s.r.o. (IČO 02772833).
+        return _is_sold_to_vans_renting(vehicle)
+
+    # Výjimka: pokud bylo vozidlo prodáno společnosti Vans Renting s.r.o.,
+    # stále má být pojištěné a zůstává v běžné POV kontrole.
     if vehicle.datum_prodeje and _is_sold_to_vans_renting(vehicle):
         return True
 
     if vehicle.datum_prodeje:
         return False
-
-    state = _normalize_state(vehicle.stav)
 
     # Vykoupené vozidlo má být pojištěné vždy.
     if state in {"VYKOUPENÉ", "VYKOUPENE"}:

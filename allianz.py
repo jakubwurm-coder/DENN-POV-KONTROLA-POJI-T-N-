@@ -4,11 +4,11 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 
-from normalize import normalize_spz, normalize_vin
+from normalize import normalize_spz, normalize_vin, vin_looks_standard
 
 
 BASE_DIR = Path(__file__).resolve().parent
-ALLIANZ_FILE = BASE_DIR / "aktual_ALLIANZ.txt"
+ALLIANZ_FILE = BASE_DIR / "aktual_ALLIANZ.csv"
 
 
 @dataclass
@@ -37,66 +37,61 @@ def clean_text(value: str) -> str:
 def load_allianz_vehicles() -> AllianzLoadResult:
     try:
         if not ALLIANZ_FILE.exists():
-            raise RuntimeError(f"Allianz tabulka nebyla nalezena:\n{ALLIANZ_FILE}")
+            raise RuntimeError(f"Allianz CSV nebyl nalezen:\n{ALLIANZ_FILE}")
 
         vehicles: list[AllianzVehicle] = []
-        seen: set[tuple[str, str]] = set()
+        seen: set[str] = set()
 
+        # Aktuální Allianz CSV je jednoduchý seznam VIN/SPZ, jeden identifikátor na řádek.
+        # Standardní 17znakové hodnoty bereme jako VIN, ostatní jako SPZ.
         with ALLIANZ_FILE.open("r", encoding="utf-8-sig", newline="") as handle:
-            reader = csv.DictReader(handle, delimiter="\t")
-
-            required = {"cislo_smlouvy", "datum_pocatku_pojisteni", "stav", "SPZ", "vin"}
-            missing = required - set(reader.fieldnames or [])
-            if missing:
-                raise RuntimeError(
-                    "Allianz tabulka nemá očekávané sloupce: " + ", ".join(sorted(missing))
-                )
-
+            reader = csv.reader(handle)
             for row in reader:
-                # Aktuální Allianz export: AK = aktivní smlouva.
-                if clean_text(row.get("stav", "")).upper() != "AK":
+                if not row:
                     continue
 
-                pojistka = clean_text(row.get("cislo_smlouvy", ""))
-                poj_od = clean_text(row.get("datum_pocatku_pojisteni", ""))
-                poj_do = clean_text(row.get("datum_storna", "")) or clean_text(
-                    row.get("datum_konce_leasingu", "")
-                )
-                vin = normalize_vin(clean_text(row.get("vin", "")).upper())
-                spz = normalize_spz(clean_text(row.get("SPZ", "")).upper())
+                raw = clean_text(row[0]).upper()
+                if not raw:
+                    continue
 
-                # Pro porovnání preferujeme VIN; pokud není validní/dostupný, zůstává SPZ.
-                identifier = vin or spz
+                normalized = normalize_vin(raw)
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+
+                if vin_looks_standard(normalized):
+                    vin = normalized
+                    spz = ""
+                    identifier = vin
+                else:
+                    vin = ""
+                    spz = normalize_spz(raw)
+                    identifier = spz
+
                 if not identifier:
                     continue
-
-                key = (pojistka, identifier)
-                if key in seen:
-                    continue
-                seen.add(key)
 
                 vehicles.append(
                     AllianzVehicle(
                         identifier=identifier,
                         vin=vin,
                         spz=spz,
-                        pojistka=pojistka,
-                        poj_od=poj_od,
-                        poj_do=poj_do,
+                        pojistka="",
+                        poj_od="",
+                        poj_do="",
                     )
                 )
 
         vehicles.sort(key=lambda v: (v.vin or v.spz))
 
         if not vehicles:
-            raise RuntimeError("Allianz tabulka byla otevřena, ale nebyla rozpoznána žádná aktivní vozidla.")
+            raise RuntimeError("Allianz CSV byl otevřen, ale nebylo rozpoznáno žádné vozidlo.")
 
-        starts = sorted(v.poj_od for v in vehicles if v.poj_od)
         return AllianzLoadResult(
             vehicles=vehicles,
             available=True,
             error="",
-            period_od=starts[0] if starts else "",
+            period_od="",
             period_do="",
         )
 
@@ -113,7 +108,7 @@ def load_allianz_vehicles() -> AllianzLoadResult:
 def print_report(result: AllianzLoadResult) -> None:
     print()
     print("=" * 72)
-    print("ALLIANZ - NAČTENÍ AKTUÁLNÍ TABULKY")
+    print("ALLIANZ - NAČTENÍ AKTUÁLNÍHO CSV")
     print("=" * 72)
     print()
 
@@ -123,19 +118,14 @@ def print_report(result: AllianzLoadResult) -> None:
         return
 
     print("Soubor:", ALLIANZ_FILE.name)
-    print("Načtených aktivních vozidel:", len(result.vehicles))
+    print("Načtených vozidel:", len(result.vehicles))
     print()
     print("-" * 72)
-    print(f"{'POJISTKA':<12}{'SPZ':<12}{'VIN':<20}{'OD':<12}")
+    print(f"{'SPZ':<16}{'VIN':<20}")
     print("-" * 72)
 
     for vehicle in result.vehicles:
-        print(
-            f"{vehicle.pojistka:<12}"
-            f"{vehicle.spz:<12}"
-            f"{vehicle.vin:<20}"
-            f"{vehicle.poj_od:<12}"
-        )
+        print(f"{vehicle.spz:<16}{vehicle.vin:<20}")
 
     print("-" * 72)
 

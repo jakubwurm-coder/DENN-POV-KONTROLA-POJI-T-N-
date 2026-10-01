@@ -174,14 +174,10 @@ def _snapshot() -> dict[str, Any]:
             "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ",
         }
 
-        visible_results = [
-            r
-            for r in results
-            if (
-                not getattr(r, "datum_prodeje", "")
-                or getattr(r, "status", "") in visible_statuses
-            )
-        ]
+        # Viditelnost výsledku se nesmí řídit historickým datem prodeje.
+        # O významu vozidla rozhoduje už porovnávací logika podle aktuálního
+        # stavu TIRBazar.
+        visible_results = list(results)
 
         return {
             "running": _state["running"],
@@ -227,11 +223,8 @@ def _run_check_worker() -> None:
         sold_vehicles = [
             vehicle
             for vehicle in vehicles
-            if (
-                bool(getattr(vehicle, "datum_prodeje", ""))
-                or " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
-                   in {"PRODANÉ", "PRODANE"}
-            )
+            if " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
+               in {"PRODANÉ", "PRODANE"}
         ]
 
         # Do běžného aktivního počtu prodaná vozidla nepatří, ale musí projít

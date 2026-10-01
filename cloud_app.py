@@ -246,6 +246,21 @@ def _db_init(cur) -> None:
     cur.execute("ALTER TABLE denni_pov_history ADD COLUMN IF NOT EXISTS changes JSONB NOT NULL DEFAULT '{}'::jsonb")
     cur.execute("ALTER TABLE denni_pov_history ADD COLUMN IF NOT EXISTS daily_date DATE")
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS denni_pov_history_daily_date_uidx ON denni_pov_history (daily_date) WHERE daily_date IS NOT NULL")
+    # Neměnný audit každého dokončeného běhu. Denní historie se může během dne
+    # aktualizovat, ale tento log se nikdy nepřepisuje.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS denni_pov_run_history (
+            id BIGSERIAL PRIMARY KEY,
+            checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            started_at TEXT,
+            finished_at TEXT,
+            summary JSONB NOT NULL,
+            results JSONB NOT NULL,
+            error TEXT,
+            changes JSONB NOT NULL DEFAULT '{}'::jsonb
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS denni_pov_run_history_checked_idx ON denni_pov_run_history (checked_at DESC)")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS denni_pov_annotations (
             vehicle_key TEXT PRIMARY KEY,
@@ -432,6 +447,101 @@ def _history_save_daily(data: dict[str, Any], alert_sent: bool) -> dict[str, Any
     except Exception as exc:
         print(f"Daily history save failed: {exc}")
     return daily_changes
+
+def _run_history_last_successful() -> dict[str, Any] | None:
+    """Poslední dokončený úspěšný běh. Používá se jako pevná srovnávací základna."""
+    if not _DATABASE_URL:
+        return None
+    try:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                _db_init(cur)
+                cur.execute("""
+                    SELECT started_at, finished_at, summary, results, changes
+                    FROM denni_pov_run_history
+                    WHERE COALESCE(error, '') = ''
+                    ORDER BY id DESC
+                    LIMIT 1
+                """)
+                row = cur.fetchone()
+                conn.commit()
+        if not row:
+            return None
+        return {
+            "started_at": row[0] or "",
+            "finished_at": row[1] or "",
+            "summary": row[2] if isinstance(row[2], dict) else {},
+            "results": row[3] if isinstance(row[3], list) else [],
+            "changes": row[4] if isinstance(row[4], dict) else {},
+        }
+    except Exception as exc:
+        print(f"Run history load failed: {exc}")
+        return None
+
+
+def _run_history_save(data: dict[str, Any]) -> None:
+    """Uloží neměnný snapshot každého dokončeného běhu."""
+    if not _DATABASE_URL:
+        return
+    try:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                _db_init(cur)
+                cur.execute("""
+                    INSERT INTO denni_pov_run_history
+                        (started_at, finished_at, summary, results, error, changes)
+                    VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb)
+                """, (
+                    data.get("started_at"),
+                    data.get("finished_at"),
+                    json.dumps(data.get("summary") or {}, ensure_ascii=False),
+                    json.dumps(data.get("results") or [], ensure_ascii=False),
+                    data.get("error"),
+                    json.dumps(data.get("changes") or {}, ensure_ascii=False),
+                ))
+                conn.commit()
+    except Exception as exc:
+        print(f"Run history save failed: {exc}")
+
+
+def _vehicle_run_history(vin: str, limit: int = 60) -> list[dict[str, Any]]:
+    """Audit jednoho VIN napříč skutečnými dokončenými běhy."""
+    if not _DATABASE_URL:
+        return []
+    vin = str(vin or "").strip().upper()
+    try:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                _db_init(cur)
+                cur.execute("""
+                    SELECT id, checked_at, finished_at, results
+                    FROM denni_pov_run_history
+                    ORDER BY id DESC
+                    LIMIT %s
+                """, (max(1, min(limit, 365)),))
+                runs = cur.fetchall()
+                conn.commit()
+        audit = []
+        for run_id, checked_at, finished_at, results in runs:
+            rows = results if isinstance(results, list) else []
+            row = next((r for r in rows if isinstance(r, dict)
+                        and str(r.get("vin") or "").strip().upper() == vin), None)
+            audit.append({
+                "run_id": run_id,
+                "checked_at": checked_at.isoformat() if checked_at else "",
+                "finished_at": finished_at or "",
+                "present": row is not None,
+                "status": str((row or {}).get("status_raw") or (row or {}).get("status") or ""),
+                "spz": str((row or {}).get("spz_tir") or (row or {}).get("spz_uniqa") or ""),
+                "vehicle": str((row or {}).get("vozidlo") or ""),
+                "detail": str((row or {}).get("detail") or ""),
+                "row": row or None,
+            })
+        return audit
+    except Exception as exc:
+        print(f"Vehicle run history failed: {exc}")
+        return []
+
 
 def _history_load(limit: int = 100) -> list[dict[str, Any]]:
     if not _DATABASE_URL:
@@ -1009,6 +1119,15 @@ def api_history():
     return jsonify({"ok": True, "history": _history_load(limit_i)})
 
 
+@app.get("/api/vehicle-history/<vin>")
+def api_vehicle_history(vin: str):
+    vin = re.sub(r"\s+", "", str(vin or "")).upper()
+    if not _KOSTKA_VIN.fullmatch(vin):
+        return jsonify({"ok": False, "message": "Neplatné VIN vozidla."}), 400
+    history = _vehicle_run_history(vin, request.args.get("limit", 60, type=int) or 60)
+    return jsonify({"ok": True, "vin": vin, "history": history})
+
+
 @app.get("/api/manual-history")
 def api_manual_history():
     limit = request.args.get("limit", "300")
@@ -1198,9 +1317,13 @@ def api_sync():
         data["synced_at"] = _now()
         data["csv_available"] = bool(data.get("results"))
         data["_command"] = None
-        if final_run and previous.get("finished_at") and previous.get("results"):
-            run_changes = _compare_runs(previous, data)
-            if _same_local_day(previous.get("finished_at"), _today_iso()):
+        # Srovnáváme výhradně s posledním dokončeným snapshotem, ne s průběžným
+        # stavem /api/sync. Průběžná synchronizace totiž může results dočasně
+        # vyprázdnit a dříve pak vozidlo vypadalo jako nově nalezené bez vysvětlení.
+        comparison_base = _run_history_last_successful() if final_run else None
+        if final_run and comparison_base and comparison_base.get("results"):
+            run_changes = _compare_runs(comparison_base, data)
+            if _same_local_day(comparison_base.get("finished_at"), _today_iso()):
                 prior_daily = previous.get("changes") if isinstance(previous.get("changes"), dict) else {}
                 merged_items = _merge_change_items(prior_daily.get("items") or [], run_changes.get("items") or [])
                 data["changes"] = {
@@ -1220,6 +1343,7 @@ def api_sync():
 
         if final_run:
             data["changes"] = _history_save_daily(data, alert_sent)
+            _run_history_save(data)
         _save_state(data)
 
     if final_run and not data.get("error"):

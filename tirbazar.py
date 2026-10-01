@@ -175,16 +175,14 @@ def _requires_pov_check(vehicle: TirVehicle) -> bool:
         # Jediná výjimka: prodej přímo Vans Renting s.r.o. (IČO 02772833).
         return _is_sold_to_vans_renting(vehicle)
 
+    # Aktuální stav v TIRBazar je autoritativní. Historické datum prodeje
+    # nesmí vyřadit vozidlo, které je dnes znovu ve stavu VYKOUPENÉ.
+    if state in {"VYKOUPENÉ", "VYKOUPENE"}:
+        return True
+
     # Výjimka: pokud bylo vozidlo prodáno společnosti Vans Renting s.r.o.,
     # stále má být pojištěné a zůstává v běžné POV kontrole.
     if vehicle.datum_prodeje and _is_sold_to_vans_renting(vehicle):
-        return True
-
-    if vehicle.datum_prodeje:
-        return False
-
-    # Vykoupené vozidlo má být pojištěné vždy.
-    if state in {"VYKOUPENÉ", "VYKOUPENE"}:
         return True
 
     # Nepřítomné vozidlo s evidovaným výkupem zůstává aktivní pro kontrolu.
@@ -811,7 +809,7 @@ def load_tirbazar_vehicles(
     ]
     sold = [
         v for v in vehicles
-        if bool(v.datum_prodeje) or _normalize_state(v.stav) in {"PRODANÉ", "PRODANE"}
+        if _normalize_state(v.stav) in {"PRODANÉ", "PRODANE"}
     ]
     sold_to_vans_renting = [v for v in sold if _is_sold_to_vans_renting(v)]
     ignored = [v for v in vehicles if v not in control]

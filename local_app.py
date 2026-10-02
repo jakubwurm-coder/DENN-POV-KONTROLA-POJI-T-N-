@@ -74,6 +74,8 @@ def _display_status(result) -> str:
         return "CHYBÍ POJIŠTĚNÍ"
     if status == "NEPOJIŠTĚNO, ALE DEPOZIT":
         return "NEPOJIŠTĚNO, ALE DEPOZIT"
+    if status == "DEPOZIT, ALE POJIŠTĚNÉ":
+        return "DEPOZIT, ALE POJIŠTĚNO"
     if status == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ":
         return "NEPŘÍTOMNÉ, ALE POJIŠTĚNO"
     if status == "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ":
@@ -135,6 +137,7 @@ def _summary(results, active_count: int) -> dict[str, int]:
         "absent_insured": counts.get("NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", 0),
         "absent_uninsured": counts.get("NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ", 0),
         "deposit": deposit,
+        "deposit_insured": counts.get("DEPOZIT, ALE POJIŠTĚNÉ", 0),
         "sold_uniqa": counts.get("PRODANÉ, ALE POJIŠTĚNÉ", 0),
         "extra_uniqa": counts.get("NAVÍC V UNIQA", 0),
         "spz_mismatch": counts.get("SPZ NESOUHLASÍ", 0),

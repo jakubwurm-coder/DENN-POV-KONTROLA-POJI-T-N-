@@ -694,6 +694,22 @@ GO
             raise RuntimeError((result.stderr or result.stdout or "SQL diagnostika selhala.").strip())
         payload["lines"] = [x.strip() for x in (result.stdout or "").splitlines()
                             if any(tag in x for tag in ("__CARD__|","__SALE__|","__BUY__|","__COMMISSION_BUY__|"))]
+
+        # Ověření stejného objektu, který skutečně vstupuje do hromadné kontroly.
+        vehicles, _ = tirbazar.load_tirbazar_vehicles(config)
+        for vehicle in vehicles:
+            if getattr(vehicle, "vin", "") == "WF04XXWPG4GR04000":
+                payload["lines"].append(
+                    "__LOADED__|"
+                    + str(getattr(vehicle, "oid", "") or "") + "|"
+                    + str(getattr(vehicle, "stav", "") or "") + "|"
+                    + str(getattr(vehicle, "datum_vykupu", "") or "") + "|"
+                    + str(getattr(vehicle, "datum_prodeje", "") or "") + "|"
+                    + str(getattr(vehicle, "kupujici_ico", "") or "") + "|"
+                    + str(getattr(vehicle, "kupujici_nazev", "") or "") + "|"
+                    + str(tirbazar._requires_pov_check(vehicle)) + "|"
+                    + str(tirbazar._is_sold_to_vans_renting(vehicle))
+                )
     except Exception as exc:
         payload["error"] = str(exc).strip() or exc.__class__.__name__
     response = requests.post(f"{CLOUD_URL}/api/agent/known-sold-result", headers=_headers(), json=payload, timeout=45)

@@ -225,6 +225,7 @@ def _default_state() -> dict[str, Any]:
         },
         "summary": {"active": 0, "ok_total": 0, "ok_uniqa": 0, "ok_allianz": 0, "missing": 0, "absent_insured": 0, "absent_uninsured": 0, "deposit": 0, "sold_uniqa": 0, "extra_uniqa": 0},
         "results": [],
+        "audit": {},
         "changes": {"count": 0, "items": [], "summary_delta": {}, "compared_to": None},
         "annotations": {},
         "csv_available": False,
@@ -1322,7 +1323,7 @@ def api_sync():
         annotations = _annotations_load(previous.get("annotations"))
         data = _default_state()
         data["annotations"] = annotations
-        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress"):
+        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress", "audit"):
             if key in payload: data[key] = payload[key]
         data["running"] = bool(payload.get("running"))
         if data["running"]:
@@ -1523,6 +1524,85 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
     ws.page_margins.top = 0.35
     ws.page_margins.bottom = 0.35
     ws.print_title_rows = "1:10"
+
+    # Auditní listy: technické detaily jsou v Excelu, nikoli na hlavním dashboardu.
+    audit = data.get("audit") if isinstance(data.get("audit"), dict) else {}
+    counts = audit.get("counts") if isinstance(audit.get("counts"), dict) else {}
+
+    # Kompaktní auditní souhrn pod hlavním přehledem.
+    audit_row = footer_row + 3
+    ws.merge_cells(start_row=audit_row, start_column=1, end_row=audit_row, end_column=8)
+    ac = ws.cell(row=audit_row, column=1)
+    ac.value = "AUDIT KONTROLY"
+    ac.font = Font(name="Arial", size=11, bold=True, color=dark)
+    audit_pairs = [
+        ("SQL záznamů celkem", counts.get("sql_total", "")),
+        ("Unikátních VIN", counts.get("unique_vins", "")),
+        ("Má být pojištěno", counts.get("expected_insured", "")),
+        ("Má být nepojištěno", counts.get("expected_uninsured", "")),
+        ("Odfiltrováno", counts.get("filtered", "")),
+        ("UNIQA záznamů", counts.get("uniqa", "")),
+        ("Allianz záznamů", counts.get("allianz", "")),
+        ("Duplicitních VIN skupin", counts.get("duplicate_vin_groups", "")),
+    ]
+    for offset, (label, value) in enumerate(audit_pairs, start=1):
+        r = audit_row + offset
+        ws.cell(r, 1, label).font = Font(name="Arial", size=9, color=gray)
+        ws.cell(r, 2, value).font = Font(name="Arial", size=9, bold=True, color=dark)
+
+    def add_audit_sheet(title: str, rows_data: list[dict[str, Any]], columns: list[tuple[str, str]]) -> None:
+        sheet = wb.create_sheet(title)
+        sheet.sheet_view.showGridLines = False
+        sheet.freeze_panes = "A2"
+        for col_idx, (_, label) in enumerate(columns, start=1):
+            cell = sheet.cell(1, col_idx, label)
+            cell.font = Font(name="Arial", size=9, bold=True, color=white)
+            cell.fill = PatternFill(fill_type="solid", fgColor=navy)
+            cell.alignment = Alignment(vertical="center")
+        for row_idx, item in enumerate(rows_data, start=2):
+            for col_idx, (key, _) in enumerate(columns, start=1):
+                cell = sheet.cell(row_idx, col_idx, _excel_text(item.get(key, "")))
+                cell.font = Font(name="Arial", size=9, color=dark)
+                cell.alignment = Alignment(vertical="top", wrap_text=key in {"filtr", "vysledek"})
+                if row_idx % 2 == 0:
+                    cell.fill = PatternFill(fill_type="solid", fgColor="FBFDFE")
+        if rows_data:
+            sheet.auto_filter.ref = f"A1:{chr(64 + min(len(columns), 26))}{len(rows_data) + 1}"
+        for col_idx, (key, label) in enumerate(columns, start=1):
+            letter = chr(64 + col_idx)
+            sheet.column_dimensions[letter].width = min(42, max(12, len(label) + 3, 20 if key in {"vin", "vysledek", "filtr"} else 12))
+
+    sql_rows = audit.get("sql") if isinstance(audit.get("sql"), list) else []
+    add_audit_sheet("SQL audit", sql_rows, [
+        ("oid", "OID"), ("vin", "VIN"), ("spz", "SPZ"), ("stav", "Stav"),
+        ("zeme_puvodu", "Země"), ("datum_vykupu", "Datum výkupu"),
+        ("datum_prodeje", "Datum prodeje"), ("ocekavani", "Očekávání"),
+        ("uniqa", "UNIQA"), ("allianz", "ALLIANZ"), ("vysledek", "Výsledek"),
+        ("filtr", "Důvod filtru"),
+    ])
+    uniqa_rows = audit.get("uniqa") if isinstance(audit.get("uniqa"), list) else []
+    add_audit_sheet("UNIQA", uniqa_rows, [
+        ("vin", "VIN"), ("spz", "SPZ"), ("cps", "ČPS"),
+        ("poj_od", "Pojištění od"), ("poj_do", "Pojištění do"),
+    ])
+    allianz_rows = audit.get("allianz") if isinstance(audit.get("allianz"), list) else []
+    add_audit_sheet("ALLIANZ", allianz_rows, [
+        ("identifikator", "Identifikátor"), ("vin", "VIN"), ("spz", "SPZ"),
+        ("pojistka", "Pojistka"), ("poj_od", "Pojištění od"), ("poj_do", "Pojištění do"),
+    ])
+    duplicate_groups = audit.get("duplicates") if isinstance(audit.get("duplicates"), list) else []
+    duplicate_rows = []
+    for group_no, group in enumerate(duplicate_groups, start=1):
+        if not isinstance(group, list):
+            continue
+        for item in group:
+            if isinstance(item, dict):
+                duplicate_rows.append({"skupina": group_no, **item})
+    add_audit_sheet("Duplicity a výjimky", duplicate_rows, [
+        ("skupina", "Skupina"), ("oid", "OID"), ("vin", "VIN"), ("spz", "SPZ"),
+        ("stav", "Stav"), ("datum_vykupu", "Datum výkupu"),
+        ("datum_prodeje", "Datum prodeje"), ("ocekavani", "Očekávání"),
+    ])
 
     output = io.BytesIO()
     wb.save(output)

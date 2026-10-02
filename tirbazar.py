@@ -171,16 +171,17 @@ def _requires_pov_check(vehicle: TirVehicle) -> bool:
 
     state = _normalize_state(vehicle.stav)
 
-    # PRODEJ JE PRVOTNÍ KRITÉRIUM. Jakmile má karta evidovaný DatumProdeje,
-    # vozidlo už do běžné POV kontroly nevstupuje, bez ohledu na Stav nebo
-    # text DEPOZIT v poznámce. Jediná výjimka je prodej přímo Vans Renting.
+    # PRODEJ JE PRVOTNÍ KRITÉRIUM. Prodaná karta MUSÍ zůstat v kontrolní
+    # množině, protože se proti UNIQA + Allianz ověřuje opačné očekávání:
+    # běžný prodej má být NEPOJIŠTĚNÝ; prodej Vans Renting je výjimka a
+    # zůstává očekávaně POJIŠTĚNÝ. O výsledku rozhodne compare.py.
     if vehicle.datum_prodeje:
-        return _is_sold_to_vans_renting(vehicle)
+        return True
 
-    # Stav PRODANÉ je záložní autoritativní signál i tehdy, když se
-    # historický řádek dbo.Prodej / DatumProdeje nepodaří dohledat.
+    # Stav PRODANÉ je autoritativní signál i tehdy, když historický řádek
+    # dbo.Prodej / DatumProdeje není dostupný.
     if state in {"PRODANÉ", "PRODANE"}:
-        return _is_sold_to_vans_renting(vehicle)
+        return True
 
     if state in {"VYKOUPENÉ", "VYKOUPENE"}:
         return True

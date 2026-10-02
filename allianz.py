@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import csv
+import io
 from dataclasses import dataclass
-from pathlib import Path
+
+import requests
 
 from normalize import normalize_spz, normalize_vin, vin_looks_standard
 
 
-BASE_DIR = Path(__file__).resolve().parent
-ALLIANZ_FILE = BASE_DIR / "aktual_ALLIANZ.csv"
+ALLIANZ_GITHUB_URL = (
+    "https://raw.githubusercontent.com/"
+    "jakubwurm-coder/DENN-POV-KONTROLA-POJI-T-N-/main/aktual_ALLIANZ.csv"
+)
 
 
 @dataclass
@@ -36,15 +40,26 @@ def clean_text(value: str) -> str:
 
 def load_allianz_vehicles() -> AllianzLoadResult:
     try:
-        if not ALLIANZ_FILE.exists():
-            raise RuntimeError(f"Allianz CSV nebyl nalezen:\n{ALLIANZ_FILE}")
+        response = requests.get(
+            ALLIANZ_GITHUB_URL,
+            headers={
+                "Accept": "text/csv,text/plain;q=0.9,*/*;q=0.8",
+                "User-Agent": "DENNI-POV-Agent/Allianz",
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+
+        text = response.content.decode("utf-8-sig")
+        if not text.strip():
+            raise RuntimeError("Allianz CSV na GitHubu je prázdný.")
 
         vehicles: list[AllianzVehicle] = []
         seen: set[str] = set()
 
-        # Aktuální Allianz CSV je jednoduchý seznam VIN/SPZ, jeden identifikátor na řádek.
+        # Allianz data mají jediný autoritativní zdroj: GitHub.
         # Standardní 17znakové hodnoty bereme jako VIN, ostatní jako SPZ.
-        with ALLIANZ_FILE.open("r", encoding="utf-8-sig", newline="") as handle:
+        with io.StringIO(text, newline="") as handle:
             reader = csv.reader(handle)
             for row in reader:
                 if not row:
@@ -120,7 +135,7 @@ def print_report(result: AllianzLoadResult) -> None:
         print(result.error)
         return
 
-    print("Soubor:", ALLIANZ_FILE.name)
+    print("Zdroj:", ALLIANZ_GITHUB_URL)
     print("Načtených vozidel:", len(result.vehicles))
     print()
     print("-" * 72)

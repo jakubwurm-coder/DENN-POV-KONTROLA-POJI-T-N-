@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# DENNI POV - generated/local audit artifacts
+output/
+*.bak
+*.bak_*
+tsql_last_output.txt

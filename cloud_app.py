@@ -1336,7 +1336,8 @@ def agent_sql_sample_result():
     with _lock:
         data = _load_state()
         pending = data.get("_sql_sample") if isinstance(data.get("_sql_sample"), dict) else {}
-        if not command_id or str(pending.get("id") or "") != command_id:
+        startup_diag = command_id == "startup-sql-sample-20261002"
+        if not command_id or (not startup_diag and str(pending.get("id") or "") != command_id):
             return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
         error = str(payload.get("error") or "")
         result = {

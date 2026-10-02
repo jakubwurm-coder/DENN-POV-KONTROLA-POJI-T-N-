@@ -1326,6 +1326,36 @@ def agent_lookup_result():
 
 
 
+
+@app.post("/api/agent/sql-sample-result")
+def agent_sql_sample_result():
+    if not _authorized():
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    command_id = str(payload.get("id") or "").strip()
+    with _lock:
+        data = _load_state()
+        pending = data.get("_sql_sample") if isinstance(data.get("_sql_sample"), dict) else {}
+        if not command_id or str(pending.get("id") or "") != command_id:
+            return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
+        error = str(payload.get("error") or "")
+        result = {
+            "id": command_id,
+            "status": "error" if error else "done",
+            "rows": payload.get("rows") if isinstance(payload.get("rows"), list) else [],
+            "state_columns": payload.get("state_columns") if isinstance(payload.get("state_columns"), list) else [],
+            "state_values": payload.get("state_values") if isinstance(payload.get("state_values"), list) else [],
+            "error": error,
+            "finished_at": _now(),
+        }
+        data["_sql_sample"] = result
+        if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:
+            data["_command"] = None
+        _save_state(data)
+    # TEMP diagnostika: výsledek jde do aplikačního logu, ne do veřejného API.
+    print("SQL_SAMPLE_RESULT " + json.dumps(result, ensure_ascii=False), flush=True)
+    return jsonify({"ok": True})
+
 @app.post("/api/audit-export")
 def request_audit_export():
     with _lock:
@@ -1725,6 +1755,7 @@ def health():
         "synced_at": data.get("synced_at"),
         "waiting_for_agent": bool(data.get("_command")),
     })
+
 
 
 

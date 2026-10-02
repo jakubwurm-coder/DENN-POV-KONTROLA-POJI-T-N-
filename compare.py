@@ -119,6 +119,55 @@ def compare_vehicles(
         uniqa_vehicle = uniqa_by_vin.get(vin)
 
         # ====================================================
+        # DEPOZIT
+        #
+        # SQL/TIRBazar říká, že vozidlo NEMÁ BÝT POJIŠTĚNO.
+        # Teprve UNIQA + Allianz potvrdí skutečný stav.
+        # ====================================================
+        if _is_deposit_note(vehicle.poznamky):
+            allianz_vehicle = None
+            if allianz_available:
+                allianz_vehicle = allianz_by_vin.get(vin)
+                if allianz_vehicle is None and tir_spz:
+                    allianz_vehicle = allianz_by_spz.get(tir_spz)
+
+            if uniqa_available and uniqa_vehicle:
+                results.append(ComparisonResult(
+                    oid=vehicle.oid, vin=vin, tir_spz=tir_spz,
+                    uniqa_spz=normalize_spz(uniqa_vehicle.spz),
+                    status="DEPOZIT, ALE POJIŠTĚNÉ",
+                    detail="Vozidlo je v depozitu, ale je stále pojištěné v UNIQA – správný stav je NEPOJIŠTĚNO.",
+                    datum_vykupu=vehicle.datum_vykupu, datum_prodeje="",
+                ))
+                continue
+
+            if allianz_vehicle is not None:
+                results.append(ComparisonResult(
+                    oid=vehicle.oid, vin=vin, tir_spz=tir_spz, uniqa_spz="",
+                    status="DEPOZIT, ALE POJIŠTĚNÉ",
+                    detail="Vozidlo je v depozitu, ale je stále pojištěné v ALLIANZ – správný stav je NEPOJIŠTĚNO.",
+                    datum_vykupu=vehicle.datum_vykupu, datum_prodeje="",
+                ))
+                continue
+
+            if not uniqa_available or not allianz_available:
+                results.append(ComparisonResult(
+                    oid=vehicle.oid, vin=vin, tir_spz=tir_spz, uniqa_spz="",
+                    status="NELZE OVĚŘIT",
+                    detail="Vozidlo je v depozitu a má být NEPOJIŠTĚNO, ale nelze ověřit oba zdroje pojištění.",
+                    datum_vykupu=vehicle.datum_vykupu, datum_prodeje="",
+                ))
+                continue
+
+            results.append(ComparisonResult(
+                oid=vehicle.oid, vin=vin, tir_spz=tir_spz, uniqa_spz="",
+                status="NEPOJIŠTĚNO, ALE DEPOZIT",
+                detail="Vozidlo je v depozitu a nebylo nalezeno v UNIQA ani ALLIANZ – správně NEPOJIŠTĚNO.",
+                datum_vykupu=vehicle.datum_vykupu, datum_prodeje="",
+            ))
+            continue
+
+        # ====================================================
         # NEPŘÍTOMNÉ + VYKOUPENÉ
         #
         # Vozidlo zůstává v aktivním počtu, ale správný stav
@@ -457,39 +506,6 @@ def compare_vehicles(
             continue
 
         # ====================================================
-        # 3. DEPOZIT
-        #
-        # Kontrolujeme až poté, co není v UNIQA ani Allianz.
-        # ====================================================
-
-        if _is_deposit_note(
-            vehicle.poznamky
-        ):
-
-            note = _short_note(
-                vehicle.poznamky
-            )
-
-            results.append(
-                ComparisonResult(
-                    oid=vehicle.oid,
-                    vin=vin,
-                    tir_spz=tir_spz,
-                    uniqa_spz="",
-                    status="NEPOJIŠTĚNO, ALE DEPOZIT",
-                    detail=(
-                        "Vozidlo nebylo nalezeno v UNIQA ani Allianz, "
-                        "ale v poznámce TIRBazar byl nalezen text DEPOZIT. "
-                        f"Poznámka: {note}"
-                    ),
-                    datum_vykupu=vehicle.datum_vykupu,
-                    datum_prodeje="",
-                )
-            )
-
-            continue
-
-        # ====================================================
         # 4. OPRAVDU CHYBÍ POJIŠTĚNÍ
         # ====================================================
 
@@ -549,6 +565,7 @@ def compare_vehicles(
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ": 2,
         "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ": 9,
         "NEPOJIŠTĚNO, ALE DEPOZIT": 3,
+        "DEPOZIT, ALE POJIŠTĚNÉ": 2,
         "PRODANÉ, ALE POJIŠTĚNÉ": 3,
         "SPZ NESOUHLASÍ": 4,
         "NAVÍC V UNIQA": 5,

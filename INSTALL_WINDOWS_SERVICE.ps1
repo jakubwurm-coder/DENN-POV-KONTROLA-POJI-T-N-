@@ -342,7 +342,7 @@ Write-Host "HOTOVO"
 Write-Host ("Sluzba: " + $taskName)
 Write-Host ("Stav: " + $task.State)
 Write-Host "Automaticky start: pri startu Windows, bez nutnosti prihlaseni uzivatele"
-Write-Host "Automaticka kontrola: kazdych 15 minut"
+Write-Host "Automaticka kontrola: kazdou 1 hodinu"
 Write-Host "Online tlacitko: agent kontroluje pozadavek kazdych 15 sekund"
 Write-Host "Online web: https://denni-pov-kontrola.onrender.com"
 Write-Host ("Log: " + (Join-Path $credentialDir "online-agent.log"))

@@ -1727,3 +1727,15 @@ def health():
     })
 
 
+
+
+# TEMP SQL sample trigger; removed immediately after diagnostic response.
+try:
+    with _lock:
+        _diag_state = _load_state()
+        _diag_id = uuid.uuid4().hex
+        _diag_state["_sql_sample"] = {"id": _diag_id, "status": "pending", "requested_at": _now()}
+        _diag_state["_command"] = {"id": _diag_id, "action": "sample_tirbazar", "requested_at": _now()}
+        _save_state(_diag_state)
+except Exception:
+    pass

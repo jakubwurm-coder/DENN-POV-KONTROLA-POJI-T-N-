@@ -485,6 +485,132 @@ def lookup_vehicle(command: dict[str, Any]) -> None:
     response.raise_for_status()
 
 
+
+def sample_tirbazar(command: dict[str, Any]) -> None:
+    """Read-only diagnostika: 10 skutečných karet + všechna dbo.Vozidlo pole obsahující 'Stav'."""
+    command_id = str(command.get("id") or "").strip()
+    payload: dict[str, Any] = {"id": command_id, "rows": [], "state_columns": [], "state_values": [], "error": ""}
+    try:
+        if not command_id:
+            raise ValueError("Chybí ID diagnostického požadavku.")
+
+        # Na Windows tím aktivujeme .NET SqlClient kompatibilitu a bezpečně
+        # uložené přihlašovací údaje. Na ostatních OS je to no-op pro lokální app.
+        _load_local_app()
+        import tirbazar
+        from config import load_config
+
+        config = load_config()
+        password = tirbazar.get_password()
+        base_dir = Path(__file__).resolve().parent
+        freetds_conf = base_dir / "freetds.conf"
+        tsql = tirbazar.Path("/opt/homebrew/bin/tsql")
+        if not freetds_conf.exists():
+            raise RuntimeError(f"Chybí {freetds_conf}")
+        if not tsql.exists():
+            raise RuntimeError(f"Chybí {tsql}")
+
+        sql = r"""
+USE TIRBazar;
+GO
+SET NOCOUNT ON;
+GO
+
+SELECT '__STATECOL__|' + c.name + '|' + t.name
+FROM sys.columns c
+JOIN sys.types t ON c.user_type_id = t.user_type_id
+WHERE c.object_id = OBJECT_ID('dbo.Vozidlo')
+  AND c.name LIKE '%Stav%'
+ORDER BY c.column_id;
+GO
+
+SELECT TOP 10
+    '__ROW__|' +
+    CAST(v.OID AS VARCHAR(30)) + '|' +
+    REPLACE(REPLACE(ISNULL(v.VIN, ''), CHAR(13), ' '), CHAR(10), ' ') + '|' +
+    REPLACE(REPLACE(ISNULL(CASE
+        WHEN v.NovaRegistracniZnacka IS NOT NULL AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> ''
+        THEN v.NovaRegistracniZnacka ELSE v.RegistracniZnacka END, ''), CHAR(13), ' '), CHAR(10), ' ') + '|' +
+    REPLACE(REPLACE(ISNULL(CONVERT(VARCHAR(100), v.Stav), ''), CHAR(13), ' '), CHAR(10), ' ') + '|' +
+    ISNULL(CONVERT(VARCHAR(30), v.GCRecord), '')
+FROM dbo.Vozidlo v
+WHERE v.GCRecord IS NULL
+  AND LTRIM(RTRIM(ISNULL(v.VIN, ''))) <> ''
+ORDER BY v.OID DESC;
+GO
+
+DECLARE @col SYSNAME, @sql NVARCHAR(MAX);
+DECLARE state_cursor CURSOR LOCAL FAST_FORWARD FOR
+SELECT c.name
+FROM sys.columns c
+WHERE c.object_id = OBJECT_ID('dbo.Vozidlo')
+  AND c.name LIKE '%Stav%'
+ORDER BY c.column_id;
+
+OPEN state_cursor;
+FETCH NEXT FROM state_cursor INTO @col;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    SET @sql = N'
+    SELECT TOP 10
+        ''__STATEVAL__|'' + CAST(v.OID AS VARCHAR(30)) + ''|'' +
+        REPLACE(REPLACE(''' + REPLACE(@col, '''', '''''') + N''', CHAR(13), '' ''), CHAR(10), '' '') + ''|'' +
+        REPLACE(REPLACE(ISNULL(CONVERT(NVARCHAR(4000), v.' + QUOTENAME(@col) + N'), ''''), CHAR(13), '' ''), CHAR(10), '' '')
+    FROM dbo.Vozidlo v
+    WHERE v.GCRecord IS NULL
+      AND LTRIM(RTRIM(ISNULL(v.VIN, ''''))) <> ''''
+    ORDER BY v.OID DESC;';
+    EXEC sp_executesql @sql;
+    FETCH NEXT FROM state_cursor INTO @col;
+END
+CLOSE state_cursor;
+DEALLOCATE state_cursor;
+GO
+"""
+        tirbazar.validate_read_only(sql)
+        env = os.environ.copy()
+        if os.name != "nt":
+            env["FREETDSCONF"] = str(freetds_conf)
+            env["TDSVER"] = "7.4"
+        try:
+            result = tirbazar.subprocess.run(
+                [str(tsql), "-S", "tirbazar", "-U", config.username, "-P", password],
+                input=sql, capture_output=True, text=True, env=env, timeout=120,
+            )
+        finally:
+            password = ""
+
+        if result.returncode != 0:
+            raise RuntimeError((result.stderr or result.stdout or "SQL diagnostika selhala.").strip())
+
+        for original in (result.stdout or "").splitlines():
+            line = original.strip()
+            if "__STATECOL__|" in line:
+                parts = line[line.find("__STATECOL__|"):].split("|", 2)
+                if len(parts) == 3:
+                    payload["state_columns"].append({"name": parts[1].strip(), "type": parts[2].strip()})
+            elif "__ROW__|" in line:
+                parts = line[line.find("__ROW__|"):].split("|", 5)
+                if len(parts) == 6:
+                    payload["rows"].append({
+                        "oid": parts[1].strip(), "vin": parts[2].strip(), "spz": parts[3].strip(),
+                        "legacy_stav": parts[4].strip(), "gcrecord": parts[5].strip(),
+                    })
+            elif "__STATEVAL__|" in line:
+                parts = line[line.find("__STATEVAL__|"):].split("|", 3)
+                if len(parts) == 4:
+                    payload["state_values"].append({
+                        "oid": parts[1].strip(), "column": parts[2].strip(), "value": parts[3].strip()
+                    })
+    except Exception as exc:
+        payload["error"] = str(exc).strip() or exc.__class__.__name__
+
+    response = requests.post(
+        f"{CLOUD_URL}/api/agent/sql-sample-result",
+        headers=_headers(), json=payload, timeout=45,
+    )
+    response.raise_for_status()
+
 def _error_snapshot(exc: Exception) -> dict[str, Any]:
     message = str(exc).strip() or exc.__class__.__name__
     now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
@@ -563,6 +689,8 @@ def main() -> int:
                     lookup_vehicle(command or {})
                 elif action == "export_audit":
                     export_audit(command or {})
+                elif action == "sample_tirbazar":
+                    sample_tirbazar(command or {})
                 else:
                     run_and_sync("požadavek z online webu")
                     next_auto = time.monotonic() + AUTO_SYNC_SECONDS

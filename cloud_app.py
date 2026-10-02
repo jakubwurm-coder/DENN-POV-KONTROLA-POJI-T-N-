@@ -1034,8 +1034,23 @@ def _send_push_for_state(data: dict[str, Any], tag: str = "denni-pov-check") -> 
     summary = public.get("summary") or {}
     active = int(summary.get("active") or 0)
     missing = int(summary.get("missing") or 0)
-    unwanted = int(summary.get("absent_insured") or 0) + int(summary.get("sold_uniqa") or 0) + int(summary.get("extra_uniqa") or 0)
+    unwanted = (
+        int(summary.get("absent_insured") or 0)
+        + int(summary.get("sold_uniqa") or 0)
+        + int(summary.get("extra_uniqa") or 0)
+        + int(summary.get("deposit_insured") or 0)
+    )
+    other = int(summary.get("spz_mismatch") or 0) + int(summary.get("unverified") or 0)
+    problems = missing + unwanted + other
+
+    # Uživatel chce upozornění pouze tehdy, když výsledek skutečně
+    # vyžaduje kontrolu. Bez problému neposíláme žádnou push notifikaci.
+    if problems <= 0:
+        return {"sent": 0, "subscriptions": 0}
+
     body = f"Aktivní vozidla: {active} · chybí pojištění: {missing} · pojištění navíc: {unwanted}"
+    if other:
+        body += f" · ostatní ke kontrole: {other}"
     payload = json.dumps({
         "title": "DENNÍ POV · Kontrola dokončena",
         "body": body,

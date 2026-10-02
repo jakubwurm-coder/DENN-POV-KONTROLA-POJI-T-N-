@@ -69,10 +69,8 @@ def _is_absent_purchased(vehicle: TirVehicle) -> bool:
 
 
 def _is_sold(vehicle: TirVehicle) -> bool:
-    """Pro POV je prodej prvotní kritérium; stav PRODANÉ je záložní signál."""
-    return bool(getattr(vehicle, "datum_prodeje", "")) or (
-        _normalize_state(getattr(vehicle, "stav", "")) in {"PRODANÉ", "PRODANE"}
-    )
+    """Pro POV rozhoduje aktuální pole „Stav vozidla“ v TIRBazar."""
+    return _normalize_state(getattr(vehicle, "stav", "")) in {"PRODANÉ", "PRODANE"}
 
 
 def compare_vehicles(

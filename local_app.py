@@ -14,7 +14,8 @@ from compare import compare_vehicles
 from config import load_config
 from models import ComparisonResult
 from report import prepare_output, write_comparison, write_duplicates, write_tirbazar_snapshot
-from tirbazar import _requires_pov_check, load_tirbazar_vehicles
+from tirbazar import _is_czech_for_pov, _requires_pov_check, load_tirbazar_vehicles
+import tirbazar
 from uniqa import load_uniqa_vehicles
 
 app = Flask(__name__)
@@ -29,6 +30,7 @@ _state: dict[str, Any] = {
     "active_count": 0,
     "results": [],
     "last_csv": None,
+    "audit": {},
     "sources": {
         "tirbazar": {"state": "idle", "status": "Zatím nenačteno", "detail": "• ke kontrole: 0"},
         "uniqa": {"state": "idle", "status": "Zatím nenačteno", "detail": "Aktivních VIN: 0 • Duplicitních VIN: 0"},
@@ -187,6 +189,7 @@ def _snapshot() -> dict[str, Any]:
             "sources": {k: dict(v) for k, v in _state["sources"].items()},
             "summary": _summary(results, _state["active_count"]),
             "results": [_serialize_result(r) for r in visible_results],
+            "audit": dict(_state.get("audit") or {}),
             "csv_available": bool(
                 _state["last_csv"]
                 and Path(_state["last_csv"]).exists()
@@ -200,6 +203,39 @@ def _set_source(name: str, state: str, status: str, detail: str | None = None) -
         _state["sources"][name]["status"] = status
         if detail is not None:
             _state["sources"][name]["detail"] = detail
+
+
+def _audit_filter_reason(vehicle) -> str:
+    state = " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
+    if not getattr(vehicle, "vin", ""):
+        return "Bez VIN"
+    if not _is_czech_for_pov(vehicle):
+        return "Mimo pravidla země / registrační značky"
+    if _is_deposit_vehicle(vehicle):
+        return "Depozit"
+    if state in {"PRODANÉ", "PRODANE"}:
+        return "Prodané – kontroluje se pouze pojištění navíc"
+    if state in {"NEPŘÍTOMNÉ", "NEPRITOMNE", "REZERVOVANÉ", "REZERVOVANE", "V KOMISI"} and not getattr(vehicle, "datum_vykupu", ""):
+        return "Bez evidovaného výkupu"
+    return f"Stav mimo POV: {getattr(vehicle, 'stav', '') or 'neuveden'}"
+
+
+def _audit_vehicle_row(vehicle, eligible: bool) -> dict[str, object]:
+    state = " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
+    absent = state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"} and bool(getattr(vehicle, "datum_vykupu", ""))
+    deposit = _is_deposit_vehicle(vehicle)
+    expected = "NEMÁ BÝT POJIŠTĚNO" if absent or deposit else ("MÁ BÝT POJIŠTĚNO" if eligible else "MIMO POV")
+    return {
+        "oid": getattr(vehicle, "oid", None),
+        "vin": getattr(vehicle, "vin", "") or "",
+        "spz": getattr(vehicle, "spz", "") or "",
+        "stav": getattr(vehicle, "stav", "") or "",
+        "zeme_puvodu": getattr(vehicle, "zeme_puvodu", "") or "",
+        "datum_vykupu": getattr(vehicle, "datum_vykupu", "") or "",
+        "datum_prodeje": getattr(vehicle, "datum_prodeje", "") or "",
+        "ocekavani": expected,
+        "filtr": "" if eligible and not deposit else _audit_filter_reason(vehicle),
+    }
 
 
 def _run_check_worker() -> None:
@@ -319,6 +355,73 @@ def _run_check_worker() -> None:
 
         results.extend(_deposit_result(vehicle) for vehicle in deposit_vehicles)
 
+        # Auditní data patří ke stejnému běhu jako výsledek. Díky tomu Excel
+        # zpětně ukáže přesně SQL/TIRBazar, UNIQA a Allianz použitá při rozhodnutí.
+        result_by_oid = {
+            getattr(result, "oid", None): result
+            for result in results
+            if getattr(result, "oid", None) is not None
+        }
+        uniqa_vins = {getattr(v, "vin", "") for v in uniqa.vehicles if getattr(v, "vin", "")}
+        allianz_vins = {getattr(v, "vin", "") for v in allianz.vehicles if getattr(v, "vin", "")}
+        allianz_spz = {getattr(v, "spz", "") for v in allianz.vehicles if getattr(v, "spz", "")}
+
+        sql_rows = []
+        for vehicle in vehicles:
+            eligible = _requires_pov_check(vehicle)
+            row = _audit_vehicle_row(vehicle, eligible)
+            vin = getattr(vehicle, "vin", "") or ""
+            spz = getattr(vehicle, "spz", "") or ""
+            result = result_by_oid.get(getattr(vehicle, "oid", None))
+            row["uniqa"] = "ANO" if vin and vin in uniqa_vins else "NE"
+            row["allianz"] = "ANO" if (vin and vin in allianz_vins) or (spz and spz in allianz_spz) else "NE"
+            row["vysledek"] = _display_status(result) if result is not None else (
+                "SPRÁVNĚ NEPOJIŠTĚNO" if row["ocekavani"] == "NEMÁ BÝT POJIŠTĚNO" else row["filtr"]
+            )
+            sql_rows.append(row)
+
+        audit = {
+            "counts": {
+                **dict(tirbazar.LAST_LOAD_STATS),
+                "eligible_total": len(eligible_vehicles),
+                "active_control": len(control_vehicles),
+                "deposit": len(deposit_vehicles),
+                "expected_insured": sum(1 for v in control_vehicles if " ".join(str(getattr(v, "stav", "") or "").strip().upper().split()) not in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}),
+                "expected_uninsured": sum(1 for v in control_vehicles if " ".join(str(getattr(v, "stav", "") or "").strip().upper().split()) in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}) + len(deposit_vehicles),
+                "uniqa": len(uniqa.vehicles),
+                "allianz": len(allianz.vehicles),
+            },
+            "sql": sql_rows,
+            "uniqa": [
+                {
+                    "vin": getattr(v, "vin", "") or "",
+                    "spz": getattr(v, "spz", "") or "",
+                    "cps": getattr(v, "cps", "") or "",
+                    "poj_od": getattr(v, "poj_od", "") or "",
+                    "poj_do": getattr(v, "poj_do", "") or "",
+                }
+                for v in uniqa.vehicles
+            ],
+            "allianz": [
+                {
+                    "identifikator": getattr(v, "identifier", "") or "",
+                    "vin": getattr(v, "vin", "") or "",
+                    "spz": getattr(v, "spz", "") or "",
+                    "pojistka": getattr(v, "pojistka", "") or "",
+                    "poj_od": getattr(v, "poj_od", "") or "",
+                    "poj_do": getattr(v, "poj_do", "") or "",
+                }
+                for v in allianz.vehicles
+            ],
+            "duplicates": [
+                [
+                    _audit_vehicle_row(v, _requires_pov_check(v))
+                    for v in group
+                ]
+                for group in duplicates
+            ],
+        }
+
         vehicle_by_oid = {
             vehicle.oid: vehicle
             for vehicle in [*compare_vehicles_input, *deposit_vehicles]
@@ -342,6 +445,7 @@ def _run_check_worker() -> None:
         with _lock:
             _state["results"] = results
             _state["last_csv"] = str(csv_path)
+            _state["audit"] = audit
             _state["finished_at"] = _now()
             _state["error"] = None
     except Exception as exc:

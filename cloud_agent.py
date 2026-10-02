@@ -446,7 +446,9 @@ def _lookup_filter_reason(vehicle: dict[str, Any]) -> dict[str, str]:
     if state in {"PRODANÉ", "PRODANE"}:
         return {"decision": "KONTROLA POJIŠTĚNÍ NAVÍC", "expected": "NEPOJIŠTĚNO", "reason": "Aktuální stav TIRBazar je PRODANÉ; systém pouze ověřuje, zda pojištění nezůstalo aktivní."}
     if state in {"VYKOUPENÉ", "VYKOUPENE"}:
-        return {"decision": "ZAŘAZENO DO POV", "expected": "POJIŠTĚNO", "reason": "Vykoupené vozidlo má být pojištěné vždy."}
+        if "DEPOZIT" in note:
+            return {"decision": "KONTROLA POJIŠTĚNÍ NAVÍC", "expected": "NEPOJIŠTĚNO", "reason": "Aktuální stav je VYKOUPENÉ a poznámka obsahuje DEPOZIT; kontroluje se, zda pojištění nezůstalo aktivní."}
+        return {"decision": "ZAŘAZENO DO POV", "expected": "POJIŠTĚNO", "reason": "Vykoupené vozidlo má být pojištěné."}
     if state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}:
         if purchase:
             return {"decision": "ZAŘAZENO DO POV", "expected": "NEPOJIŠTĚNO", "reason": "Nepřítomné vozidlo s evidovaným výkupem má být nepojištěné."}
@@ -455,8 +457,6 @@ def _lookup_filter_reason(vehicle: dict[str, Any]) -> dict[str, str]:
         if purchase:
             return {"decision": "ZAŘAZENO DO POV", "expected": "POJIŠTĚNO", "reason": "Rezervace / komise má evidovaný výkup, proto vstupuje do POV kontroly."}
         return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": "Rezervace / komise bez evidovaného výkupu neznamená povinnost POV."}
-    if "DEPOZIT" in note:
-        return {"decision": "FILTROVÁNO / DEPOZIT", "expected": "NEPOJIŠTĚNO", "reason": "Poznámka TIRBazar obsahuje DEPOZIT."}
     if state in {"PRONAJATÉ", "PRONAJATE", "VOLNÉ", "VOLNE", "PARKOVANÉ", "PARKOVANE", "PARKOVÁNÍ UKONČENO", "PARKOVANI UKONCENO", "VRÁCENÉ Z KOMISE", "VRACENE Z KOMISE"}:
         return {"decision": "FILTROVÁNO", "expected": "MIMO POV", "reason": f"Stav {vehicle.get('stav') or 'vozidla'} se podle pravidel běžně do POV kontroly nezařazuje."}
     if country and country not in {"CZ", "ČR", "CESKA REPUBLIKA", "ČESKÁ REPUBLIKA"} and not spz:

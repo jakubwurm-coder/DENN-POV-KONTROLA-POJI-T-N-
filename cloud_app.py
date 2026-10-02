@@ -188,7 +188,7 @@ def _today_iso() -> str:
     return _now_dt().date().isoformat()
 
 
-def _run_is_stale(data: dict[str, Any], max_minutes: int = 20) -> bool:
+def _run_is_stale(data: dict[str, Any], max_minutes: int = 10) -> bool:
     if not data.get("running"):
         return False
     started = str(data.get("started_at") or "").strip()
@@ -1247,7 +1247,7 @@ def api_run():
             return jsonify({"ok": False, "message": "Kontrola už probíhá."}), 409
         if data.get("running") and _run_is_stale(data):
             data["running"] = False
-            data["error"] = "Předchozí kontrola překročila 20 minut a byla automaticky uvolněna."
+            data["error"] = "Předchozí kontrola překročila 10 minut a byla automaticky uvolněna."
             data["_command"] = None
         command_id = uuid.uuid4().hex
         data["running"] = True

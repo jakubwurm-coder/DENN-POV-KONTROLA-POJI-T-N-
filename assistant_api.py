@@ -30,7 +30,8 @@ def install_assistant_api(app, load_state: Callable[[], dict[str, Any]], public_
         problem_raw = {
             "CHYBÍ V UNIQA",
             "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-            "PRODANÉ, ALE V UNIQA",
+            "PRODANÉ, ALE POJIŠTĚNÉ",
+            "DEPOZIT, ALE POJIŠTĚNÉ",
             "NAVÍC V UNIQA",
             "SPZ NESOUHLASÍ",
             "NELZE OVĚŘIT",

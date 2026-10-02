@@ -1357,6 +1357,21 @@ def agent_sql_sample_result():
     print("SQL_SAMPLE_RESULT " + json.dumps(result, ensure_ascii=False), flush=True)
     return jsonify({"ok": True})
 
+
+@app.post("/api/agent/known-sold-result")
+def agent_known_sold_result():
+    if not _authorized():
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    result = {
+        "id": str(payload.get("id") or ""),
+        "lines": payload.get("lines") if isinstance(payload.get("lines"), list) else [],
+        "error": str(payload.get("error") or ""),
+        "finished_at": _now(),
+    }
+    print("KNOWN_SOLD_RESULT " + json.dumps(result, ensure_ascii=False), flush=True)
+    return jsonify({"ok": True})
+
 @app.post("/api/audit-export")
 def request_audit_export():
     with _lock:
@@ -1761,13 +1776,3 @@ def health():
 
 
 
-# TEMP SQL sample trigger; removed immediately after diagnostic response.
-try:
-    with _lock:
-        _diag_state = _load_state()
-        _diag_id = uuid.uuid4().hex
-        _diag_state["_sql_sample"] = {"id": _diag_id, "status": "pending", "requested_at": _now()}
-        _diag_state["_command"] = {"id": _diag_id, "action": "sample_tirbazar", "requested_at": _now()}
-        _save_state(_diag_state)
-except Exception:
-    pass

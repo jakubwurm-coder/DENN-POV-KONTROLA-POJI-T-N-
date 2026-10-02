@@ -265,18 +265,15 @@ def _run_check_worker() -> None:
 
         # Do běžného aktivního počtu prodaná vozidla nepatří, ale musí projít
         # porovnáním s pojišťovnami. Jen tak odhalíme pojištění vedené navíc.
-        compare_vehicles_input = control_vehicles + [
+        compare_vehicles_input = eligible_vehicles + [
             vehicle for vehicle in sold_vehicles
-            if vehicle not in control_vehicles and not _is_deposit_vehicle(vehicle)
+            if vehicle not in eligible_vehicles
         ]
 
         ignored_vehicles = [
             vehicle
             for vehicle in vehicles
-            if (
-                (not _requires_pov_check(vehicle) and vehicle not in sold_vehicles)
-                or _is_deposit_vehicle(vehicle)
-            )
+            if not _requires_pov_check(vehicle) and vehicle not in sold_vehicles
         ]
 
         ignored_vins = {
@@ -353,8 +350,6 @@ def _run_check_worker() -> None:
             allianz_error=allianz.error,
         )
 
-        results.extend(_deposit_result(vehicle) for vehicle in deposit_vehicles)
-
         # Auditní data patří ke stejnému běhu jako výsledek. Díky tomu Excel
         # zpětně ukáže přesně SQL/TIRBazar, UNIQA a Allianz použitá při rozhodnutí.
         result_by_oid = {
@@ -424,7 +419,7 @@ def _run_check_worker() -> None:
 
         vehicle_by_oid = {
             vehicle.oid: vehicle
-            for vehicle in [*compare_vehicles_input, *deposit_vehicles]
+            for vehicle in compare_vehicles_input
         }
         for result in results:
             source_vehicle = vehicle_by_oid.get(getattr(result, "oid", None))

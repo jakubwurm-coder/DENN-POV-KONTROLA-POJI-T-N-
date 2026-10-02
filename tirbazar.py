@@ -14,6 +14,9 @@ from normalize import normalize_spz, normalize_vin
 KEYCHAIN_SERVICE = "UNIQA_CHECKER_TIRBAZAR"
 KEYCHAIN_ACCOUNT = "TB"
 
+# Diagnostika posledního SQL načtení pro auditní Excel.
+LAST_LOAD_STATS: dict[str, int] = {}
+
 FORBIDDEN_SQL = (
     "INSERT ",
     "UPDATE ",
@@ -835,5 +838,18 @@ def load_tirbazar_vehicles(
     print("Ostatní vozidla mimo pravidla POV - ignorováno:", len(ignored))
     print("Aktivních ke kontrole celkem:", len(control))
     print()
+
+    LAST_LOAD_STATS.clear()
+    LAST_LOAD_STATS.update({
+        "sql_total": total,
+        "raw_rows": len(raw_rows),
+        "unique_vins": len(vehicles),
+        "without_vin": max(without_vin_sql, len(without_vin)),
+        "duplicate_vin_groups": len(duplicates),
+        "control": len(control),
+        "filtered": max(0, len(vehicles) - len(control)),
+        "sold": len(sold),
+        "sold_to_vans_renting": len(sold_to_vans_renting),
+    })
 
     return vehicles, duplicates

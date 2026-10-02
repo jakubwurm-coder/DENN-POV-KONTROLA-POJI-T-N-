@@ -611,6 +611,78 @@ GO
     )
     response.raise_for_status()
 
+
+def diagnose_known_sold_vins() -> None:
+    """TEMP read-only diagnostika dvou karet, které TIRBazar UI ukazuje jako Prodané."""
+    diag_id = "known-sold-vins-20261002"
+    payload: dict[str, Any] = {"id": diag_id, "lines": [], "error": ""}
+    try:
+        _load_local_app()
+        import tirbazar
+        from config import load_config
+        config = load_config()
+        password = tirbazar.get_password()
+        base_dir = Path(__file__).resolve().parent
+        freetds_conf = base_dir / "freetds.conf"
+        tsql = tirbazar.Path("/opt/homebrew/bin/tsql")
+        vins = ("WV1ZZZ2DZ1H035224", "WF04XXWPG4GR04000")
+        vin_sql = ",".join("'" + x.replace("'", "''") + "'" for x in vins)
+        sql = f"""
+USE TIRBazar;
+GO
+SET NOCOUNT ON;
+GO
+SELECT '__CARD__|' + CAST(v.OID AS VARCHAR(30)) + '|' +
+ REPLACE(REPLACE(ISNULL(v.VIN,''),CHAR(13),' '),CHAR(10),' ') + '|' +
+ REPLACE(REPLACE(ISNULL(CONVERT(NVARCHAR(4000),v.Stav),''),CHAR(13),' '),CHAR(10),' ') + '|' +
+ REPLACE(REPLACE(ISNULL(CONVERT(NVARCHAR(4000),v.StavKod),''),CHAR(13),' '),CHAR(10),' ') + '|' +
+ REPLACE(REPLACE(ISNULL(CONVERT(NVARCHAR(4000),v.PuvodniStav),''),CHAR(13),' '),CHAR(10),' ') + '|' +
+ REPLACE(REPLACE(ISNULL(CONVERT(NVARCHAR(4000),v.TechnickyStav),''),CHAR(13),' '),CHAR(10),' ') + '|' +
+ ISNULL(CONVERT(VARCHAR(30),v.GCRecord),'')
+FROM dbo.Vozidlo v
+WHERE v.VIN IN ({vin_sql})
+ORDER BY v.VIN,v.OID;
+GO
+SELECT '__SALE__|' + CAST(p.Vozidlo AS VARCHAR(30)) + '|' +
+ ISNULL(CONVERT(VARCHAR(19),p.DatumProdeje,120),'') + '|' +
+ ISNULL(CONVERT(VARCHAR(30),p.GCRecord),'')
+FROM dbo.Prodej p JOIN dbo.Vozidlo v ON v.OID=p.Vozidlo
+WHERE v.VIN IN ({vin_sql})
+ORDER BY p.Vozidlo,p.DatumProdeje;
+GO
+SELECT '__BUY__|' + CAST(x.Vozidlo AS VARCHAR(30)) + '|' +
+ ISNULL(CONVERT(VARCHAR(19),x.DatumVykupu,120),'') + '|' +
+ ISNULL(CONVERT(VARCHAR(30),x.GCRecord),'')
+FROM dbo.VykupVozidla x JOIN dbo.Vozidlo v ON v.OID=x.Vozidlo
+WHERE v.VIN IN ({vin_sql})
+ORDER BY x.Vozidlo,x.DatumVykupu;
+GO
+SELECT '__COMMISSION_BUY__|' + CAST(x.Vozidlo AS VARCHAR(30)) + '|' +
+ ISNULL(CONVERT(VARCHAR(19),x.DatumVykupu,120),'') + '|' +
+ ISNULL(CONVERT(VARCHAR(30),x.GCRecord),'')
+FROM dbo.VykoupeniZKomise x JOIN dbo.Vozidlo v ON v.OID=x.Vozidlo
+WHERE v.VIN IN ({vin_sql})
+ORDER BY x.Vozidlo,x.DatumVykupu;
+GO
+"""
+        tirbazar.validate_read_only(sql)
+        env = os.environ.copy()
+        if os.name != "nt":
+            env["FREETDSCONF"] = str(freetds_conf); env["TDSVER"] = "7.4"
+        try:
+            result = tirbazar.subprocess.run([str(tsql), "-S", "tirbazar", "-U", config.username, "-P", password],
+                input=sql, capture_output=True, text=True, env=env, timeout=120)
+        finally:
+            password = ""
+        if result.returncode != 0:
+            raise RuntimeError((result.stderr or result.stdout or "SQL diagnostika selhala.").strip())
+        payload["lines"] = [x.strip() for x in (result.stdout or "").splitlines()
+                            if any(tag in x for tag in ("__CARD__|","__SALE__|","__BUY__|","__COMMISSION_BUY__|"))]
+    except Exception as exc:
+        payload["error"] = str(exc).strip() or exc.__class__.__name__
+    response = requests.post(f"{CLOUD_URL}/api/agent/known-sold-result", headers=_headers(), json=payload, timeout=45)
+    response.raise_for_status()
+
 def _error_snapshot(exc: Exception) -> dict[str, Any]:
     message = str(exc).strip() or exc.__class__.__name__
     now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
@@ -673,11 +745,11 @@ def main() -> int:
     print("Online web:", CLOUD_URL)
     print("Automatická kontrola: každou 1 hodinu.")
     print("Tento proces musí běžet na počítači, který vidí TIRBazar SQL a má přístup do UNIQA.")
-    # TEMP 2026-10-02: jednorázová read-only SQL diagnostika při startu.
+    # TEMP 2026-10-02: cílená read-only diagnostika dvou známých prodaných VIN.
     try:
-        sample_tirbazar({"id": "startup-sql-sample-20261002"})
+        diagnose_known_sold_vins()
     except Exception as exc:
-        print("SQL startup diagnostika selhala:", exc)
+        print("Known sold VIN diagnostika selhala:", exc)
     if args.once:
         run_and_sync("ruční jednorázová synchronizace"); return 0
     last_command_id = ""

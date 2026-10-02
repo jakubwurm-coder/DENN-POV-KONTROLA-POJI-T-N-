@@ -263,32 +263,35 @@ def _run_check_worker() -> None:
             vehicle for vehicle in vehicles if _requires_pov_check(vehicle)
         ]
 
-        deposit_vehicles = [
-            vehicle for vehicle in eligible_vehicles if _is_deposit_vehicle(vehicle)
-        ]
-        control_vehicles = [
-            vehicle for vehicle in eligible_vehicles if not _is_deposit_vehicle(vehicle)
-        ]
-
         sold_vehicles = [
             vehicle
-            for vehicle in vehicles
+            for vehicle in eligible_vehicles
             if (
                 bool(getattr(vehicle, "datum_prodeje", ""))
                 or " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
                    in {"PRODANÉ", "PRODANE"}
             )
         ]
+        sold_oids = {getattr(vehicle, "oid", None) for vehicle in sold_vehicles}
 
-        # Prodaná vozidla se kontrolují OBRÁCENĚ: očekáváme NEPOJIŠTĚNO.
-        # Proto musí vstoupit do porovnání s UNIQA i Allianz, ale nesmí být
-        # vyhodnocena jako CHYBÍ POJIŠTĚNÍ. compare.py jim dává vlastní větev.
+        deposit_vehicles = [
+            vehicle
+            for vehicle in eligible_vehicles
+            if getattr(vehicle, "oid", None) not in sold_oids and _is_deposit_vehicle(vehicle)
+        ]
+        # Aktivní počet = vozidla, která jsou aktuálně v běžné POV kontrole.
+        # Běžně prodaná vozidla se ověřují proti oběma pojišťovnám, ale do
+        # aktivního počtu nepatří.
+        control_vehicles = [
+            vehicle
+            for vehicle in eligible_vehicles
+            if getattr(vehicle, "oid", None) not in sold_oids and not _is_deposit_vehicle(vehicle)
+        ]
+
+        # Jediný zdroj pravdy: _requires_pov_check() už obsahuje i PRODANÉ.
+        # compare.py podle stavu/prodeje rozliší očekávání POJIŠTĚNO vs.
+        # NEPOJIŠTĚNO a případné pojištění prodaného vozidla nahlásí.
         compare_vehicles_input = list(eligible_vehicles)
-        compare_oids = {getattr(vehicle, "oid", None) for vehicle in compare_vehicles_input}
-        for vehicle in sold_vehicles:
-            if getattr(vehicle, "oid", None) not in compare_oids:
-                compare_vehicles_input.append(vehicle)
-                compare_oids.add(getattr(vehicle, "oid", None))
 
         sold_vins = {vehicle.vin for vehicle in sold_vehicles if vehicle.vin}
         ignored_vehicles = [

@@ -1769,3 +1769,18 @@ def health():
         "synced_at": data.get("synced_at"),
         "waiting_for_agent": bool(data.get("_command")),
     })
+
+
+# TEMP 2026-10-02: jednorázově vyžádej read-only SQL vzorek po deployi.
+# Po získání diagnostiky bude tento blok odstraněn.
+try:
+    with _lock:
+        _diag_state = _load_state()
+        _diag = _diag_state.get("_sql_sample") if isinstance(_diag_state.get("_sql_sample"), dict) else {}
+        if _diag.get("status") not in {"pending", "done"}:
+            _diag_id = uuid.uuid4().hex
+            _diag_state["_sql_sample"] = {"id": _diag_id, "status": "pending", "requested_at": _now()}
+            _diag_state["_command"] = {"id": _diag_id, "action": "sample_tirbazar", "requested_at": _now()}
+            _save_state(_diag_state)
+except Exception:
+    pass

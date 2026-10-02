@@ -14,7 +14,7 @@ from compare import compare_vehicles
 from config import load_config
 from models import ComparisonResult
 from report import prepare_output, write_comparison, write_duplicates, write_tirbazar_snapshot
-from tirbazar import _is_czech_for_pov, _requires_pov_check, load_tirbazar_vehicles
+from tirbazar import _is_czech_for_pov, _is_sold_to_vans_renting, _requires_pov_check, load_tirbazar_vehicles
 import tirbazar
 from uniqa import load_uniqa_vehicles
 

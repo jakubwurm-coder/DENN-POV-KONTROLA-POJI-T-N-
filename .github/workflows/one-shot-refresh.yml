@@ -1,4 +1,4 @@
-name: One-shot DENNI POV refresh 2
+name: One-shot DENNI POV diagnostic buyer
 on:
   push:
     paths:

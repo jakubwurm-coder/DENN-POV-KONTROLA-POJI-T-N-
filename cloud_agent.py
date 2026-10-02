@@ -34,7 +34,7 @@ CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrende
 SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "OPYnDYQG4X5oVQPsKPE7qB25pw1YV9KUZWzFXcFrygfSvx1aKhkH_-MunoSx7Zof")
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
 AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "3600"))
-MAX_CHECK_SECONDS = int(os.getenv("DENNI_POV_MAX_CHECK_SECONDS", "900"))
+MAX_CHECK_SECONDS = int(os.getenv("DENNI_POV_MAX_CHECK_SECONDS", "600"))
 SERVICE_MODE = os.getenv("DENNI_POV_SERVICE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 

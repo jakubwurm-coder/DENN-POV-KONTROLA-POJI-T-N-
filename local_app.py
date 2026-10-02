@@ -267,26 +267,36 @@ def _run_check_worker() -> None:
         sold_vehicles = [
             vehicle
             for vehicle in vehicles
-            if " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
-               in {"PRODANÉ", "PRODANE"}
+            if (
+                bool(getattr(vehicle, "datum_prodeje", ""))
+                or " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
+                   in {"PRODANÉ", "PRODANE"}
+            )
         ]
 
-        # PRODANÉ je prvotní kritérium. Běžně prodané vozidlo už do POV
-        # porovnání ani do přehledu nevstupuje, a to ani když poznámka obsahuje
-        # DEPOZIT. Jedinou výjimku řeší _requires_pov_check(): prodej přímo
-        # Vans Renting s.r.o. zůstává mezi eligible_vehicles.
+        # Prodaná vozidla se kontrolují OBRÁCENĚ: očekáváme NEPOJIŠTĚNO.
+        # Proto musí vstoupit do porovnání s UNIQA i Allianz, ale nesmí být
+        # vyhodnocena jako CHYBÍ POJIŠTĚNÍ. compare.py jim dává vlastní větev.
         compare_vehicles_input = list(eligible_vehicles)
+        compare_oids = {getattr(vehicle, "oid", None) for vehicle in compare_vehicles_input}
+        for vehicle in sold_vehicles:
+            if getattr(vehicle, "oid", None) not in compare_oids:
+                compare_vehicles_input.append(vehicle)
+                compare_oids.add(getattr(vehicle, "oid", None))
 
+        sold_vins = {vehicle.vin for vehicle in sold_vehicles if vehicle.vin}
         ignored_vehicles = [
             vehicle
             for vehicle in vehicles
             if not _requires_pov_check(vehicle)
         ]
 
+        # Prodané VIN nesmíme odstranit z UNIQA vstupu: právě jejich případnou
+        # přítomnost v UNIQA/Allianz potřebujeme odhalit jako pojištění navíc.
         ignored_vins = {
             vehicle.vin
             for vehicle in ignored_vehicles
-            if vehicle.vin
+            if vehicle.vin and vehicle.vin not in sold_vins
         }
 
         active_count = len(control_vehicles)

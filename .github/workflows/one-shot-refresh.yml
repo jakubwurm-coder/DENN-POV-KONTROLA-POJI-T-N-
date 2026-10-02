@@ -1,0 +1,11 @@
+name: One-shot DENNI POV refresh
+on:
+  push:
+    paths:
+      - ".github/workflows/one-shot-refresh.yml"
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger current Windows agent refresh
+        run: curl --fail --silent --show-error -X POST https://denni-pov-kontrola.onrender.com/api/run

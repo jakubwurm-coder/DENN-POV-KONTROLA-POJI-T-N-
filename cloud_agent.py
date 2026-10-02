@@ -673,6 +673,11 @@ def main() -> int:
     print("Online web:", CLOUD_URL)
     print("Automatická kontrola: každou 1 hodinu.")
     print("Tento proces musí běžet na počítači, který vidí TIRBazar SQL a má přístup do UNIQA.")
+    # TEMP 2026-10-02: jednorázová read-only SQL diagnostika při startu.
+    try:
+        sample_tirbazar({"id": "startup-sql-sample-20261002"})
+    except Exception as exc:
+        print("SQL startup diagnostika selhala:", exc)
     if args.once:
         run_and_sync("ruční jednorázová synchronizace"); return 0
     last_command_id = ""

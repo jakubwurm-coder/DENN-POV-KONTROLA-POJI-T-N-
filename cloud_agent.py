@@ -477,6 +477,22 @@ def lookup_vehicle(command: dict[str, Any]) -> None:
         if vehicle is not None:
             vehicle["filter"] = _lookup_filter_reason(vehicle)
             vehicle["insurance"] = _lookup_insurance_context(vehicle.get("vin", ""), vehicle.get("spz", ""))
+
+            # Ruční SQL lookup má aktuálnější stav TIRBazar než historický webový
+            # snapshot. Pokud aktuální stav očekává NEPOJIŠTĚNO a starý snapshot
+            # tvrdí „CHYBÍ POJIŠTĚNÍ“, jde o správně nepojištěné vozidlo, nikoli
+            # o problém. Skutečné pojištění navíc zůstává problémem.
+            if vehicle["filter"].get("expected") == "NEPOJIŠTĚNO":
+                insurance = vehicle["insurance"]
+                status_now = str(insurance.get("status") or insurance.get("status_raw") or "").strip().upper()
+                if status_now in {"CHYBÍ POJIŠTĚNÍ", "CHYBÍ V UNIQA"}:
+                    insurance.update({
+                        "status": "V POŘÁDKU · NEPOJIŠTĚNO",
+                        "status_raw": "OK_NEPOJISTENO",
+                        "detail": "Vozidlo má být nepojištěné a nebylo nalezeno v UNIQA ani Allianz.",
+                        "insurer": "",
+                        "spz_insurance": "",
+                    })
             payload["found"] = True
             payload["vehicle"] = vehicle
     except Exception as exc:

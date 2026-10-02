@@ -31,7 +31,8 @@ def install_mcp_api(
         bad = {
             "CHYBÍ V UNIQA",
             "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-            "PRODANÉ, ALE V UNIQA",
+            "PRODANÉ, ALE POJIŠTĚNÉ",
+            "DEPOZIT, ALE POJIŠTĚNÉ",
             "NAVÍC V UNIQA",
             "SPZ NESOUHLASÍ",
             "NELZE OVĚŘIT",

@@ -1,4 +1,4 @@
-name: One-shot DENNI POV refresh
+name: One-shot DENNI POV refresh 2
 on:
   push:
     paths:

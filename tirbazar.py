@@ -729,7 +729,10 @@ def load_tirbazar_vehicles(
 
         normal_purchase = datum_vykupu.strip()
         commission_purchase = datum_vykupu_komise.strip()
-        effective_purchase = normal_purchase or commission_purchase
+        # U jedné karty může existovat běžný výkup i výkup z komise.
+        # ISO formát YYYY-MM-DD HH:MM:SS lze bezpečně řadit jako text.
+        # Pro určení stáří karty je rozhodující novější z obou dat.
+        effective_purchase = max(normal_purchase, commission_purchase)
 
         raw_rows.append(
             TirVehicle(
@@ -766,19 +769,17 @@ def load_tirbazar_vehicles(
     duplicates: list[list[TirVehicle]] = []
 
     for _, group in groups.items():
-        # Duplicitní VIN nesmíme řešit pouze nejvyšším OID. Starší záznam může
-        # obsahovat prodej/výkup, který je pro POV rozhodující. Sloučíme proto
-        # historii do aktuálního (nejvyššího OID) záznamu.
-        group = sorted(group, key=lambda x: x.oid, reverse=True)
+        # U duplicitního VIN je aktuální karta ta s nejnovějším datem výkupu
+        # nebo výkupu z komise. OID rozhoduje pouze při shodném datu.
+        # Údaje ze starších karet se do aktuální karty nepřenášejí.
+        group = sorted(
+            group,
+            key=lambda x: (x.datum_vykupu or "", x.oid),
+            reverse=True,
+        )
         current = group[0]
         if len(group) > 1:
             duplicates.append(group)
-            if not current.datum_prodeje:
-                current.datum_prodeje = next((v.datum_prodeje for v in group if v.datum_prodeje), "")
-            if not current.datum_vykupu:
-                current.datum_vykupu = next((v.datum_vykupu for v in group if v.datum_vykupu), "")
-            if not current.poznamky:
-                current.poznamky = next((v.poznamky for v in group if v.poznamky), "")
         vehicles.append(current)
 
     vehicles.sort(key=lambda x: x.oid)

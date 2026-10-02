@@ -58,7 +58,10 @@ def load_allianz_vehicles() -> AllianzLoadResult:
         seen: set[str] = set()
 
         # Allianz data mají jediný autoritativní zdroj: GitHub.
-        # Standardní 17znakové hodnoty bereme jako VIN, ostatní jako SPZ.
+        # CSV obsahuje identifikátor vozidla. Krátké historické VIN (např. A499)
+        # nesmíme automaticky zaměnit za SPZ. Hodnotu proto zpřístupníme pro
+        # porovnání jak podle VIN, tak podle SPZ; skutečný TIRBazar záznam
+        # rozhodne, kterým identifikátorem se vozidlo shoduje.
         with io.StringIO(text, newline="") as handle:
             reader = csv.reader(handle)
             for row in reader:
@@ -77,14 +80,9 @@ def load_allianz_vehicles() -> AllianzLoadResult:
                     continue
                 seen.add(key)
 
-                if vin_looks_standard(normalized):
-                    vin = normalized
-                    spz = ""
-                    identifier = vin
-                else:
-                    vin = ""
-                    spz = normalize_spz(raw)
-                    identifier = spz
+                vin = normalized
+                spz = normalize_spz(raw)
+                identifier = normalized
 
                 if not identifier:
                     continue

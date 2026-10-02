@@ -313,8 +313,37 @@ def compare_vehicles(
                         datum_prodeje=vehicle.datum_prodeje,
                     )
                 )
+                continue
 
-            # Prodané a nepojištěné vozidlo je správně a nevytváří problém.
+            # Správné NEPOJIŠTĚNO lze potvrdit jen tehdy, když byly oba
+            # zdroje dostupné. Při výpadku jednoho zdroje nesmíme absenci
+            # pojištění pouze předpokládat.
+            if not uniqa_available or not allianz_available:
+                detail = (
+                    "Vozidlo je prodané a má být NEPOJIŠTĚNO, ale nelze "
+                    "bezpečně potvrdit absenci pojištění, protože některý "
+                    "zdroj pojištění není dostupný."
+                )
+                if uniqa_error:
+                    detail += f" UNIQA chyba: {uniqa_error}"
+                if allianz_error:
+                    detail += f" Allianz chyba: {allianz_error}"
+                results.append(
+                    ComparisonResult(
+                        oid=vehicle.oid,
+                        vin=vin,
+                        tir_spz=tir_spz,
+                        uniqa_spz="",
+                        status="NELZE OVĚŘIT",
+                        detail=detail,
+                        datum_vykupu=vehicle.datum_vykupu,
+                        datum_prodeje=vehicle.datum_prodeje,
+                    )
+                )
+                continue
+
+            # Oba zdroje byly dostupné a vozidlo nebylo nalezeno ani v jednom:
+            # prodané vozidlo je tedy správně nepojištěné a nevytváří problém.
             continue
 
         # ====================================================

@@ -34,6 +34,7 @@ CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrende
 SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "OPYnDYQG4X5oVQPsKPE7qB25pw1YV9KUZWzFXcFrygfSvx1aKhkH_-MunoSx7Zof")
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
 AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "3600"))
+MAX_CHECK_SECONDS = int(os.getenv("DENNI_POV_MAX_CHECK_SECONDS", "900"))
 SERVICE_MODE = os.getenv("DENNI_POV_SERVICE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -224,7 +225,15 @@ def run_local_check(progress_callback: Callable[[dict[str, Any]], None] | None =
     _reset_for_run(local_app)
     worker = threading.Thread(target=local_app._run_check_worker, daemon=True)
     worker.start()
+    deadline = time.monotonic() + MAX_CHECK_SECONDS
     while worker.is_alive():
+        if time.monotonic() >= deadline:
+            snapshot = _decorate_snapshot(local_app._snapshot())
+            phase = str((snapshot.get("progress") or {}).get("phase") or "neznámá fáze")
+            raise TimeoutError(
+                f"Kontrola překročila maximální dobu {MAX_CHECK_SECONDS // 60} minut. "
+                f"Poslední fáze: {phase}. Agent bude automaticky restartován."
+            )
         if progress_callback:
             try:
                 progress_callback(_decorate_snapshot(local_app._snapshot()))
@@ -513,6 +522,9 @@ def main() -> int:
                 push_snapshot(_error_snapshot(exc)); print("Chyba byla odeslána na online web.")
             except Exception as report_exc:
                 print("Nepodařilo se odeslat chybu na online web:", report_exc)
+            if isinstance(exc, TimeoutError):
+                print("Watchdog ukončuje agenta; Windows služba jej znovu spustí.")
+                return 124
         time.sleep(max(5, POLL_SECONDS))
 
 

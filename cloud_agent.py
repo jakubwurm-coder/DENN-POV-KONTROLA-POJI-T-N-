@@ -118,6 +118,7 @@ def _reset_for_run(local_app) -> None:
         local_app._state["error"] = None
         local_app._state["results"] = []
         local_app._state["last_csv"] = None
+        local_app._state["audit"] = {}
         local_app._state["sources"] = {
             "tirbazar": {"state": "loading", "status": "Načítám vstupní data přehledu vozidel…", "detail": "SQL Server / pouze čtení"},
             "uniqa": {"state": "idle", "status": "Čekám…", "detail": "Aktivní smlouvy"},

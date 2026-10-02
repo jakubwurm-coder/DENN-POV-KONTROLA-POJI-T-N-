@@ -921,6 +921,8 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         "PRODANÉ, ALE POJIŠTĚNÉ",
         "NAVÍC V UNIQA",
         "DEPOZIT, ALE POJIŠTĚNÉ",
+        "SPZ NESOUHLASÍ",
+        "NELZE OVĚŘIT",
     }
 
     def _is_resolved_issue(row: dict[str, Any]) -> bool:

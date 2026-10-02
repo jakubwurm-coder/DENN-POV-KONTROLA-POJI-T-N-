@@ -63,7 +63,7 @@ def _write_stuck_log(snapshot: dict[str, Any]) -> None:
 
 
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
-SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "OPYnDYQG4X5oVQPsKPE7qB25pw1YV9KUZWzFXcFrygfSvx1aKhkH_-MunoSx7Zof")
+SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "").strip()
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
 AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "3600"))
 MAX_CHECK_SECONDS = int(os.getenv("DENNI_POV_MAX_CHECK_SECONDS", "600"))

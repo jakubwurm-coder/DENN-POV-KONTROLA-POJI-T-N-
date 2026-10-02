@@ -188,6 +188,19 @@ def _today_iso() -> str:
     return _now_dt().date().isoformat()
 
 
+def _run_is_stale(data: dict[str, Any], max_minutes: int = 20) -> bool:
+    if not data.get("running"):
+        return False
+    started = str(data.get("started_at") or "").strip()
+    if not started:
+        return True
+    try:
+        started_dt = datetime.strptime(started, "%d.%m.%Y %H:%M:%S").replace(tzinfo=_PRAGUE_TZ)
+    except ValueError:
+        return True
+    return (_now_dt() - started_dt).total_seconds() > max_minutes * 60
+
+
 def _date_from_display(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
@@ -1230,8 +1243,12 @@ def api_vehicle_lookup_status(query: str):
 def api_run():
     with _lock:
         data = _load_state()
-        if data.get("running"):
+        if data.get("running") and not _run_is_stale(data):
             return jsonify({"ok": False, "message": "Kontrola už probíhá."}), 409
+        if data.get("running") and _run_is_stale(data):
+            data["running"] = False
+            data["error"] = "Předchozí kontrola překročila 20 minut a byla automaticky uvolněna."
+            data["_command"] = None
         command_id = uuid.uuid4().hex
         data["running"] = True
         data["started_at"] = _now()

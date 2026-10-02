@@ -232,6 +232,7 @@ def _default_state() -> dict[str, Any]:
         "synced_at": None,
         "_command": None,
         "_vehicle_lookup": None,
+        "_audit_export": None,
     }
 
 
@@ -1305,6 +1306,48 @@ def agent_lookup_result():
     return jsonify({"ok": True})
 
 
+@app.post("/api/audit-export")
+def request_audit_export():
+    with _lock:
+        data = _load_state()
+        pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
+        if pending.get("status") == "pending":
+            return jsonify({"ok": True, "status": "pending"})
+        command_id = uuid.uuid4().hex
+        data["_audit_export"] = {"id": command_id, "status": "pending", "requested_at": _now()}
+        data["_command"] = {"id": command_id, "action": "export_audit", "requested_at": _now()}
+        _save_state(data)
+    return jsonify({"ok": True, "status": "pending"})
+
+
+@app.get("/api/audit-export")
+def audit_export_status():
+    with _lock:
+        data = _load_state()
+        pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
+    return jsonify({"ok": True, "status": pending.get("status") or "idle", "error": pending.get("error") or ""})
+
+
+@app.post("/api/agent/audit-result")
+def agent_audit_result():
+    if not _authorized():
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    command_id = str(payload.get("id") or "")
+    audit = payload.get("audit") if isinstance(payload.get("audit"), dict) else {}
+    with _lock:
+        data = _load_state()
+        pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
+        if str(pending.get("id") or "") != command_id:
+            return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
+        data["audit"] = audit
+        data["_audit_export"] = {"id": command_id, "status": "ready", "finished_at": _now()}
+        if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:
+            data["_command"] = None
+        _save_state(data)
+    return jsonify({"ok": True})
+
+
 @app.post("/api/sync")
 def api_sync():
     if not _authorized(): return jsonify({"ok": False, "message": "Unauthorized"}), 401
@@ -1323,7 +1366,7 @@ def api_sync():
         annotations = _annotations_load(previous.get("annotations"))
         data = _default_state()
         data["annotations"] = annotations
-        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress", "audit"):
+        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress"):
             if key in payload: data[key] = payload[key]
         data["running"] = bool(payload.get("running"))
         if data["running"]:

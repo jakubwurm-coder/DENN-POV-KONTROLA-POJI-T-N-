@@ -30,6 +30,38 @@ def _configure_stdio() -> None:
 
 _configure_stdio()
 
+def _write_stuck_log(snapshot: dict[str, Any]) -> None:
+    """Zapíše diagnostiku, pokud kontrola překročí watchdog limit."""
+    try:
+        if os.name == "nt":
+            log_dir = Path(os.getenv("LOCALAPPDATA", str(BASE_DIR))) / "DENNI_POV_KONTROLA"
+        else:
+            log_dir = BASE_DIR
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "stuck-check.log"
+
+        sources = snapshot.get("sources") or {}
+        progress = snapshot.get("progress") or {}
+        lines = [
+            "=" * 72,
+            f"ČAS: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}",
+            f"UDÁLOST: KONTROLA ZASEKNUTA - WATCHDOG {MAX_CHECK_SECONDS // 60} MIN",
+            f"START: {snapshot.get('started_at') or '-'}",
+            f"FÁZE: {progress.get('phase') or '-'}",
+            f"PROGRESS: {progress.get('percent') if progress.get('percent') is not None else '-'} %",
+            f"TIRBAZAR: {(sources.get('tirbazar') or {}).get('state', '-')} | {(sources.get('tirbazar') or {}).get('status', '-')}",
+            f"UNIQA: {(sources.get('uniqa') or {}).get('state', '-')} | {(sources.get('uniqa') or {}).get('status', '-')}",
+            f"ALLIANZ: {(sources.get('allianz') or {}).get('state', '-')} | {(sources.get('allianz') or {}).get('status', '-')}",
+            f"CHYBA: {snapshot.get('error') or '-'}",
+            "",
+        ]
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write("\n".join(lines))
+        print(f"Diagnostický log zaseknutí uložen: {log_path}")
+    except Exception as exc:
+        print("Diagnostický log zaseknutí se nepodařilo uložit:", exc)
+
+
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
 SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "OPYnDYQG4X5oVQPsKPE7qB25pw1YV9KUZWzFXcFrygfSvx1aKhkH_-MunoSx7Zof")
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
@@ -230,6 +262,7 @@ def run_local_check(progress_callback: Callable[[dict[str, Any]], None] | None =
         if time.monotonic() >= deadline:
             snapshot = _decorate_snapshot(local_app._snapshot())
             phase = str((snapshot.get("progress") or {}).get("phase") or "neznámá fáze")
+            _write_stuck_log(snapshot)
             raise TimeoutError(
                 f"Kontrola překročila maximální dobu {MAX_CHECK_SECONDS // 60} minut. "
                 f"Poslední fáze: {phase}. Agent bude automaticky restartován."

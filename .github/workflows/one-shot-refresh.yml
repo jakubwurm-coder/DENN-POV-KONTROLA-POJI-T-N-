@@ -1,4 +1,4 @@
-name: One-shot DENNI POV diagnostic buyer
+name: One-shot DENNI POV verify buyer fix
 on:
   push:
     paths:

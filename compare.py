@@ -125,7 +125,10 @@ def compare_vehicles(
         # Teprve UNIQA + Allianz potvrdí skutečný stav.
         # ====================================================
         if (
-            _normalize_state(getattr(vehicle, "stav", "")) in {"VYKOUPENÉ", "VYKOUPENE"}
+            _normalize_state(getattr(vehicle, "stav", "")) in {
+                "VYKOUPENÉ", "VYKOUPENE",
+                "REZERVOVANÉ", "REZERVOVANE",
+            }
             and _is_deposit_note(vehicle.poznamky)
         ):
             allianz_vehicle = None

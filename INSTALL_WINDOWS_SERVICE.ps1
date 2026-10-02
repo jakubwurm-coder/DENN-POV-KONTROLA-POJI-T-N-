@@ -309,21 +309,25 @@ $runner = Join-Path $appDir "WINDOWS_ONLINE_AGENT.ps1"
 $quotedRunner = '"' + $runner + '"'
 $arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $quotedRunner"
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments
-$trigger = New-ScheduledTaskTrigger -AtStartup
+$startupTrigger = New-ScheduledTaskTrigger -AtStartup
+$logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $account
+$triggers = @($startupTrigger, $logonTrigger)
+
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
     -RestartCount 999 `
     -RestartInterval (New-TimeSpan -Minutes 1) `
-    -ExecutionTimeLimit ([TimeSpan]::Zero)
+    -ExecutionTimeLimit ([TimeSpan]::Zero) `
+    -MultipleInstances IgnoreNew
 
 # Registrace s -User/-Password vytvori batch logon: uzivatel nemusi byt prihlaseny.
 # Heslo uklada Windows Task Scheduler; skript ho nikam nezapisuje.
 Register-ScheduledTask `
     -TaskName $taskName `
     -Action $action `
-    -Trigger $trigger `
+    -Trigger $triggers `
     -Settings $settings `
     -User $account `
     -Password $taskPassword `
@@ -341,7 +345,9 @@ Write-Host ""
 Write-Host "HOTOVO"
 Write-Host ("Sluzba: " + $taskName)
 Write-Host ("Stav: " + $task.State)
-Write-Host "Automaticky start: pri startu Windows, bez nutnosti prihlaseni uzivatele"
+Write-Host "Automaticky start: pri startu Windows + pojistka pri prihlaseni"
+Write-Host "Odhlaseni uzivatele: agent zustava bezet na pozadi (LogonType Password)"
+Write-Host "Dvojita instance: blokovana (IgnoreNew)"
 Write-Host "Automaticka kontrola: kazdou 1 hodinu"
 Write-Host "Online tlacitko: agent kontroluje pozadavek kazdych 15 sekund"
 Write-Host "Online web: https://denni-pov-kontrola.onrender.com"

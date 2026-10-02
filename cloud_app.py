@@ -910,6 +910,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     summary["ok_total"] = raw_counts.get("OK", 0)
     summary["absent_uninsured"] = raw_counts.get("NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ", 0)
     summary["deposit"] = raw_counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0)
+    summary["deposit_insured"] = raw_counts.get("DEPOZIT, ALE POJIŠTĚNÉ", 0)
     summary["spz_mismatch"] = raw_counts.get("SPZ NESOUHLASÍ", 0)
     summary["unverified"] = raw_counts.get("NELZE OVĚŘIT", 0)
 
@@ -919,6 +920,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
         "PRODANÉ, ALE POJIŠTĚNÉ",
         "NAVÍC V UNIQA",
+        "DEPOZIT, ALE POJIŠTĚNÉ",
     }
 
     def _is_resolved_issue(row: dict[str, Any]) -> bool:
@@ -1514,6 +1516,7 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ": ("FFF0F3", red),
         "PRODANÉ, ALE POJIŠTĚNÉ": ("F4F0FF", "7256B8"),
         "NEPOJIŠTĚNO, ALE DEPOZIT": ("E9F7F0", green),
+        "DEPOZIT, ALE POJIŠTĚNÉ": ("FFF0F3", red),
         "NAVÍC V UNIQA": ("EAF7FA", "16849B"),
         "SPZ NESOUHLASÍ": ("FFF7E7", "A87512"),
         "NELZE OVĚŘIT": ("F1F4F6", "647789"),

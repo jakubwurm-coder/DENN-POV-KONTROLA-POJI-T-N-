@@ -48,8 +48,11 @@ def windows_status():
     issue_raw_statuses = {
         "CHYBÍ V UNIQA",
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+        "DEPOZIT, ALE POJIŠTĚNÉ",
         "PRODANÉ, ALE POJIŠTĚNÉ",
         "NAVÍC V UNIQA",
+        "SPZ NESOUHLASÍ",
+        "NELZE OVĚŘIT",
     }
     resolved_statuses = {"VYŘEŠENO", "V POŘÁDKU"}
 

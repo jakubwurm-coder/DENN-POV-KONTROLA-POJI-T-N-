@@ -171,21 +171,18 @@ def _requires_pov_check(vehicle: TirVehicle) -> bool:
 
     state = _normalize_state(vehicle.stav)
 
-    # Stav PRODANÉ je autoritativní i tehdy, když se nepodaří dohledat
-    # historický řádek dbo.Prodej / DatumProdeje. Tím zabráníme falešnému
-    # "CHYBÍ POJIŠTĚNÍ" u prodaného vozidla.
-    if state in {"PRODANÉ", "PRODANE"}:
-        # Jediná výjimka: prodej přímo Vans Renting s.r.o. (IČO 02772833).
+    # PRODEJ JE PRVOTNÍ KRITÉRIUM. Jakmile má karta evidovaný DatumProdeje,
+    # vozidlo už do běžné POV kontroly nevstupuje, bez ohledu na Stav nebo
+    # text DEPOZIT v poznámce. Jediná výjimka je prodej přímo Vans Renting.
+    if vehicle.datum_prodeje:
         return _is_sold_to_vans_renting(vehicle)
 
-    # Aktuální stav v TIRBazar je autoritativní. Historické datum prodeje
-    # nesmí vyřadit vozidlo, které je dnes znovu ve stavu VYKOUPENÉ.
-    if state in {"VYKOUPENÉ", "VYKOUPENE"}:
-        return True
+    # Stav PRODANÉ je záložní autoritativní signál i tehdy, když se
+    # historický řádek dbo.Prodej / DatumProdeje nepodaří dohledat.
+    if state in {"PRODANÉ", "PRODANE"}:
+        return _is_sold_to_vans_renting(vehicle)
 
-    # Výjimka: pokud bylo vozidlo prodáno společnosti Vans Renting s.r.o.,
-    # stále má být pojištěné a zůstává v běžné POV kontrole.
-    if vehicle.datum_prodeje and _is_sold_to_vans_renting(vehicle):
+    if state in {"VYKOUPENÉ", "VYKOUPENE"}:
         return True
 
     # Nepřítomné vozidlo s evidovaným výkupem zůstává aktivní pro kontrolu.

@@ -275,32 +275,62 @@ Write-Host "Instaluji/aktualizuji potrebne balicky..."
 & $venvPython -m pip install -r (Join-Path $appDir "requirements.txt")
 if ($LASTEXITCODE -ne 0) { throw "Instalace Python balicku selhala." }
 
-# 4) Trvaly skryty agent v Planovaci uloh pod stejnym Windows uctem.
+# 4) Trvaly skryty agent. Bezi pod STEJNYM Windows uctem i bez prihlasene plochy.
+# Dulezite: ulozene CLIXML/DPAPI credentials jsou vazane na tento ucet, proto nepouzivame
+# LocalSystem ani S4U. LogonType Password zachova DPAPI i sitovy pristup (SQL, UNIQA, Render).
+$account = "$env:USERDOMAIN\$env:USERNAME"
+
+# Fail-safe: pred zmenou ulohy overime, ze aktualni ucet umi precist kriticke credentials.
+$verifySql = Load-SecureCredential $sqlCredPath
+$verifyUniqa = Load-SecureCredential $uniqaCredPath
+if (-not $verifySql) { throw "Bezpecnostni kontrola selhala: TIRBazar credential nelze nacist. Planovana uloha nebyla zmenena." }
+if (-not $verifyUniqa) { throw "Bezpecnostni kontrola selhala: UNIQA credential nelze nacist. Planovana uloha nebyla zmenena." }
+try {
+    $null = $verifySql.GetNetworkCredential().Password
+    $null = $verifyUniqa.GetNetworkCredential().Password
+} catch {
+    throw "Bezpecnostni kontrola DPAPI selhala. Planovana uloha nebyla zmenena."
+}
+
+Write-Host ""
+Write-Host "Pro beh DENNI POV bez prihlaseneho uzivatele Windows potrebuje jednou ulozit heslo uctu $account."
+$taskPasswordSecure = Read-Host "Zadej heslo k Windows uctu $account" -AsSecureString
+$taskPasswordPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($taskPasswordSecure)
+try {
+    $taskPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($taskPasswordPtr)
+} finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($taskPasswordPtr)
+}
+if ([string]::IsNullOrWhiteSpace($taskPassword)) {
+    throw "Heslo Windows uctu nebylo zadano. Planovana uloha nebyla zmenena."
+}
+
 $runner = Join-Path $appDir "WINDOWS_ONLINE_AGENT.ps1"
 $quotedRunner = '"' + $runner + '"'
 $arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $quotedRunner"
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User ("$env:USERDOMAIN\$env:USERNAME")
+$trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
-    -RestartCount 10 `
+    -RestartCount 999 `
     -RestartInterval (New-TimeSpan -Minutes 1) `
     -ExecutionTimeLimit ([TimeSpan]::Zero)
-$principal = New-ScheduledTaskPrincipal `
-    -UserId ("$env:USERDOMAIN\$env:USERNAME") `
-    -LogonType Interactive `
-    -RunLevel Limited
 
+# Registrace s -User/-Password vytvori batch logon: uzivatel nemusi byt prihlaseny.
+# Heslo uklada Windows Task Scheduler; skript ho nikam nezapisuje.
 Register-ScheduledTask `
     -TaskName $taskName `
     -Action $action `
     -Trigger $trigger `
     -Settings $settings `
-    -Principal $principal `
-    -Description "DENNI POV - automaticky online agent pro TIRBazar, UNIQA a Render" `
+    -User $account `
+    -Password $taskPassword `
+    -RunLevel Limited `
+    -Description "DENNI POV - automaticky online agent pro TIRBazar, UNIQA a Render; bezi od startu Windows bez prihlaseni uzivatele" `
     -Force | Out-Null
+$taskPassword = $null
 
 try { Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue } catch {}
 Start-ScheduledTask -TaskName $taskName
@@ -311,7 +341,7 @@ Write-Host ""
 Write-Host "HOTOVO"
 Write-Host ("Sluzba: " + $taskName)
 Write-Host ("Stav: " + $task.State)
-Write-Host "Automaticky start: po prihlaseni do Windows"
+Write-Host "Automaticky start: pri startu Windows, bez nutnosti prihlaseni uzivatele"
 Write-Host "Automaticka kontrola: kazdych 15 minut"
 Write-Host "Online tlacitko: agent kontroluje pozadavek kazdych 15 sekund"
 Write-Host "Online web: https://denni-pov-kontrola.onrender.com"

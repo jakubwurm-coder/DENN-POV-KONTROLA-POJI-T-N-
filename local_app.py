@@ -217,9 +217,9 @@ def _audit_filter_reason(vehicle) -> str:
         return "Bez VIN"
     if not _is_czech_for_pov(vehicle):
         return "Mimo pravidla země / registrační značky"
-    # PRODANÉ má přednost i před textem DEPOZIT v poznámce.
-    if state in {"PRODANÉ", "PRODANE"}:
-        return "Prodané – mimo POV přehled"
+    # Evidovaný prodej má přednost i před textem DEPOZIT v poznámce.
+    if bool(getattr(vehicle, "datum_prodeje", "")) or state in {"PRODANÉ", "PRODANE"}:
+        return "Prodané – očekává se NEPOJIŠTĚNO; kontroluje se UNIQA i Allianz"
     if _is_deposit_vehicle(vehicle):
         return "Depozit"
     if state in {"NEPŘÍTOMNÉ", "NEPRITOMNE", "REZERVOVANÉ", "REZERVOVANE", "V KOMISI"} and not getattr(vehicle, "datum_vykupu", ""):
@@ -231,8 +231,14 @@ def _audit_vehicle_row(vehicle, eligible: bool) -> dict[str, object]:
     state = " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
     absent = state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"} and bool(getattr(vehicle, "datum_vykupu", ""))
     deposit = _is_deposit_vehicle(vehicle)
-    sold = state in {"PRODANÉ", "PRODANE"}
-    expected = "NEMÁ BÝT POJIŠTĚNO" if sold or absent or deposit else ("MÁ BÝT POJIŠTĚNO" if eligible else "MIMO POV")
+    sold = bool(getattr(vehicle, "datum_prodeje", "")) or state in {"PRODANÉ", "PRODANE"}
+    sold_to_vans = sold and _is_sold_to_vans_renting(vehicle)
+    expected = (
+        "MÁ BÝT POJIŠTĚNO" if sold_to_vans
+        else "NEMÁ BÝT POJIŠTĚNO" if sold or absent or deposit
+        else "MÁ BÝT POJIŠTĚNO" if eligible
+        else "MIMO POV"
+    )
     return {
         "oid": getattr(vehicle, "oid", None),
         "vin": getattr(vehicle, "vin", "") or "",

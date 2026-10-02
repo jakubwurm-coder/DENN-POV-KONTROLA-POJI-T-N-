@@ -146,7 +146,10 @@ def _summary(results, active_count: int) -> dict[str, int]:
 
 
 def _is_deposit_vehicle(vehicle) -> bool:
-    """Depozit je výjimka z POV kontroly bez ohledu na stav v pojišťovně."""
+    """Depozit se vyhodnocuje pouze u aktuálně vykoupeného vozidla."""
+    state = " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
+    if state not in {"VYKOUPENÉ", "VYKOUPENE"}:
+        return False
     return "DEPOZIT" in str(getattr(vehicle, "poznamky", "") or "").strip().upper()
 
 

@@ -1325,6 +1325,51 @@ def agent_lookup_result():
     return jsonify({"ok": True})
 
 
+
+@app.get("/api/sql-sample")
+def sql_sample():
+    """Dočasná read-only diagnostika 10 karet TIRBazar pro ověření SQL schématu."""
+    with _lock:
+        data = _load_state()
+        pending = data.get("_sql_sample") if isinstance(data.get("_sql_sample"), dict) else {}
+        if not pending or pending.get("status") in {"done", "error"}:
+            # done/error pouze vracíme; nový požadavek se zakládá parametrem ?new=1
+            if pending and request.args.get("new") != "1":
+                return jsonify({"ok": True, **pending})
+            command_id = uuid.uuid4().hex
+            pending = {"id": command_id, "status": "pending", "requested_at": _now()}
+            data["_sql_sample"] = pending
+            data["_command"] = {"id": command_id, "action": "sample_tirbazar", "requested_at": _now()}
+            _save_state(data)
+        return jsonify({"ok": True, **pending})
+
+
+@app.post("/api/agent/sql-sample-result")
+def agent_sql_sample_result():
+    if not _authorized():
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    command_id = str(payload.get("id") or "").strip()
+    with _lock:
+        data = _load_state()
+        pending = data.get("_sql_sample") if isinstance(data.get("_sql_sample"), dict) else {}
+        if not command_id or str(pending.get("id") or "") != command_id:
+            return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
+        error = str(payload.get("error") or "")
+        data["_sql_sample"] = {
+            "id": command_id,
+            "status": "error" if error else "done",
+            "rows": payload.get("rows") if isinstance(payload.get("rows"), list) else [],
+            "state_columns": payload.get("state_columns") if isinstance(payload.get("state_columns"), list) else [],
+            "state_values": payload.get("state_values") if isinstance(payload.get("state_values"), list) else [],
+            "error": error,
+            "finished_at": _now(),
+        }
+        if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:
+            data["_command"] = None
+        _save_state(data)
+    return jsonify({"ok": True})
+
 @app.post("/api/audit-export")
 def request_audit_export():
     with _lock:

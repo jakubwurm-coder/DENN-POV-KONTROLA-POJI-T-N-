@@ -1,5 +1,6 @@
 from models import TirVehicle, UniqaVehicle
 from compare import compare_vehicles
+from tirbazar import _is_sold_to_vans_renting, build_sql
 
 class A:
     def __init__(self, vin="", spz=""):
@@ -39,4 +40,23 @@ cases=[
 for name,vehicle,uq,al,uq_av,al_av,expected in cases:
     got=status(vehicle,uq,al,uq_av,al_av)
     assert got==expected, f"{name}: expected {expected}, got {got}"
-print(f"OK: {len(cases)} POV decision cases")
+# Výjimka Vans Renting smí vzniknout pouze z explicitního IČO kupujícího.
+ford = v(stav="PRODANÉ", datum_prodeje="2023-11-30")
+ford.vin = "WF04XXWPG4GR04000"
+ford.spz = "2TC2606"
+ford.kupujici_ico = ""
+assert _is_sold_to_vans_renting(ford) is False
+assert status(ford, False, False, True, True) == "NO_PROBLEM"
+
+vans_sale = v(stav="PRODANÉ", datum_prodeje="2026-01-01")
+vans_sale.kupujici_ico = "02772833"
+assert _is_sold_to_vans_renting(vans_sale) is True
+assert status(vans_sale, False, False, True, True) == "CHYBÍ V UNIQA"
+
+# SQL nesmí obsahovat dřívější heuristiku, která křížově spojovala libovolné
+# buyer-like ID s cizími tabulkami a vytvářela falešné Vans Renting prodeje.
+sql = build_sql()
+assert "CROSS JOIN sys.tables" not in sql
+assert "@vansScanSql" not in sql
+
+print(f"OK: {len(cases)} POV decision cases + sold buyer regression")

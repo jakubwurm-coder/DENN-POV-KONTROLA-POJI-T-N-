@@ -296,7 +296,7 @@ def _run_check_worker() -> None:
                 "allianz",
                 "ok",
                 f"Načteno: {_now()}",
-                "",
+                f"GitHub · aktual_ALLIANZ.csv · {len(allianz.vehicles)} vozidel",
             )
         else:
             _set_source("allianz", "error", "Načtení selhalo", allianz.error or "Allianz není dostupná")

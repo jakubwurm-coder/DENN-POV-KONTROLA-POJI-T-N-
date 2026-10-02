@@ -124,7 +124,10 @@ def compare_vehicles(
         # SQL/TIRBazar říká, že vozidlo NEMÁ BÝT POJIŠTĚNO.
         # Teprve UNIQA + Allianz potvrdí skutečný stav.
         # ====================================================
-        if _is_deposit_note(vehicle.poznamky):
+        if (
+            _normalize_state(getattr(vehicle, "stav", "")) in {"VYKOUPENÉ", "VYKOUPENE"}
+            and _is_deposit_note(vehicle.poznamky)
+        ):
             allianz_vehicle = None
             if allianz_available:
                 allianz_vehicle = allianz_by_vin.get(vin)

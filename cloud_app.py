@@ -1777,7 +1777,7 @@ try:
     with _lock:
         _diag_state = _load_state()
         _diag = _diag_state.get("_sql_sample") if isinstance(_diag_state.get("_sql_sample"), dict) else {}
-        if _diag.get("status") not in {"pending", "done"}:
+        if _diag.get("status") != "done":
             _diag_id = uuid.uuid4().hex
             _diag_state["_sql_sample"] = {"id": _diag_id, "status": "pending", "requested_at": _now()}
             _diag_state["_command"] = {"id": _diag_id, "action": "sample_tirbazar", "requested_at": _now()}

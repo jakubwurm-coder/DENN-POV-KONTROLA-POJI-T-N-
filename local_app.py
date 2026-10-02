@@ -266,17 +266,16 @@ def _run_check_worker() -> None:
                in {"PRODANÉ", "PRODANE"}
         ]
 
-        # Do běžného aktivního počtu prodaná vozidla nepatří, ale musí projít
-        # porovnáním s pojišťovnami. Jen tak odhalíme pojištění vedené navíc.
-        compare_vehicles_input = eligible_vehicles + [
-            vehicle for vehicle in sold_vehicles
-            if vehicle not in eligible_vehicles
-        ]
+        # PRODANÉ je prvotní kritérium. Běžně prodané vozidlo už do POV
+        # porovnání ani do přehledu nevstupuje, a to ani když poznámka obsahuje
+        # DEPOZIT. Jedinou výjimku řeší _requires_pov_check(): prodej přímo
+        # Vans Renting s.r.o. zůstává mezi eligible_vehicles.
+        compare_vehicles_input = list(eligible_vehicles)
 
         ignored_vehicles = [
             vehicle
             for vehicle in vehicles
-            if not _requires_pov_check(vehicle) and vehicle not in sold_vehicles
+            if not _requires_pov_check(vehicle)
         ]
 
         ignored_vins = {

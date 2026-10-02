@@ -150,6 +150,8 @@ def _decorate_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     snapshot = dict(snapshot)
     snapshot["progress"] = _progress_for(snapshot)
     snapshot["agent"] = {"computer": platform.node(), "system": platform.system()}
+    # Velký audit se při běžné synchronizaci na web neposílá.
+    snapshot.pop("audit", None)
     return snapshot
 
 
@@ -519,6 +521,23 @@ def run_and_sync(reason: str) -> None:
         _send_result_email(snapshot)
 
 
+def export_audit(command: dict[str, Any]) -> None:
+    """Načte kompletní audit až na výslovný požadavek z webu."""
+    command_id = str(command.get("id") or "")
+    local_app = _load_local_app()
+    _reset_for_run(local_app)
+    local_app._run_check_worker()
+    with local_app._lock:
+        audit = dict(local_app._state.get("audit") or {})
+    response = requests.post(
+        f"{CLOUD_URL}/api/agent/audit-result",
+        headers=_headers(),
+        json={"id": command_id, "audit": audit},
+        timeout=90,
+    )
+    response.raise_for_status()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="DENNI POV kancelářský agent pro Render")
     parser.add_argument("--once", action="store_true")
@@ -542,6 +561,8 @@ def main() -> int:
                 action = str((command or {}).get("action") or "run_check")
                 if action == "lookup_vehicle":
                     lookup_vehicle(command or {})
+                elif action == "export_audit":
+                    export_audit(command or {})
                 else:
                     run_and_sync("požadavek z online webu")
                     next_auto = time.monotonic() + AUTO_SYNC_SECONDS

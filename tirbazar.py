@@ -450,7 +450,21 @@ BEGIN
     FROM dbo.Prodej p
     WHERE p.GCRecord IS NULL
       AND p.DatumProdeje IS NOT NULL
-      AND p.Vozidlo IS NOT NULL;';
+      AND p.Vozidlo IS NOT NULL
+      -- Jedno vozidlo může mít více historických prodejů (např. nejprve
+      -- interně na Vans Renting a později skutečnému zákazníkovi). Pro POV
+      -- musí být kupující vždy z posledního platného prodeje.
+      AND NOT EXISTS (
+          SELECT 1
+          FROM dbo.Prodej p2
+          WHERE p2.Vozidlo = p.Vozidlo
+            AND p2.GCRecord IS NULL
+            AND p2.DatumProdeje IS NOT NULL
+            AND (
+                p2.DatumProdeje > p.DatumProdeje
+                OR (p2.DatumProdeje = p.DatumProdeje AND p2.OID > p.OID)
+            )
+      );';
 
     EXEC sp_executesql @buyerSql;
 END
@@ -536,7 +550,18 @@ BEGIN
           ON p.' + QUOTENAME(@buyerFkCol) + N' = b.' + QUOTENAME(@buyerRefCol) + N'
         WHERE p.GCRecord IS NULL
           AND p.DatumProdeje IS NOT NULL
-          AND p.Vozidlo IS NOT NULL;';
+          AND p.Vozidlo IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.Prodej p2
+              WHERE p2.Vozidlo = p.Vozidlo
+                AND p2.GCRecord IS NULL
+                AND p2.DatumProdeje IS NOT NULL
+                AND (
+                    p2.DatumProdeje > p.DatumProdeje
+                    OR (p2.DatumProdeje = p.DatumProdeje AND p2.OID > p.OID)
+                )
+          );';
 
         EXEC sp_executesql @buyerSql;
     END;

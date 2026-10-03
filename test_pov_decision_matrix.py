@@ -61,5 +61,7 @@ assert status(vans_sale, False, False, True, True) == "CHYBÍ V UNIQA"
 sql = build_sql()
 assert "CROSS JOIN sys.tables" not in sql
 assert "@vansScanSql" not in sql
+assert sql.count("p2.DatumProdeje > p.DatumProdeje") == 2
+assert sql.count("p2.OID > p.OID") == 2
 
 print(f"OK: {len(cases)} POV decision cases + sold buyer regression")

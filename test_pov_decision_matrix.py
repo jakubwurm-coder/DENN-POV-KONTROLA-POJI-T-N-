@@ -63,5 +63,7 @@ assert "CROSS JOIN sys.tables" not in sql
 assert "@vansScanSql" not in sql
 assert sql.count("p2.DatumProdeje > p.DatumProdeje") == 2
 assert sql.count("p2.OID > p.OID") == 2
+assert "pc.column_id" in sql
+assert "'KUPUJICI', 'KUPUJÍCÍ'" in sql
 
 print(f"OK: {len(cases)} POV decision cases + sold buyer regression")

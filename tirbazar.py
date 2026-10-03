@@ -495,11 +495,21 @@ BEGIN
       )
     ORDER BY
         CASE
-            WHEN UPPER(pc.name) LIKE '%KUP%' THEN 1
-            WHEN UPPER(pc.name) LIKE '%ODBER%' THEN 2
-            WHEN UPPER(pc.name) LIKE '%ZAKAZ%' THEN 3
+            -- Přímá vazba Kupující/Odběratel/Zákazník má přednost před
+            -- pomocnými vazbami typu kontakt, pobočka nebo zástupce.
+            WHEN UPPER(pc.name) IN (
+                'KUPUJICI', 'KUPUJÍCÍ',
+                'ODBERATEL', 'ODBĚRATEL',
+                'ZAKAZNIK', 'ZÁKAZNÍK'
+            ) THEN 1
+            WHEN UPPER(pc.name) LIKE '%KUP%' THEN 2
+            WHEN UPPER(pc.name) LIKE '%ODBER%' THEN 3
+            WHEN UPPER(pc.name) LIKE '%ZAKAZ%' THEN 4
             ELSE 9
-        END;
+        END,
+        pc.column_id,
+        rt.name,
+        rc.column_id;
 
     IF @buyerTable IS NOT NULL
     BEGIN

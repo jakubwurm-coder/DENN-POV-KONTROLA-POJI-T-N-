@@ -1270,6 +1270,8 @@ def api_run():
             data["running"] = False
             data["error"] = "Předchozí kontrola překročila 10 minut a byla automaticky uvolněna."
             data["_command"] = None
+        if data.get("_command"):
+            return jsonify({"ok": False, "message": "Agent má čekající požadavek. Zkuste to za chvíli."}), 409
         command_id = uuid.uuid4().hex
         data["running"] = True
         data["started_at"] = _now()
@@ -1283,7 +1285,9 @@ def api_run():
             "allianz": {"state": "idle", "status": "Čekám…", "detail": "Flotilové PDF"},
         }
         _save_state(data)
-    return jsonify({"ok": True, "message": "Požadavek na kontrolu odeslán kancelářskému agentovi."})
+    return jsonify({"ok": True, "request_id": command_id, "status": "pending",
+                    "started_at": data["started_at"],
+                    "message": "Požadavek na kontrolu odeslán kancelářskému agentovi."}), 202
 
 
 @app.get("/api/agent/command")

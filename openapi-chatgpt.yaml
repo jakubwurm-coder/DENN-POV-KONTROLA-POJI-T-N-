@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: DENNÍ POV – kontrola pojištění
-  version: 1.0.0
-  description: Read-only API pro aktuální stav kontroly pojištění vozidel.
+  version: 1.1.0
+  description: Stav kontroly a zabezpečené spuštění přes samostatný řídicí token.
 servers:
   - url: https://denni-pov-kontrola.onrender.com
 paths:
@@ -22,6 +22,37 @@ paths:
           description: Chybí nebo nesouhlasí API token.
       security:
         - bearerAuth: []
+  /api/assistant/run:
+    post:
+      operationId: startInsuranceCheck
+      summary: Odešle požadavek na novou kontrolu kancelářskému agentovi.
+      description: Vyžaduje ASSISTANT_CONTROL_TOKEN. Po přijetí sledujte getInsuranceStatus až do dokončení; průběžný souhrn není konečný výsledek.
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Požadavek přijat, kontrola ještě není dokončena.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  request_id:
+                    type: string
+                  status:
+                    type: string
+                  started_at:
+                    type: string
+                  message:
+                    type: string
+        '401':
+          description: Chybí nebo nesouhlasí řídicí token.
+        '409':
+          description: Kontrola nebo jiný požadavek právě probíhá.
+        '503':
+          description: Spuštění kontroly není dostupné.
 components:
   securitySchemes:
     bearerAuth:

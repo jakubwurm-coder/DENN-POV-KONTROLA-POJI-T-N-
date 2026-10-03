@@ -7,15 +7,26 @@ from typing import Any, Callable
 from flask import jsonify, request
 
 
-def install_assistant_api(app, load_state: Callable[[], dict[str, Any]], public_state: Callable[[dict[str, Any]], dict[str, Any]], lock) -> None:
-    """Install a read-only API intended for ChatGPT/Voice integrations."""
+def install_assistant_api(app, load_state: Callable[[], dict[str, Any]], public_state: Callable[[dict[str, Any]], dict[str, Any]], lock, start_check: Callable | None = None) -> None:
+    """Install status API and optional separately authorized check trigger."""
 
     def authorized() -> bool:
         expected = os.getenv("ASSISTANT_API_TOKEN", "").strip()
-        if not expected:
-            return False
         supplied = request.headers.get("Authorization", "").strip()
-        return hmac.compare_digest(supplied, f"Bearer {expected}")
+        control = os.getenv("ASSISTANT_CONTROL_TOKEN", "").strip()
+        return (bool(expected) and hmac.compare_digest(supplied, f"Bearer {expected}")) or (
+            bool(control) and hmac.compare_digest(supplied, f"Bearer {control}")
+        )
+
+    @app.post("/api/assistant/run")
+    def assistant_run():
+        expected = os.getenv("ASSISTANT_CONTROL_TOKEN", "").strip()
+        supplied = request.headers.get("Authorization", "").strip()
+        if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
+            return jsonify({"ok": False, "message": "Unauthorized"}), 401
+        if start_check is None:
+            return jsonify({"ok": False, "message": "Spuštění kontroly není dostupné."}), 503
+        return start_check()
 
     @app.get("/api/assistant/status")
     def assistant_status():
@@ -58,6 +69,10 @@ def install_assistant_api(app, load_state: Callable[[], dict[str, Any]], public_
             "ok": True,
             "generated_at": state.get("finished_at") or state.get("synced_at"),
             "running": bool(state.get("running")),
+            "started_at": state.get("started_at"),
+            "progress": state.get("progress") or {},
+            "sources": state.get("sources") or {},
+            "result_is_current": not bool(state.get("running")) and bool(state.get("finished_at")) and not bool(state.get("error")),
             "error": state.get("error"),
             "summary": {
                 "active": int(summary.get("active") or 0),

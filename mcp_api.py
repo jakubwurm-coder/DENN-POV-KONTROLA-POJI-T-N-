@@ -17,10 +17,15 @@ def install_mcp_api(
     save_state: Callable[[dict[str, Any]], Any],
     public_state: Callable[[dict[str, Any]], dict[str, Any]],
     lock,
+    start_check: Callable | None = None,
 ) -> None:
+    def control_authorized(capability: str) -> bool:
+        expected = os.getenv("MCP_CONTROL_TOKEN", "").strip()
+        return bool(expected) and hmac.compare_digest(capability, expected)
+
     def authorized(capability: str) -> bool:
         expected = os.getenv("MCP_CAPABILITY_TOKEN", "").strip()
-        return bool(expected) and hmac.compare_digest(capability, expected)
+        return (bool(expected) and hmac.compare_digest(capability, expected)) or control_authorized(capability)
 
     def current_status() -> dict[str, Any]:
         with lock:
@@ -57,6 +62,10 @@ def install_mcp_api(
         return {
             "generated_at": state.get("finished_at") or state.get("synced_at"),
             "running": bool(state.get("running")),
+            "started_at": state.get("started_at"),
+            "progress": state.get("progress") or {},
+            "sources": state.get("sources") or {},
+            "result_is_current": not bool(state.get("running")) and bool(state.get("finished_at")) and not bool(state.get("error")),
             "error": state.get("error"),
             "summary": {
                 "active": int(summary.get("active") or 0),
@@ -99,10 +108,11 @@ def install_mcp_api(
                 "result": {
                     "protocolVersion": "2025-03-26",
                     "capabilities": {"tools": {"listChanged": False}},
-                    "serverInfo": {"name": "denni-pov", "version": "1.0.0"},
+                    "serverInfo": {"name": "denni-pov", "version": "1.1.0"},
                     "instructions": (
-                        "Read-only aktuální přehled kontroly pojištění "
-                        "vozidel DENNÍ POV / Vans Centre."
+                        "Aktuální přehled DENNÍ POV. Spuštění kontroly je dostupné pouze "
+                        "s řídicím tokenem. Po spuštění načítejte stav; při running=true "
+                        "jsou souhrny průběžné nebo z předchozí kontroly."
                     ),
                 },
             })
@@ -115,7 +125,13 @@ def install_mcp_api(
                 "jsonrpc": "2.0",
                 "id": rpc_id,
                 "result": {
-                    "tools": [{
+                    "tools": ([{
+                        "name": "start_insurance_check",
+                        "title": "Spustit kontrolu DENNÍ POV",
+                        "description": "Odešle stejný požadavek jako tlačítko Spustit kontrolu. Výsledek sledujte přes get_insurance_status. Při souběhu vrátí busy.",
+                        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+                        "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+                    }] if control_authorized(capability) and start_check else []) + [{
                         "name": "get_insurance_status",
                         "title": "Aktuální stav DENNÍ POV",
                         "description": (
@@ -159,6 +175,20 @@ def install_mcp_api(
         if method == "tools/call":
             params = body.get("params") if isinstance(body.get("params"), dict) else {}
             tool_name = str(params.get("name") or "")
+            if tool_name == "start_insurance_check":
+                if not control_authorized(capability) or start_check is None:
+                    return jsonify({"jsonrpc": "2.0", "id": rpc_id,
+                                    "error": {"code": -32602, "message": "Spuštění kontroly není povoleno."}}), 403
+                arguments = params.get("arguments", {})
+                if not isinstance(arguments, dict) or arguments:
+                    return jsonify({"jsonrpc": "2.0", "id": rpc_id,
+                                    "error": {"code": -32602, "message": "Nástroj nepřijímá argumenty."}}), 400
+                response = app.make_response(start_check())
+                result = response.get_json()
+                return jsonify({"jsonrpc": "2.0", "id": rpc_id, "result": {
+                    "content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}],
+                    "structuredContent": result, "isError": response.status_code >= 400,
+                }})
             if tool_name == "lookup_vehicle":
                 arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
                 vin = re.sub(r"\s+", "", str(arguments.get("vin") or "")).upper()
@@ -170,6 +200,9 @@ def install_mcp_api(
                 command_id = uuid.uuid4().hex
                 with lock:
                     state = load_state()
+                    if state.get("running") or state.get("_command"):
+                        return jsonify({"jsonrpc": "2.0", "id": rpc_id, "error": {
+                            "code": -32602, "message": "Agent právě zpracovává jiný požadavek."}}), 409
                     state["_vehicle_lookup"] = {
                         "id": command_id, "vin": vin, "status": "pending",
                         "found": False, "vehicle": None, "error": "", "requested_at": time.time(),

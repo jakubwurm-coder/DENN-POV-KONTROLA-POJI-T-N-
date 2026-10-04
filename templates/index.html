@@ -21,7 +21,7 @@
       </div>
 
       <nav class="nav" aria-label="Filtry vozidel">
-        <button class="nav-item active" type="button" data-filter="ATTENTION"><span class="nav-icon">!</span><span>K řešení</span></button>
+        <button class="nav-item active" type="button" data-filter="ATTENTION"><span class="nav-icon">!</span><span>Výjimky kontroly</span></button>
 
         <button id="navResultsToggle" class="nav-item nav-toggle" type="button" aria-expanded="false">
           <span class="nav-icon">▦</span><span>Výsledky kontroly</span><span class="nav-chevron">›</span>
@@ -345,6 +345,11 @@
                 <strong id="cExtra">0</strong>
                 <small>z toho vyřešeno <b id="cExtraResolved">0</b> · k řešení <b id="cExtraOpen">0</b></small>
               </button>
+              <button class="metric-card" type="button" data-filter="DEPOSIT_INSURED">
+                <span class="metric-label">Depozit · pojištěno</span>
+                <strong id="cDepositInsured">0</strong>
+                <small>z toho vyřešeno <b id="cDepositInsuredResolved">0</b> · k řešení <b id="cDepositInsuredOpen">0</b></small>
+              </button>
             </div>
           </div>
 
@@ -453,14 +458,14 @@
 
         <section id="dataSection" class="data-section" hidden>
           <div class="data-toolbar">
-            <div class="view-switch" aria-label="Zobrazení vozidel"><button type="button" data-filter="ATTENTION" aria-pressed="true">K řešení <span id="attentionCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
+            <div class="view-switch" aria-label="Zobrazení vozidel"><button type="button" data-filter="ATTENTION" aria-pressed="true">Výjimky <span id="attentionCount">—</span></button><button type="button" data-filter="OPEN" aria-pressed="false">Otevřené <span id="openCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
             <div class="data-tools">
               <div class="search-control"><span class="search-icon">⌕</span><input id="search" autocomplete="off" aria-label="Hledat vozidlo" placeholder="Hledat SPZ, VIN nebo vozidlo…"></div>
               <button id="clearBtn" class="btn btn-secondary btn-small" type="button" hidden>Zrušit hledání</button><a id="csvBtn" class="btn btn-secondary btn-small disabled" aria-disabled="true" href="/download/xlsx">↓ Stáhnout Excel</a>
             </div>
           </div>
           <div id="activeFilter" class="active-filter" hidden>Aktivní filtr: <strong id="activeFilterLabel"></strong><button id="clearFilterInline" type="button" aria-label="Zrušit filtr">×</button></div>
-          <p class="table-hint">Kliknutím na vozidlo otevřete detail a poznámky.</p>
+          <p class="table-hint">Výjimky zůstávají viditelné i po vyřešení. Otevřené případy jsou vždy nahoře, vyřešené pod nimi. Vyřešených výjimek: <strong id="resolvedExceptionCount">0</strong>.</p>
           <div class="table-card">
             <div class="table-scroll">
               <table>
@@ -484,6 +489,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261001sidebar1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261004exceptions2"></script>
 </body>
 </html>

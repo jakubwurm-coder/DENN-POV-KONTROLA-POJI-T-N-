@@ -847,6 +847,10 @@ button{cursor:pointer}
 .table-scroll tbody tr.problem-row:nth-child(even){background:#fff0f3}
 .table-scroll tbody tr.problem-row:hover{background:#ffe7ec}
 .table-scroll tbody tr.problem-row td{color:#c91436;border-bottom-color:#f6ccd5}
+.table-scroll tbody tr.resolved-unusual-row,
+.table-scroll tbody tr.resolved-unusual-row:nth-child(even){background:#f3f8f6}
+.table-scroll tbody tr.resolved-unusual-row:hover{background:#eaf4ef}
+.table-scroll tbody tr.resolved-unusual-row td{color:#526b61;border-bottom-color:#dce9e2}
 .table-scroll tbody tr:last-child td{border-bottom:0}
 .table-scroll td:nth-child(3),.table-scroll td:nth-child(4){
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;

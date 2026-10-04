@@ -813,7 +813,14 @@ def main() -> int:
     if args.no_initial: next_auto += AUTO_SYNC_SECONDS
     while True:
         try:
-            command = get_command()
+            try:
+                command = get_command()
+            except requests.RequestException as exc:
+                # A temporary Render timeout is not a check result. Never
+                # replace the last valid vehicle snapshot with an empty error.
+                print("Web dočasně neodpovídá; poslední výsledek zůstává zachován:", exc)
+                time.sleep(max(5, POLL_SECONDS))
+                continue
             command_id = str((command or {}).get("id", ""))
             if command_id and command_id != last_command_id:
                 last_command_id = command_id

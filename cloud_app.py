@@ -25,6 +25,8 @@ app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
 
 _lock = threading.Lock()
+_db_init_lock = threading.Lock()
+_db_schema_ready = False
 _STATE_FILE = Path(os.getenv("CLOUD_STATE_FILE", "/tmp/denni_pov_state.json"))
 _DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 _KOSTKA_URL = "https://api.dataovozidlech.cz/api/vehicletechnicaldata/v2"
@@ -236,7 +238,7 @@ def _default_state() -> dict[str, Any]:
     }
 
 
-def _db_init(cur) -> None:
+def _db_init_uncached(cur) -> None:
     cur.execute("""
         CREATE TABLE IF NOT EXISTS denni_pov_state (
             id INTEGER PRIMARY KEY,
@@ -316,6 +318,21 @@ def _db_init(cur) -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     """)
+
+
+def _db_init(cur) -> None:
+    """Initialize the schema once per web process, not on every state poll."""
+    global _db_schema_ready
+    if _db_schema_ready:
+        return
+    with _db_init_lock:
+        if _db_schema_ready:
+            return
+        _db_init_uncached(cur)
+        # Commit before publishing the process-wide flag so another thread can
+        # immediately use the tables from its own connection.
+        cur.connection.commit()
+        _db_schema_ready = True
 
 
 def _db_load() -> dict[str, Any] | None:
@@ -1434,6 +1451,9 @@ def api_sync():
         annotations = _annotations_load(previous.get("annotations"))
         data = _default_state()
         data["annotations"] = annotations
+        data["last_successful_at"] = previous.get("last_successful_at") or (
+            previous.get("finished_at") if not previous.get("error") else None
+        )
         for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress"):
             if key in payload: data[key] = payload[key]
         data["running"] = bool(payload.get("running"))
@@ -1444,13 +1464,24 @@ def api_sync():
             if not data.get("error"):
                 data["progress"] = {"percent": 100, "phase": "Hotovo", "eta_seconds": 0}
         data["synced_at"] = _now()
+        failed_final = final_run and bool(data.get("error"))
+        # A failed/transport-interrupted run must not erase the last valid
+        # vehicle list. Keep the error visible, but retain the prior results
+        # until a complete successful run replaces them.
+        if failed_final and not data.get("results") and previous.get("results"):
+            data["results"] = previous.get("results") or []
+            data["summary"] = previous.get("summary") or {}
+        elif final_run and not failed_final:
+            data["last_successful_at"] = data.get("finished_at")
         data["csv_available"] = bool(data.get("results"))
         data["_command"] = None
         # Srovnáváme výhradně s posledním dokončeným snapshotem, ne s průběžným
         # stavem /api/sync. Průběžná synchronizace totiž může results dočasně
         # vyprázdnit a dříve pak vozidlo vypadalo jako nově nalezené bez vysvětlení.
-        comparison_base = _run_history_last_successful() if final_run else None
-        if final_run and comparison_base and comparison_base.get("results"):
+        comparison_base = _run_history_last_successful() if final_run and not failed_final else None
+        if failed_final:
+            data["changes"] = previous.get("changes") or _default_state()["changes"]
+        elif final_run and comparison_base and comparison_base.get("results"):
             run_changes = _compare_runs(comparison_base, data)
             if _same_local_day(comparison_base.get("finished_at"), _today_iso()):
                 prior_daily = previous.get("changes") if isinstance(previous.get("changes"), dict) else {}
@@ -1470,7 +1501,7 @@ def api_sync():
         else:
             data["changes"] = previous.get("changes") or _default_state()["changes"]
 
-        if final_run:
+        if final_run and not failed_final:
             data["changes"] = _history_save_daily(data, alert_sent)
             _run_history_save(data)
         _save_state(data)
@@ -1773,7 +1804,4 @@ def health():
         "synced_at": data.get("synced_at"),
         "waiting_for_agent": bool(data.get("_command")),
     })
-
-
-
 

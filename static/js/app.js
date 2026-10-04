@@ -189,6 +189,12 @@ function renderRows(){
     return;
   }
 
+  if(state.error&&!state.results.length){
+    $('footerRight').textContent='Výsledek není k dispozici';
+    $('rows').innerHTML='<tr class="empty-row"><td colspan="3" class="empty">Kontrola se nezdařila. Hodnota 0 není výsledkem kontroly. Spusťte ji znovu po obnovení spojení.</td></tr>';
+    return;
+  }
+
   const q=$('search').value.trim().toUpperCase();
   const rows=state.results
     .filter(r=>matches(r)&&(!q||Object.values(r).join(' ').toUpperCase().includes(q)))
@@ -414,7 +420,12 @@ function render(){
   csvBtn.setAttribute('aria-disabled',exportDisabled?'true':'false');
   const live=$('liveDot');if(state.running){live.className='status-dot loading';$('liveStatus').textContent='Kontrola probíhá';}else if(sessionCheckStarted&&state.error){live.className='status-dot error';$('liveStatus').textContent='Chyba kontroly';}else if(sessionCheckStarted&&state.finished_at){live.className='status-dot ok';$('liveStatus').textContent='Kontrola dokončena';}else{live.className='status-dot idle';$('liveStatus').textContent='Připraveno';}
   const lastCheck=$('lastCheck');if(lastCheck){lastCheck.textContent=state.running&&sessionCheckStarted?'Právě probíhá':sessionCheckStarted?shortDateTime(state.finished_at):'—';}
-  $('footerLeft').textContent=state.running&&state.started_at?'Spuštěno: '+state.started_at:(sessionCheckStarted&&state.finished_at?'Dokončeno: '+state.finished_at:'Připraveno');renderRows();renderChanges();
+  $('footerLeft').textContent=state.running&&state.started_at
+    ?'Spuštěno: '+state.started_at
+    :(sessionCheckStarted&&state.error&&state.results.length
+      ?'Kontrola selhala · zobrazen poslední platný stav: '+(state.last_successful_at||'čas neuveden')
+      :(sessionCheckStarted&&state.finished_at?'Dokončeno: '+state.finished_at:'Připraveno'));
+  renderRows();renderChanges();
 }
 
 async function refresh(){try{

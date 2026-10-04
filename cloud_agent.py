@@ -333,8 +333,14 @@ SELECT TOP 1
     ISNULL(REPLACE(REPLACE(LTRIM(RTRIM(CASE
         WHEN v.NovaRegistracniZnacka IS NOT NULL AND LTRIM(RTRIM(v.NovaRegistracniZnacka)) <> ''
         THEN v.NovaRegistracniZnacka ELSE v.RegistracniZnacka END)), CHAR(13), ''), CHAR(10), ''), '') + '|' +
-    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(v.Stav)), CHAR(13), ' '), CHAR(10), ' '), '|', '/'), '') + '|' +
-    ISNULL(CONVERT(VARCHAR(19), normalni_vykup.DatumVykupu, 120), '') + '|' +
+    ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CASE
+        WHEN prodej.DatumProdeje IS NOT NULL
+         AND prodej.DatumProdeje >= COALESCE(normalni_vykup.DatumVykupu, komise_vykup.DatumVykupu, '19000101')
+         AND prodej.DatumProdeje >= COALESCE(komise_vykup.DatumVykupu, normalni_vykup.DatumVykupu, '19000101')
+        THEN 'Prodané' ELSE v.Stav END)), CHAR(13), ' '), CHAR(10), ' '), '|', '/'), '') + '|' +
+    ISNULL(CONVERT(VARCHAR(19), CASE
+        WHEN normalni_vykup.DatumVykupu >= ISNULL(komise_vykup.DatumVykupu, '19000101') THEN normalni_vykup.DatumVykupu
+        ELSE komise_vykup.DatumVykupu END, 120), '') + '|' +
     ISNULL(CONVERT(VARCHAR(19), prodej.DatumProdeje, 120), '') + '|' +
     ISNULL(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(COALESCE(
         NULLIF(stat_puvodu.PopisStatu COLLATE DATABASE_DEFAULT, ''),
@@ -355,12 +361,23 @@ OUTER APPLY (
     WHERE vv.Vozidlo = v.OID
 ) normalni_vykup
 OUTER APPLY (
+    SELECT MAX(vk.DatumVykupu) AS DatumVykupu
+    FROM dbo.VykoupeniZKomise vk
+    WHERE vk.Vozidlo = v.OID
+) komise_vykup
+OUTER APPLY (
     SELECT MAX(p.DatumProdeje) AS DatumProdeje
     FROM dbo.Prodej p
     WHERE p.Vozidlo = v.OID
 ) prodej
 WHERE {where_sql}
-ORDER BY CASE WHEN v.GCRecord IS NULL THEN 0 ELSE 1 END, v.OID DESC;
+ORDER BY
+    CASE WHEN v.GCRecord IS NULL THEN 0 ELSE 1 END,
+    CASE
+        WHEN normalni_vykup.DatumVykupu >= ISNULL(komise_vykup.DatumVykupu, '19000101') THEN normalni_vykup.DatumVykupu
+        ELSE komise_vykup.DatumVykupu
+    END DESC,
+    v.OID DESC;
 GO
 exit
 """
@@ -435,6 +452,13 @@ def _lookup_insurance_context(vin: str, spz: str) -> dict[str, Any]:
 def _lookup_filter_reason(vehicle: dict[str, Any]) -> dict[str, str]:
     """Stejná pravidla v lidské podobě pro ruční SQL vyhledávání."""
     state = str(vehicle.get("stav") or "").strip().upper()
+    sold_at = str(vehicle.get("datum_prodeje") or "").strip()
+    purchased_at = str(vehicle.get("datum_vykupu") or "").strip()
+    # U starších karet někdy zůstává stav VYKOUPENÉ i po prodeji.
+    # Pro POV je směrodatný poslední pohyb vozidla.
+    if sold_at and (not purchased_at or sold_at >= purchased_at):
+        state = "PRODANÉ"
+        vehicle["stav"] = "Prodané"
     purchase = bool(str(vehicle.get("datum_vykupu") or "").strip())
     country = str(vehicle.get("zeme_puvodu") or "").strip().upper()
     spz = str(vehicle.get("spz") or "").strip()

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261004sidebar1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261004ui2">
 </head>
 <body>
   <div class="app-shell">
@@ -125,12 +125,12 @@
 
         </section>
 
-        <section id="howItWorksSection" class="how-it-works-section manual-section" aria-labelledby="howItWorksTitle" hidden>
+        <section id="howItWorksSection" class="how-it-works-section manual-section manual-simple" aria-labelledby="howItWorksTitle" hidden>
           <div class="how-head">
             <div>
               <span class="section-kicker">MANUÁL SYSTÉMU</span>
               <h2 id="howItWorksTitle">Jak DENNÍ POV funguje</h2>
-              <p>Stručný návod, jak spustit kontrolu, číst výsledky a označit vyřešený případ.</p>
+              <p>TIRBazar určí stav vozidla. Pojišťovna potvrdí, zda je skutečně pojištěné.</p>
             </div>
             <div class="how-principle">
               <span>HLAVNÍ IDENTIFIKÁTOR</span>
@@ -142,17 +142,17 @@
           <div class="manual-summary">
             <div class="manual-summary-main">
               <strong>Základní princip</strong>
-              <p><b>TIRBazar</b> určí očekávaný stav vozidla. <b>UNIQA a Allianz</b> ověří skutečné pojištění. Systém porovná VIN a zobrazí jen rozdíly, které je potřeba prověřit.</p>
+              <p><b>TIRBazar</b> určí aktuální stav vozidla. <b>Pojišťovna</b> ověří aktivní pojištění. DENNÍ POV obě informace porovná podle VIN a zobrazí výsledek.</p>
             </div>
             <div class="manual-flow-inline" aria-label="Zjednodušený průběh kontroly">
-              <span>TIRBazar</span><i>→</i><span>UNIQA</span><i>→</i><span>Allianz</span><i>→</i><span>Depozit</span><i>→</i><span>Výsledek</span>
+              <span>TIRBazar</span><i>→</i><span>Pojišťovna</span><i>→</i><span>Výsledek</span>
             </div>
           </div>
 
           <div class="manual-quick-grid">
-            <article><span>1</span><div><strong>Spusť kontrolu</strong><p>Tlačítko na hlavní stránce načte TIRBazar, UNIQA a Allianz. Výsledek se zobrazí až po dokončení na 100 %.</p></div></article>
+            <article><span>1</span><div><strong>Spusť kontrolu</strong><p>Systém načte TIRBazar a pojišťovnu. Výsledky zobrazí po dokončení kontroly.</p></div></article>
             <article><span>2</span><div><strong>Otevři Nutnou kontrolu</strong><p>Červeně jsou chybějící nebo nadbytečné pojistky. VIN je hlavní identifikátor, SPZ pouze doplňkový.</p></div></article>
-            <article><span>3</span><div><strong>Prověř detail vozidla</strong><p>V detailu uvidíš původní výsledek, poznámku, stav TIRBazar a dostupné technické údaje.</p></div></article>
+            <article><span>3</span><div><strong>Prověř detail vozidla</strong><p>V detailu uvidíš původní výsledek, stav řešení a dostupné technické údaje.</p></div></article>
             <article><span>4</span><div><strong>Označ Vyřešeno</strong><p>Vyřešený případ v přehledu zůstane, zezelená a přesune se z počtu „k řešení“ do „vyřešeno“. Zpět ho vrátíš volbou Původní status.</p></div></article>
             <article><span>✓</span><div><strong>Správné stavy</strong><p>Pojištění v pořádku, nepřítomné bez pojištění a skutečný depozit nevyžadují zásah.</p></div></article>
             <article><span>!</span><div><strong>Technická chyba není chybějící pojištění</strong><p>Při výpadku zdroje systém použije „Nelze ověřit“ a nevytvoří automaticky falešný závěr.</p></div></article>
@@ -194,17 +194,25 @@
 
           <div class="manual-accordion">
             <details class="how-details" open>
-              <summary><span><small>1 · FILTRACE VOZIDEL</small><strong>Která vozidla vstupují do kontroly</strong></span><span class="how-details-plus">+</span></summary>
+              <summary><span><small>KONTROLNÍ FILTRY</small><strong>Jak se rozhoduje podle aktuálního stavu TIRBazar</strong></span><span class="how-details-plus">+</span></summary>
               <div class="how-details-body">
-                <div class="logic-row"><strong>Vykoupené</strong><span>Kontroluje se vždy. Očekávaný stav je <b>POJIŠTĚNO</b>.</span></div>
-                <div class="logic-row"><strong>Rezervované</strong><span>Kontroluje se pouze tehdy, pokud má evidovaný výkup.</span></div>
-                <div class="logic-row"><strong>V komisi</strong><span>Kontroluje se až po evidovaném vykoupení z komise.</span></div>
-                <div class="logic-row"><strong>Nepřítomné</strong><span>Pokud má evidovaný výkup, zůstává v kontrole, ale správný očekávaný stav je <b>NEPOJIŠTĚNO</b>.</span></div>
-                <div class="logic-row"><strong>Prodané</strong><span>Standardně už pojištěné být nemá. Systém ale ověří, zda pojistka po prodeji nezůstala aktivní.</span></div>
+                <div class="logic-row"><strong>Vykoupené</strong><span>Pokud je aktuální stav pouze <b>Vykoupené</b>, vozidlo je zařazené do kontroly a má být <b>POJIŠTĚNO</b>.</span></div>
+                <div class="logic-row"><strong>Prodané</strong><span>Prodej má přednost před starším výkupem. Vozidlo má být <b>NEPOJIŠTĚNO</b>; aktivní pojistka je problém.</span></div>
+                <div class="logic-row"><strong>Nepřítomné</strong><span>S evidovaným výkupem má být <b>NEPOJIŠTĚNO</b>. Aktivní pojistka je problém.</span></div>
+                <div class="logic-row"><strong>Rezervované</strong><span>Kontroluje se jen s evidovaným výkupem. Potom má být <b>POJIŠTĚNO</b>.</span></div>
+                <div class="logic-row"><strong>V komisi</strong><span>Kontroluje se až po vykoupení z komise. Potom má být <b>POJIŠTĚNO</b>.</span></div>
+                <div class="logic-row"><strong>Vrácené z komise</strong><span>Do běžné kontroly POV se nezařazuje.</span></div>
+                <div class="logic-row"><strong>Depozit</strong><span>Má být <b>NEPOJIŠTĚNO</b>. Aktivní pojistka je problém.</span></div>
                 <div class="logic-row"><strong>Prodej na Vans Renting</strong><span>Pokud je kupujícím Vans Renting s.r.o., IČO 02772833, vozidlo zůstává v běžné POV kontrole a má být pojištěné.</span></div>
                 <div class="logic-row"><strong>Bez VIN</strong><span>Bez VIN se vozidlo do standardní kontroly nezařadí, protože VIN je hlavní identifikátor.</span></div>
               </div>
             </details>
+
+            <div class="manual-result-guide">
+              <div><i class="logic-dot bad"></i><strong>Červená</strong><span>Chybí pojištění nebo je aktivní tam, kde být nemá.</span></div>
+              <div><i class="logic-dot ok"></i><strong>Zelená</strong><span>Správný stav nebo ručně označeno jako Vyřešeno.</span></div>
+              <div><i class="logic-dot warn"></i><strong>Nelze ověřit</strong><span>Zdroj nebyl dostupný; nejde automaticky o chybějící pojištění.</span></div>
+            </div>
 
             <details class="how-details">
               <summary><span><small>2 · ZEMĚ A SPZ</small><strong>Jak se rozhoduje o zařazení vozidla</strong></span><span class="how-details-plus">+</span></summary>
@@ -279,7 +287,7 @@
 
           <div class="how-safety-note">
             <span class="how-safety-icon">✓</span>
-            <div><strong>Technická chyba se nikdy automaticky nepovažuje za chybějící pojištění.</strong><p>Pokud se některý potřebný zdroj nepodaří načíst, výsledek je „Nelze ověřit“. Systém tím omezuje falešná upozornění způsobená výpadkem UNIQA, Allianz nebo připojení.</p></div>
+            <div><strong>Technická chyba není chybějící pojištění.</strong><p>Když se TIRBazar nebo pojišťovna nepodaří načíst, vozidlo dostane stav „Nelze ověřit“. Neoznačí se automaticky jako nepojištěné.</p></div>
           </div>
         </section>
 
@@ -368,36 +376,6 @@
             </div>
           </div>
 
-          <div class="overview-group overview-group-info">
-            <div class="overview-group-head">
-              <div>
-                <span class="overview-group-kicker">PŘEHLED A HISTORIE</span>
-                <h3>Informace</h3>
-              </div>
-            </div>
-            <div class="metric-grid metric-grid-group">
-              <button class="metric-card" type="button" data-filter="ACTIVE">
-                <span class="metric-label">Aktivní ke kontrole</span>
-                <strong id="cActiveOverview">0</strong>
-                <small>vozidla v aktivní kontrole</small>
-              </button>
-              <button id="overviewTodayChanges" class="metric-card overview-action" type="button">
-                <span class="metric-label">↕ Dnešní změny</span>
-                <strong id="cTodayChanges">0</strong>
-                <small>změny zachycené během dne</small>
-              </button>
-              <button id="overviewManualChanges" class="metric-card overview-action" type="button">
-                <span class="metric-label">✎ Ruční změny</span>
-                <strong>Historie</strong>
-                <small>statusy, poznámky a zásahy uživatele</small>
-              </button>
-              <button id="overviewSources" class="metric-card overview-action" type="button">
-                <span class="metric-label">⚙ Datové zdroje</span>
-                <strong>Stav</strong>
-                <small>TIRBazar a evidence pojištění</small>
-              </button>
-            </div>
-          </div>
         </section>
 
         <section id="changesSection" class="data-section" hidden>

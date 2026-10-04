@@ -37,13 +37,10 @@ function rowBadgeClass(r){
 }
 
 function rowPriority(r){
-  if(isUnusual(r)) return needsAttention(r)?0:2;
-  const badge=rowBadgeClass(r);
-  if(['badge-missing','badge-error','badge-sold','badge-extra'].includes(badge)) return 0;
-  if(badge==='badge-warning') return 1;
-  if(badge==='badge-deposit') return 2;
-  if(badge==='badge-ok') return 3;
-  return 2;
+  if(needsAttention(r)) return 0;
+  if(isResolvedUnusual(r)) return 1;
+  if(['OK','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ','NEPOJIŠTĚNO, ALE DEPOZIT'].includes(String(r.status_raw||'').toUpperCase())) return 2;
+  return 3;
 }
 
 function source(name,prefix){
@@ -152,6 +149,7 @@ function matches(r){
     if(raw==='OK')return true;
     if(raw==='CHYBÍ V UNIQA')return workflow==='VYŘEŠENO';
     if(raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ')return workflow==='VYŘEŠENO';
+    if(raw==='NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ')return true;
     return false;
   }
   if(activeFilter==='OK_UNIQA')return r.status_raw==='OK'&&r.pojistovna==='UNIQA';
@@ -529,7 +527,7 @@ let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return
 
 
 $('runBtn').addEventListener('click',run);
-$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navOverview').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
+$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navOverview').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 $('csvBtn').addEventListener('click',async event=>{
   event.preventDefault();
   const btn=$('csvBtn');
@@ -570,16 +568,15 @@ function renderLookupMain(v){
   const insuranceStatus=ins.in_last_check?(ins.status||ins.status_raw||'Výsledek nalezen'):(filter.expected==='MIMO POV'?'Nekontrolováno – mimo POV':'Není v posledním výsledku');
   const item=(label,value)=>'<div class="lookup-main-item"><span>'+esc(label)+'</span><strong>'+esc(value||'—')+'</strong></div>';
   content.innerHTML=
-    '<div class="lookup-main-head"><div><span class="section-kicker">VYHLEDÁNÍ V TIRBAZAR SQL</span><h2>'+esc(title)+'</h2><div class="lookup-main-ident">'+esc(v.spz||'Bez SPZ')+' · '+esc(v.vin||'Bez VIN')+'</div></div><button type="button" class="lookup-main-close" id="lookupMainClose">×</button></div>'+
+    '<div class="lookup-main-head"><div><span class="section-kicker">TIRBAZAR SQL</span><h2>'+esc(title)+'</h2><div class="lookup-main-ident"><span>'+esc(v.spz||'Bez SPZ')+'</span><span>'+esc(v.vin||'Bez VIN')+'</span></div></div><button type="button" class="lookup-main-close" id="lookupMainClose" aria-label="Zavřít detail">Zavřít</button></div>'+
     '<div class="lookup-main-status-row">'+
-      '<div class="lookup-status-card '+lookupStatusClass(filter.decision)+'"><span>ZAŘAZENÍ DO KONTROLY</span><strong>'+esc(filter.decision||'Neurčeno')+'</strong><small>'+esc(filter.reason||'')+'</small></div>'+
-      '<div class="lookup-status-card '+lookupStatusClass(insuranceStatus)+'"><span>POJIŠTĚNÍ</span><strong>'+esc(insuranceStatus)+'</strong><small>'+esc(ins.detail||(ins.last_check?'Poslední kontrola: '+ins.last_check:'V poslední kontrole není k dispozici výsledek.'))+'</small></div>'+
+      '<div class="lookup-status-card '+lookupStatusClass(filter.decision)+'"><span>ZAŘAZENÍ DO POV</span><strong>'+esc(filter.decision||'Neurčeno')+'</strong><small>'+esc(filter.reason||'')+'</small></div>'+
+      '<div class="lookup-status-card '+lookupStatusClass(insuranceStatus)+'"><span>VÝSLEDEK POJIŠTĚNÍ</span><strong>'+esc(insuranceStatus)+'</strong><small>'+esc(ins.detail||(ins.last_check?'Poslední kontrola: '+ins.last_check:'V poslední kontrole není k dispozici výsledek.'))+'</small></div>'+
     '</div>'+
     '<div class="lookup-main-grid">'+
       '<article><h3>Vozidlo</h3><div class="lookup-main-items">'+item('VIN',v.vin)+item('SPZ',v.spz)+item('Stav v TIRBazar',v.stav)+item('OID',v.oid)+item('Země původu',v.zeme_puvodu)+'</div></article>'+
-      '<article><h3>Evidence</h3><div class="lookup-main-items">'+item('Datum výkupu',v.datum_vykupu)+item('Datum prodeje',v.datum_prodeje)+item('Očekávaný stav POV',filter.expected)+item('Pojišťovna',ins.insurer)+item('SPZ v pojištění',ins.spz_insurance)+'</div></article>'+
-    '</div>'+
-    (v.poznamky?'<div class="lookup-main-note"><span>POZNÁMKA TIRBAZAR</span><strong>'+esc(v.poznamky)+'</strong></div>':'');
+      '<article><h3>Evidence</h3><div class="lookup-main-items">'+item('Datum výkupu',v.datum_vykupu)+item('Datum prodeje',v.datum_prodeje)+item('Stav',filter.expected)+item('Pojišťovna',ins.insurer)+item('SPZ v pojištění',ins.spz_insurance)+'</div></article>'+
+    '</div>';
   panel.hidden=false;
   const close=$('lookupMainClose');if(close)close.addEventListener('click',()=>{panel.hidden=true;});
   panel.scrollIntoView({behavior:'smooth',block:'start'});

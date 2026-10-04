@@ -91,7 +91,7 @@ function showBreakdown(){
   hideSources();hideChanges();hideManualHistory();hideHowItWorks();hideData();
   section.hidden=false;
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  const nav=$('navOthers');if(nav)nav.classList.add('active');
+  const nav=$('navOverview');if(nav)nav.classList.add('active');
   section.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
@@ -139,7 +139,7 @@ function isResolvedUnusual(r){
 function resultLabel(r){
   return ({'OK':'Pojištění v pořádku','CHYBÍ V UNIQA':'Chybí pojištění','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'Nepřítomné · pojištěno','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'Nepřítomné · nepojištěno','PRODANÉ, ALE POJIŠTĚNÉ':'Prodané · pojištěno','NAVÍC V UNIQA':'Pojištění navíc','NEPOJIŠTĚNO, ALE DEPOZIT':'Depozit','DEPOZIT, ALE POJIŠTĚNÉ':'Depozit · pojištěno','SPZ NESOUHLASÍ':'SPZ nesouhlasí','NELZE OVĚŘIT':'Nelze ověřit'}[r.status_raw]||r.original_status||r.status_raw||r.status||'—');
 }
-filterNames.ATTENTION='Výjimky kontroly';
+filterNames.ATTENTION='Nutná kontrola';
 filterNames.OPEN='Otevřené případy';
 function matches(r){
   if(activeFilter==='VŠE')return true;
@@ -340,8 +340,8 @@ function render(){
 
   const navExtraCount=$('navExtraCount');
   if(navExtraCount){
-    const showExtraIndicator=!suppressFinalResults&&sessionCheckStarted&&!!state.finished_at&&!state.error&&issues.unwanted>0;
-    navExtraCount.textContent=showExtraIndicator?String(issues.unwanted):'0';
+    const showExtraIndicator=!suppressFinalResults&&sessionCheckStarted&&!!state.finished_at&&!state.error&&attention>0;
+    navExtraCount.textContent=showExtraIndicator?String(attention):'0';
     navExtraCount.classList.toggle('is-alert',showExtraIndicator);
     navExtraCount.classList.toggle('is-hidden',!showExtraIndicator);
     navExtraCount.hidden=!showExtraIndicator;
@@ -516,29 +516,20 @@ function setFilter(filter){
   document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x.dataset.filter===filter));
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   const side=document.querySelector(`.nav-item[data-filter="${filter}"]`);
-  if(side)side.classList.add('active');else if(filter==='VŠE')$('navAllVehicles').classList.add('active');else if(filter==='OPEN')document.querySelector('.nav-item[data-filter="ATTENTION"]')?.classList.add('active');else if(filter!=='VŠE'&&$('navOthers'))$('navOthers').classList.add('active');
+  if(side)side.classList.add('active');else if(filter==='OPEN')document.querySelector('.nav-item[data-filter="ATTENTION"]')?.classList.add('active');
   renderRows();
 }
 function clearFilter(){
   hideSources();hideBreakdown();showData();activeFilter='VŠE';$('search').value='';
   document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('selected'));
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  $('navAllVehicles').classList.add('active');renderRows();
+  renderRows();
 }
 let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return;lastToast=msg;const t=$('toast');t.textContent=msg;t.className='toast'+(error?' error':'');t.hidden=false;setTimeout(()=>{t.hidden=true;lastToast='';},5000);}
 
 
 $('runBtn').addEventListener('click',run);
-const navResultsToggle=$('navResultsToggle');
-const navResultsMenu=$('navResultsMenu');
-function setResultsMenu(open){
-  if(!navResultsToggle||!navResultsMenu)return;
-  navResultsMenu.hidden=!open;
-  navResultsToggle.setAttribute('aria-expanded',String(open));
-  navResultsToggle.classList.toggle('open',open);
-}
-if(navResultsToggle)navResultsToggle.addEventListener('click',()=>setResultsMenu(navResultsMenu.hidden));
-$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navAllVehicles').addEventListener('click',clearFilter);$('navOthers').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
+$('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navOverview').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);$('overviewTodayChanges').addEventListener('click',showChanges);$('overviewManualChanges').addEventListener('click',showManualHistory);$('overviewSources').addEventListener('click',showSources);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 $('csvBtn').addEventListener('click',async event=>{
   event.preventDefault();
   const btn=$('csvBtn');

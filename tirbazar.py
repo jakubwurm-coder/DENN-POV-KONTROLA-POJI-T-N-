@@ -154,6 +154,23 @@ def _is_sold_to_vans_renting(vehicle: TirVehicle) -> bool:
     return buyer_ico == "02772833"
 
 
+def _is_effectively_sold(vehicle: TirVehicle) -> bool:
+    """Vrátí True, pokud poslední známý pohyb vozidla je prodej.
+
+    Aktuální stav PRODANÉ je autoritativní. U starších karet ale může stav
+    zůstat VYKOUPENÉ/REZERVOVANÉ i po prodeji; tehdy rozhodne pořadí dat.
+    Historický prodej před novějším výkupem naopak nesmí přebít opětovný
+    výkup stejného vozidla.
+    """
+    state = _normalize_state(getattr(vehicle, "stav", ""))
+    if state in {"PRODANÉ", "PRODANE"}:
+        return True
+
+    sold_at = str(getattr(vehicle, "datum_prodeje", "") or "").strip()
+    purchased_at = str(getattr(vehicle, "datum_vykupu", "") or "").strip()
+    return bool(sold_at and (not purchased_at or sold_at >= purchased_at))
+
+
 def _is_control_pov_state(value: str) -> bool:
     return _normalize_state(value) in CONTROL_POV_STATE_VALUES
 
@@ -171,8 +188,9 @@ def _requires_pov_check(vehicle: TirVehicle) -> bool:
 
     state = _normalize_state(vehicle.stav)
 
-    # Autoritativní je AKTUÁLNÍ pole „Stav vozidla“ v TIRBazar.
-    # Historické DatumProdeje nesmí přebít pozdější výkup stejné karty.
+    # Aktuální stav určuje, zda karta vstoupí do porovnání. Samotné očekávání
+    # POJIŠTĚNO/NEPOJIŠTĚNO pak zpřesní _is_effectively_sold() podle pořadí
+    # posledního výkupu a prodeje.
     if state in {"PRODANÉ", "PRODANE"}:
         return True
 

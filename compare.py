@@ -4,7 +4,7 @@ from typing import Any
 
 from models import ComparisonResult, TirVehicle, UniqaVehicle
 from normalize import normalize_spz, normalize_vin
-from tirbazar import _is_sold_to_vans_renting
+from tirbazar import _is_effectively_sold, _is_sold_to_vans_renting
 
 
 def _build_allianz_indexes(
@@ -68,11 +68,6 @@ def _is_absent_purchased(vehicle: TirVehicle) -> bool:
     )
 
 
-def _is_sold(vehicle: TirVehicle) -> bool:
-    """Pro POV rozhoduje aktuální pole „Stav vozidla“ v TIRBazar."""
-    return _normalize_state(getattr(vehicle, "stav", "")) in {"PRODANÉ", "PRODANE"}
-
-
 def compare_vehicles(
     tir: list[TirVehicle],
     uniqa: list[UniqaVehicle],
@@ -118,6 +113,11 @@ def compare_vehicles(
 
         uniqa_vehicle = uniqa_by_vin.get(vin)
 
+        # Prodej má vždy přednost před textem DEPOZIT. Kromě aktuálního stavu
+        # PRODANÉ respektujeme i prodej novější než poslední výkup; tím
+        # odfiltrujeme staré prodané karty se zapomenutou poznámkou DEPOZIT.
+        sold = _is_effectively_sold(vehicle)
+
         # ====================================================
         # DEPOZIT
         #
@@ -125,7 +125,8 @@ def compare_vehicles(
         # Teprve UNIQA + Allianz potvrdí skutečný stav.
         # ====================================================
         if (
-            _normalize_state(getattr(vehicle, "stav", "")) in {
+            not sold
+            and _normalize_state(getattr(vehicle, "stav", "")) in {
                 "VYKOUPENÉ", "VYKOUPENE",
                 "REZERVOVANÉ", "REZERVOVANE",
             }
@@ -267,7 +268,7 @@ def compare_vehicles(
         # PRODANÉ
         # ====================================================
 
-        if _is_sold(vehicle) and not _is_sold_to_vans_renting(vehicle):
+        if sold and not _is_sold_to_vans_renting(vehicle):
 
             # Prodané vozidlo už nemá být pojištěné. Nezahazujeme ho ale
             # před porovnáním: pokud zůstalo v UNIQA nebo Allianz, jde o

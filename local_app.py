@@ -14,7 +14,7 @@ from compare import compare_vehicles
 from config import load_config
 from models import ComparisonResult
 from report import prepare_output, write_comparison, write_duplicates, write_tirbazar_snapshot
-from tirbazar import _is_czech_for_pov, _is_sold_to_vans_renting, _requires_pov_check, load_tirbazar_vehicles
+from tirbazar import _is_czech_for_pov, _is_effectively_sold, _is_sold_to_vans_renting, _requires_pov_check, load_tirbazar_vehicles
 import tirbazar
 from uniqa import load_uniqa_vehicles
 
@@ -146,9 +146,11 @@ def _summary(results, active_count: int) -> dict[str, int]:
 
 
 def _is_deposit_vehicle(vehicle) -> bool:
-    """Depozit se vyhodnocuje pouze u aktuálně vykoupeného vozidla."""
+    """Depozit se vyhodnocuje jen u neprodaného vykoupeného/rezervovaného vozidla."""
+    if _is_effectively_sold(vehicle):
+        return False
     state = " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
-    if state not in {"VYKOUPENÉ", "VYKOUPENE"}:
+    if state not in {"VYKOUPENÉ", "VYKOUPENE", "REZERVOVANÉ", "REZERVOVANE"}:
         return False
     return "DEPOZIT" in str(getattr(vehicle, "poznamky", "") or "").strip().upper()
 
@@ -218,7 +220,7 @@ def _audit_filter_reason(vehicle) -> str:
     if not _is_czech_for_pov(vehicle):
         return "Mimo pravidla země / registrační značky"
     # Evidovaný prodej má přednost i před textem DEPOZIT v poznámce.
-    if state in {"PRODANÉ", "PRODANE"}:
+    if _is_effectively_sold(vehicle):
         return "Prodané – očekává se NEPOJIŠTĚNO; kontroluje se UNIQA i Allianz"
     if _is_deposit_vehicle(vehicle):
         return "Depozit"
@@ -231,7 +233,7 @@ def _audit_vehicle_row(vehicle, eligible: bool) -> dict[str, object]:
     state = " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
     absent = state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"} and bool(getattr(vehicle, "datum_vykupu", ""))
     deposit = _is_deposit_vehicle(vehicle)
-    sold = state in {"PRODANÉ", "PRODANE"}
+    sold = _is_effectively_sold(vehicle)
     sold_to_vans = sold and _is_sold_to_vans_renting(vehicle)
     expected = (
         "MÁ BÝT POJIŠTĚNO" if sold_to_vans
@@ -266,10 +268,7 @@ def _run_check_worker() -> None:
         sold_vehicles = [
             vehicle
             for vehicle in eligible_vehicles
-            if (
-                " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
-                in {"PRODANÉ", "PRODANE"}
-            )
+            if _is_effectively_sold(vehicle)
         ]
         sold_oids = {getattr(vehicle, "oid", None) for vehicle in sold_vehicles}
 

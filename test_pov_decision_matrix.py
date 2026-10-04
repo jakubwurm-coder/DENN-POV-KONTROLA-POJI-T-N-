@@ -39,6 +39,9 @@ cases=[
 ("sold source down",v(stav="PRODANÉ",datum_prodeje="2023-11-30"),False,False,True,False,"NELZE OVĚŘIT"),
 ("repurchased historical sale insured",v(stav="VYKOUPENÉ",datum_prodeje="2023-11-30",datum_vykupu="2026-01-01"),True,False,True,True,"OK"),
 ("repurchased historical sale uninsured",v(stav="VYKOUPENÉ",datum_prodeje="2023-11-30",datum_vykupu="2026-01-01"),False,False,True,True,"CHYBÍ V UNIQA"),
+("stale deposit state sold later uninsured",v(stav="VYKOUPENÉ",datum_prodeje="2026-02-01",datum_vykupu="2026-01-01",poznamky="DEPOZIT"),False,False,True,True,"NO_PROBLEM"),
+("stale deposit state sold later insured",v(stav="VYKOUPENÉ",datum_prodeje="2026-02-01",datum_vykupu="2026-01-01",poznamky="DEPOZIT"),True,False,True,True,"PRODANÉ, ALE POJIŠTĚNÉ"),
+("repurchased after old sale remains deposit",v(stav="VYKOUPENÉ",datum_prodeje="2025-01-01",datum_vykupu="2026-01-01",poznamky="DEPOZIT"),False,False,True,True,"NEPOJIŠTĚNO, ALE DEPOZIT"),
 ]
 for name,vehicle,uq,al,uq_av,al_av,expected in cases:
     got=status(vehicle,uq,al,uq_av,al_av)

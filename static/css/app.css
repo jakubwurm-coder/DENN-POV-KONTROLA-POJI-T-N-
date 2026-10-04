@@ -3386,7 +3386,7 @@ button:focus-visible,a:focus-visible{outline:3px solid #2388d9;outline-offset:3p
 .manual-simple .how-flow,
 .manual-simple .how-source-grid,
 .manual-simple .manual-accordion>.how-details:not(:first-child){display:none}
-.manual-simple .manual-accordion{grid-template-columns:1fr}
+.manual-simple .manual-accordion{display:grid;grid-template-columns:1fr}
 .manual-result-guide{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .manual-result-guide>div{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:5px 8px;padding:14px;border:1px solid #dce7ef;border-radius:12px;background:#fff}
 .manual-result-guide strong{color:#17364f;font-size:13px}.manual-result-guide span{grid-column:2;color:#60788d;font-size:11px;line-height:1.45}

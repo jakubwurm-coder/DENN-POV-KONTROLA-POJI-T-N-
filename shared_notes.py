@@ -96,7 +96,7 @@ def install_local_annotations(app) -> None:
 
         note = str(payload.get("note") or "").strip()[:2000]
         workflow_status = str(payload.get("workflow_status") or "").strip().upper()
-        if workflow_status not in {"", "VYŘEŠENO", "ŘEŠÍ SE", "KONTROLA"}:
+        if workflow_status not in {"", "VYŘEŠENO"}:
             return jsonify({"ok": False, "message": "Nepovolený status."}), 400
 
         try:

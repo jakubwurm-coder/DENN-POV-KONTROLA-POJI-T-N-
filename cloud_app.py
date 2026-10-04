@@ -914,7 +914,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     summary["spz_mismatch"] = raw_counts.get("SPZ NESOUHLASÍ", 0)
     summary["unverified"] = raw_counts.get("NELZE OVĚŘIT", 0)
 
-    resolved_statuses = {"VYŘEŠENO", "V POŘÁDKU"}
+    resolved_statuses = {"VYŘEŠENO"}
     issue_statuses = {
         "CHYBÍ V UNIQA",
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
@@ -928,9 +928,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     def _is_resolved_issue(row: dict[str, Any]) -> bool:
         raw = str(row.get("status_raw") or "").upper()
         workflow = str(row.get("workflow_status") or "").upper()
-        if raw == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ":
-            return workflow == "VYŘEŠENO"
-        return workflow in resolved_statuses
+        return workflow == "VYŘEŠENO"
 
     resolved_issue_rows = [
         row for row in rows
@@ -1184,7 +1182,7 @@ def api_result_meta():
 
     note = str(payload.get("note") or "").strip()[:2000]
     workflow_status = str(payload.get("workflow_status") or "").strip().upper()
-    if workflow_status not in {"", "V POŘÁDKU", "VYŘEŠENO", "ŘEŠÍ SE", "KONTROLA"}:
+    if workflow_status not in {"", "VYŘEŠENO"}:
         return jsonify({"ok": False, "persisted": False, "message": "Nepovolený status."}), 400
 
     # PostgreSQL is authoritative. Never claim success if this write fails.
@@ -1775,7 +1773,6 @@ def health():
         "synced_at": data.get("synced_at"),
         "waiting_for_agent": bool(data.get("_command")),
     })
-
 
 
 

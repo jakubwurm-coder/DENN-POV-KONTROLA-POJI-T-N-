@@ -54,7 +54,7 @@ def windows_status():
         "SPZ NESOUHLASÍ",
         "NELZE OVĚŘIT",
     }
-    resolved_statuses = {"VYŘEŠENO", "V POŘÁDKU"}
+    resolved_statuses = {"VYŘEŠENO"}
 
     issues = []
     for row in rows:
@@ -62,10 +62,7 @@ def windows_status():
         workflow = str(row.get("workflow_status") or "").strip().upper()
         if raw not in issue_raw_statuses:
             continue
-        if raw == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ":
-            resolved = workflow == "VYŘEŠENO"
-        else:
-            resolved = workflow in resolved_statuses
+        resolved = workflow == "VYŘEŠENO"
         if resolved:
             continue
 

@@ -12,14 +12,15 @@ const filterNames={
 function esc(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
 function displaySpz(r){return (r.spz_tir||r.spz_uniqa||'').trim();}
 function resultKey(r){const vin=(r.vin||'').trim().toUpperCase();const spz=displaySpz(r).toUpperCase();return vin||('SPZ:'+spz);}
+const redInsuranceStatuses=['NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE POJIŠTĚNÉ','NAVÍC V UNIQA','DEPOZIT, ALE POJIŠTĚNÉ'];
+function isRedInsuranceStatus(r){
+  return redInsuranceStatuses.includes(String(r.status_raw||'').toUpperCase());
+}
 function badgeClass(r){
   const raw=String(r.status_raw||'').toUpperCase();
   const workflow=String(r.workflow_status||'').toUpperCase();
-  if(raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'){
-    return workflow==='VYŘEŠENO'?'badge-ok':'badge-missing';
-  }
-  if(workflow==='VYŘEŠENO'||workflow==='V POŘÁDKU') return 'badge-ok';
-  if(workflow==='ŘEŠÍ SE'||workflow==='KONTROLA') return 'badge-warning';
+  if(workflow==='VYŘEŠENO') return 'badge-ok';
+  if(isRedInsuranceStatus(r)) return 'badge-missing';
   return ({'OK':'badge-ok','CHYBÍ V UNIQA':'badge-missing','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'badge-error','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'badge-ok','NEPOJIŠTĚNO, ALE DEPOZIT':'badge-ok','DEPOZIT, ALE POJIŠTĚNÉ':'badge-error','PRODANÉ, ALE POJIŠTĚNÉ':'badge-sold','NAVÍC V UNIQA':'badge-extra','SPZ NESOUHLASÍ':'badge-warning','NELZE OVĚŘIT':'badge-error'}[r.status_raw]||'badge-error');
 }
 function visibleSystemText(value){
@@ -31,7 +32,7 @@ function rowBadgeClass(r){
   const workflow=String(r.workflow_status||'').toUpperCase();
   const forceExtraRed=(activeFilter==='EXTRA_UNIQA'||activeFilter==='UNWANTED_INSURANCE')
     && (raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'||raw==='NAVÍC V UNIQA'||raw==='DEPOZIT, ALE POJIŠTĚNÉ')
-    && !['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
+    && workflow!=='VYŘEŠENO';
   return forceExtraRed?'badge-missing':badgeClass(r);
 }
 
@@ -116,7 +117,7 @@ async function showManualHistory(){
     body.innerHTML=items.map(x=>{
       const status=x.new_workflow_status||'Původní status';
       const note=(x.new_note||'') || ((x.old_note||'')?'Poznámka odstraněna':'—');
-      return '<tr><td>'+esc(x.changed_at||'—')+'</td><td>'+esc(x.vin||x.vehicle_key||'—')+'</td><td>'+esc(x.spz||'—')+'</td><td>'+esc(visibleSystemText(x.original_status||'—'))+'</td><td><span class="status-badge '+((status==='VYŘEŠENO'||status==='V POŘÁDKU')?'badge-ok':'badge-warning')+'">'+esc(status)+'</span></td><td>'+esc(note)+'</td></tr>';
+      return '<tr><td>'+esc(x.changed_at||'—')+'</td><td>'+esc(x.vin||x.vehicle_key||'—')+'</td><td>'+esc(x.spz||'—')+'</td><td>'+esc(visibleSystemText(x.original_status||'—'))+'</td><td><span class="status-badge '+(status==='VYŘEŠENO'?'badge-ok':'badge-warning')+'">'+esc(status)+'</span></td><td>'+esc(note)+'</td></tr>';
     }).join('');
   }catch(e){
     if(body)body.innerHTML='<tr class="empty-row"><td colspan="6" class="empty">Historii se nepodařilo načíst.</td></tr>';
@@ -130,8 +131,7 @@ function isUnusual(r){
 function needsAttention(r){
   const raw=String(r.status_raw||'').toUpperCase();
   const workflow=String(r.workflow_status||'').toUpperCase();
-  const resolved=raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'?workflow==='VYŘEŠENO':['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
-  return unusualStatuses.includes(raw)&&!resolved;
+  return unusualStatuses.includes(raw)&&workflow!=='VYŘEŠENO';
 }
 function isResolvedUnusual(r){
   return isUnusual(r)&&!needsAttention(r);
@@ -150,7 +150,7 @@ function matches(r){
     const raw=String(r.status_raw||'').toUpperCase();
     const workflow=String(r.workflow_status||'').toUpperCase();
     if(raw==='OK')return true;
-    if(raw==='CHYBÍ V UNIQA')return ['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
+    if(raw==='CHYBÍ V UNIQA')return workflow==='VYŘEŠENO';
     if(raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ')return workflow==='VYŘEŠENO';
     return false;
   }
@@ -207,10 +207,10 @@ function renderRows(){
   }
   $('rows').innerHTML=rows.map(r=>{
     const index=state.results.indexOf(r);
-    const badge=badgeClass({...r,workflow_status:''});
+    const badge=badgeClass(r);
     const vehicle=(r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ')||r.obchodni_oznaceni||r.tovarni_znacka||'').trim();
     const workflow=r.workflow_status|| (needsAttention(r)?'Nové':'—');
-    const workflowClass=['VYŘEŠENO','V POŘÁDKU'].includes(workflow)?'badge-ok':workflow==='—'?'badge-neutral':'badge-warning';
+    const workflowClass=workflow==='VYŘEŠENO'?'badge-ok':workflow==='—'?'badge-neutral':'badge-warning';
     const rowClass=needsAttention(r)?'problem-row':isResolvedUnusual(r)?'resolved-unusual-row':'';
     return `<tr class="${rowClass}" data-index="${index}"><td><button class="vehicle-open" type="button" data-index="${index}" aria-label="Otevřít vozidlo ${esc(displaySpz(r)||r.vin)}">${esc(displaySpz(r)||'Bez SPZ')}</button>${vehicle?`<span class="vehicle-name">${esc(vehicle)}</span>`:''}<span class="vehicle-vin">${esc(r.vin||'—')}</span></td><td><span class="status-badge ${badge}">${esc(resultLabel(r))}</span></td><td><span class="status-badge ${workflowClass}">${esc(workflow)}</span>${r.note?'<span class="note-indicator">Poznámka v detailu</span>':''}</td></tr>`;
   }).join('');
@@ -230,11 +230,7 @@ function primaryIssueCounts(){
 
 function categoryBreakdown(rawStatus){
   const rows=(state.results||[]).filter(r=>String(r.status_raw||'').toUpperCase()===rawStatus);
-  const isResolved=r=>{
-    const workflow=String(r.workflow_status||'').toUpperCase();
-    if(rawStatus==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ') return workflow==='VYŘEŠENO';
-    return ['VYŘEŠENO','V POŘÁDKU'].includes(workflow);
-  };
+  const isResolved=r=>String(r.workflow_status||'').toUpperCase()==='VYŘEŠENO';
   const resolved=rows.filter(isResolved).length;
   return {total:rows.length,resolved,open:Math.max(0,rows.length-resolved)};
 }
@@ -501,7 +497,7 @@ function showDetail(r){
   const original=r.original_status?`<div style="margin-top:5px;color:#64748b;font-size:11px">Původní stav: ${esc(visibleSystemText(r.original_status))}</div>`:'';
   const vehicle=(r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ')).trim()||'—';
   const spzValue=displaySpz(r)||'—';
-  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span>${original}</dd><dt>Vozidlo</dt><dd id="vehicleDetailValue">${esc(vehicle)}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ</dt><dd>${esc(spzValue)}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.detail||'—'))}</dd></dl><section id="kostkaSection" class="kostka-section"><div class="kostka-heading"><div><h3>Technické údaje vozidla</h3><p id="kostkaStatus">Načítám uložené údaje…</p></div></div><div id="kostkaData"></div></section><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option>${r.status_raw==='NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ'?'':'<option value="V POŘÁDKU">V pořádku</option>'}<option value="KONTROLA">Kontrola</option><option value="ŘEŠÍ SE">Řeší se</option><option value="VYŘEŠENO">Vyřešeno</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení pojištění zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
+  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(visibleSystemText(r.status))}</span>${original}</dd><dt>Vozidlo</dt><dd id="vehicleDetailValue">${esc(vehicle)}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ</dt><dd>${esc(spzValue)}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.detail||'—'))}</dd></dl><section id="kostkaSection" class="kostka-section"><div class="kostka-heading"><div><h3>Technické údaje vozidla</h3><p id="kostkaStatus">Načítám uložené údaje…</p></div></div><div id="kostkaData"></div></section><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option><option value="VYŘEŠENO">Vyřešeno</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení pojištění zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
   $('workflowStatus').value=r.workflow_status||'';
   $('saveMeta').addEventListener('click',()=>saveMeta(r));
   $('detailDialog').showModal();

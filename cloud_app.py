@@ -232,6 +232,7 @@ def _default_state() -> dict[str, Any]:
         "annotations": {},
         "csv_available": False,
         "synced_at": None,
+        "agent": None,
         "_command": None,
         "_vehicle_lookup": None,
         "_audit_export": None,
@@ -994,11 +995,27 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     return public
 
 
-def _authorized() -> bool:
+def _normalize_agent_id(value: Any) -> str:
+    return re.sub(r"[^A-Z0-9_.-]", "", str(value or "").strip().upper())
+
+
+def _expected_agent_id() -> str:
+    return _normalize_agent_id(os.getenv("DENNI_POV_ALLOWED_AGENT_ID", "VCSERVER"))
+
+
+def _token_authorized() -> bool:
     expected = os.getenv("SYNC_TOKEN", "")
     if not expected: return False
     supplied = request.headers.get("Authorization", "")
     return hmac.compare_digest(supplied, f"Bearer {expected}")
+
+
+def _authorized() -> bool:
+    if not _token_authorized():
+        return False
+    supplied_agent = _normalize_agent_id(request.headers.get("X-Denni-Pov-Agent", ""))
+    expected_agent = _expected_agent_id()
+    return bool(expected_agent and hmac.compare_digest(supplied_agent, expected_agent))
 
 
 @app.get("/")
@@ -1307,9 +1324,19 @@ def api_run():
 
 @app.get("/api/agent/command")
 def agent_command():
-    if not _authorized(): return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    if not _token_authorized():
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    supplied_agent = _normalize_agent_id(request.headers.get("X-Denni-Pov-Agent", ""))
+    expected_agent = _expected_agent_id()
     with _lock:
         data = _load_state()
+        verified_agent = _normalize_agent_id((data.get("agent") or {}).get("id"))
+        # Jednorázová kompatibilita dovolí staré verzi na VCSERVER stáhnout
+        # příkaz, provést vlastní Git aktualizaci a restartovat se. Jakmile se
+        # VCSERVER jednou ověří, požadavky bez identity jsou trvale odmítnuty.
+        legacy_bootstrap = not supplied_agent and verified_agent != expected_agent
+        if not legacy_bootstrap and supplied_agent != expected_agent:
+            return jsonify({"ok": False, "message": "Tento počítač není povolený agent."}), 403
         command = data.get("_command")
     return jsonify({"ok": True, "command": command})
 
@@ -1454,8 +1481,11 @@ def api_sync():
         data["last_successful_at"] = previous.get("last_successful_at") or (
             previous.get("finished_at") if not previous.get("error") else None
         )
-        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress"):
+        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress", "agent"):
             if key in payload: data[key] = payload[key]
+        agent = data.get("agent") if isinstance(data.get("agent"), dict) else {}
+        if _normalize_agent_id(agent.get("id")) != _expected_agent_id():
+            return jsonify({"ok": False, "message": "Neplatná identita agenta."}), 403
         data["running"] = bool(payload.get("running"))
         if data["running"]:
             data["finished_at"] = None
@@ -1804,4 +1834,3 @@ def health():
         "synced_at": data.get("synced_at"),
         "waiting_for_agent": bool(data.get("_command")),
     })
-

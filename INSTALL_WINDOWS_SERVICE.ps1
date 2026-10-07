@@ -7,6 +7,11 @@ $appDir = Join-Path $serviceRoot "app"
 $credentialDir = Join-Path $env:LOCALAPPDATA "DENNI_POV_KONTROLA"
 $sqlCredPath = Join-Path $credentialDir "tirbazar.credential.xml"
 $uniqaCredPath = Join-Path $credentialDir "uniqa.credential.xml"
+$allowedComputer = "VCSERVER"
+
+if ($env:COMPUTERNAME.ToUpperInvariant() -ne $allowedComputer) {
+    throw "DENNI POV lze instalovat pouze na server $allowedComputer. Tento pocitac je $env:COMPUTERNAME."
+}
 
 New-Item -ItemType Directory -Path $serviceRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $credentialDir -Force | Out-Null
@@ -348,7 +353,8 @@ Write-Host ("Stav: " + $task.State)
 Write-Host "Automaticky start: pri startu Windows + pojistka pri prihlaseni"
 Write-Host "Odhlaseni uzivatele: agent zustava bezet na pozadi (LogonType Password)"
 Write-Host "Dvojita instance: blokovana (IgnoreNew)"
-Write-Host "Automaticka kontrola: kazdou 1 hodinu"
+Write-Host "Povoleny pocitac: VCSERVER"
+Write-Host "Automaticka kontrola: denne v 10:00 a 17:00"
 Write-Host "Online tlacitko: agent kontroluje pozadavek kazdych 15 sekund"
 Write-Host "Online web: https://denni-pov-kontrola.onrender.com"
 Write-Host ("Log: " + (Join-Path $credentialDir "online-agent.log"))

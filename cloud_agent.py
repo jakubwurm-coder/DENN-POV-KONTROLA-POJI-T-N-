@@ -65,6 +65,8 @@ def _write_stuck_log(snapshot: dict[str, Any]) -> None:
 
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
 SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "OPYnDYQG4X5oVQPsKPE7qB25pw1YV9KUZWzFXcFrygfSvx1aKhkH_-MunoSx7Zof")
+AGENT_ID = platform.node().strip().upper()
+ALLOWED_AGENT_ID = os.getenv("DENNI_POV_ALLOWED_AGENT_ID", "VCSERVER").strip().upper()
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
 MAX_CHECK_SECONDS = int(os.getenv("DENNI_POV_MAX_CHECK_SECONDS", "600"))
 SERVICE_MODE = os.getenv("DENNI_POV_SERVICE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -121,7 +123,21 @@ def _load_local_app():
 
 
 def _headers() -> dict[str, str]:
-    return {"Authorization": f"Bearer {SYNC_TOKEN}", "Content-Type": "application/json", "User-Agent": f"DENNI-POV-Agent/{platform.system()}"}
+    return {
+        "Authorization": f"Bearer {SYNC_TOKEN}",
+        "Content-Type": "application/json",
+        "User-Agent": f"DENNI-POV-Agent/{platform.system()}",
+        "X-Denni-Pov-Agent": AGENT_ID,
+    }
+
+
+def _validate_agent_computer() -> None:
+    """Zabrání spuštění produkčního agenta mimo jediný povolený server."""
+    if AGENT_ID != ALLOWED_AGENT_ID:
+        raise RuntimeError(
+            f"Tento agent smí běžet pouze na počítači {ALLOWED_AGENT_ID}. "
+            f"Aktuální počítač je {AGENT_ID or 'NEZNÁMÝ'}."
+        )
 
 
 def _reset_for_run(local_app) -> None:
@@ -163,7 +179,7 @@ def _progress_for(snapshot: dict[str, Any]) -> dict[str, Any]:
 def _decorate_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     snapshot = dict(snapshot)
     snapshot["progress"] = _progress_for(snapshot)
-    snapshot["agent"] = {"computer": platform.node(), "system": platform.system()}
+    snapshot["agent"] = {"id": AGENT_ID, "computer": platform.node(), "system": platform.system()}
     # Velký audit se při běžné synchronizaci na web neposílá.
     snapshot.pop("audit", None)
     return snapshot
@@ -765,7 +781,7 @@ def _error_snapshot(exc: Exception) -> dict[str, Any]:
             "allianz": {"state": "idle", "status": "Neprovedeno", "detail": "Kontrola skončila před dokončením."},
         },
         "summary": {"active": 0, "ok_total": 0, "ok_uniqa": 0, "ok_allianz": 0, "missing": 0, "deposit": 0, "sold_uniqa": 0, "extra_uniqa": 0},
-        "results": [], "agent": {"computer": platform.node(), "system": platform.system()},
+        "results": [], "agent": {"id": AGENT_ID, "computer": platform.node(), "system": platform.system()},
     }
 
 
@@ -811,7 +827,13 @@ def main() -> int:
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--no-initial", action="store_true")
     args = parser.parse_args()
+    try:
+        _validate_agent_computer()
+    except RuntimeError as exc:
+        print(f"CHYBA: {exc}")
+        return 78
     print("DENNI POV - kancelářský agent")
+    print("Povolený agent:", AGENT_ID)
     print("Online web:", CLOUD_URL)
     print("Automatická kontrola: denně v 10:00 a 17:00 (Europe/Prague).")
     print("Tento proces musí běžet na počítači, který vidí TIRBazar SQL a má přístup do UNIQA.")

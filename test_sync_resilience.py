@@ -8,7 +8,9 @@ import cloud_app
 class SyncResilienceTests(unittest.TestCase):
     def setUp(self):
         self.old_token = os.environ.get("SYNC_TOKEN")
+        self.old_agent = os.environ.get("DENNI_POV_ALLOWED_AGENT_ID")
         os.environ["SYNC_TOKEN"] = "sync-test-token"
+        os.environ["DENNI_POV_ALLOWED_AGENT_ID"] = "VCSERVER"
         self.client = cloud_app.app.test_client()
 
     def tearDown(self):
@@ -16,6 +18,10 @@ class SyncResilienceTests(unittest.TestCase):
             os.environ.pop("SYNC_TOKEN", None)
         else:
             os.environ["SYNC_TOKEN"] = self.old_token
+        if self.old_agent is None:
+            os.environ.pop("DENNI_POV_ALLOWED_AGENT_ID", None)
+        else:
+            os.environ["DENNI_POV_ALLOWED_AGENT_ID"] = self.old_agent
 
     def test_failed_empty_sync_preserves_last_valid_results(self):
         previous = cloud_app._default_state()
@@ -30,6 +36,7 @@ class SyncResilienceTests(unittest.TestCase):
             "running": False,
             "finished_at": "04.10.2026 23:38:39",
             "error": "Read timed out. (read timeout=20)",
+            "agent": {"id": "VCSERVER", "computer": "VCSERVER", "system": "Windows"},
             "sources": {"tirbazar": {"state": "error"}},
             "summary": {"active": 0, "ok_total": 0, "missing": 0},
             "results": [],
@@ -50,7 +57,10 @@ class SyncResilienceTests(unittest.TestCase):
         ):
             response = self.client.post(
                 "/api/sync",
-                headers={"Authorization": "Bearer sync-test-token"},
+                headers={
+                    "Authorization": "Bearer sync-test-token",
+                    "X-Denni-Pov-Agent": "VCSERVER",
+                },
                 json=payload,
             )
 

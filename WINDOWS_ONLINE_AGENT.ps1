@@ -20,6 +20,13 @@ function Load-SecureCredential([string]$path) {
 
 Write-AgentLog "DENNI POV online agent startuje."
 
+$allowedComputer = "VCSERVER"
+if ($env:COMPUTERNAME.ToUpperInvariant() -ne $allowedComputer) {
+    Write-AgentLog ("CHYBA: agent smi bezet pouze na " + $allowedComputer + ". Tento pocitac je " + $env:COMPUTERNAME + ".")
+    exit 78
+}
+$env:DENNI_POV_ALLOWED_AGENT_ID = $allowedComputer
+
 $savedSql = Load-SecureCredential $sqlCredPath
 if ($savedSql) {
     $net = $savedSql.GetNetworkCredential()

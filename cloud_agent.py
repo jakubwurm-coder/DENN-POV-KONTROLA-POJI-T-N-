@@ -8,10 +8,11 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
@@ -65,9 +66,22 @@ def _write_stuck_log(snapshot: dict[str, Any]) -> None:
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
 SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "OPYnDYQG4X5oVQPsKPE7qB25pw1YV9KUZWzFXcFrygfSvx1aKhkH_-MunoSx7Zof")
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
-AUTO_SYNC_SECONDS = int(os.getenv("DENNI_POV_AUTO_SYNC_SECONDS", "3600"))
 MAX_CHECK_SECONDS = int(os.getenv("DENNI_POV_MAX_CHECK_SECONDS", "600"))
 SERVICE_MODE = os.getenv("DENNI_POV_SERVICE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+PRAGUE_TZ = ZoneInfo("Europe/Prague")
+AUTO_CHECK_TIMES = ((10, 0), (17, 0))
+
+
+def _next_scheduled_run(now: datetime | None = None) -> datetime:
+    """Return the next 10:00 or 17:00 run in Europe/Prague."""
+    current = now.astimezone(PRAGUE_TZ) if now else datetime.now(PRAGUE_TZ)
+    for hour, minute in AUTO_CHECK_TIMES:
+        candidate = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate > current:
+            return candidate
+    tomorrow = current + timedelta(days=1)
+    hour, minute = AUTO_CHECK_TIMES[0]
+    return tomorrow.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
 def _auto_update_from_github() -> None:
@@ -799,7 +813,7 @@ def main() -> int:
     args = parser.parse_args()
     print("DENNI POV - kancelářský agent")
     print("Online web:", CLOUD_URL)
-    print("Automatická kontrola: každou 1 hodinu.")
+    print("Automatická kontrola: denně v 10:00 a 17:00 (Europe/Prague).")
     print("Tento proces musí běžet na počítači, který vidí TIRBazar SQL a má přístup do UNIQA.")
     # TEMP 2026-10-02: cílená read-only diagnostika dvou známých prodaných VIN.
     try:
@@ -809,8 +823,8 @@ def main() -> int:
     if args.once:
         run_and_sync("ruční jednorázová synchronizace"); return 0
     last_command_id = ""
-    next_auto = time.monotonic()
-    if args.no_initial: next_auto += AUTO_SYNC_SECONDS
+    next_auto = _next_scheduled_run()
+    print(f"Další automatická kontrola: {next_auto:%d.%m.%Y %H:%M}")
     while True:
         try:
             try:
@@ -833,10 +847,10 @@ def main() -> int:
                     sample_tirbazar(command or {})
                 else:
                     run_and_sync("požadavek z online webu")
-                    next_auto = time.monotonic() + AUTO_SYNC_SECONDS
-            elif time.monotonic() >= next_auto:
-                run_and_sync("automatická kontrola každou 1 hodinu")
-                next_auto = time.monotonic() + AUTO_SYNC_SECONDS
+            elif datetime.now(PRAGUE_TZ) >= next_auto:
+                run_and_sync(f"automatická kontrola {next_auto:%H:%M} Europe/Prague")
+                next_auto = _next_scheduled_run(datetime.now(PRAGUE_TZ))
+                print(f"Další automatická kontrola: {next_auto:%d.%m.%Y %H:%M}")
         except KeyboardInterrupt:
             print("\nAgent ukončen."); return 0
         except Exception as exc:

@@ -919,6 +919,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
         "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ",
         "SPZ NESOUHLASÍ",
+        "DVOJÍ POJIŠTĚNÍ",
         "NELZE OVĚŘIT",
     }
     summary["active"] = sum(
@@ -930,7 +931,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     summary["deposit"] = raw_counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0)
     summary["deposit_insured"] = raw_counts.get("DEPOZIT, ALE POJIŠTĚNÉ", 0)
     summary["spz_mismatch"] = raw_counts.get("SPZ NESOUHLASÍ", 0)
-    summary["double_insured"] = raw_counts.get("DVOJÍ POJIŠTĚNÍ", 0)
+    summary["double_insured"] = sum(1 for row in rows if str(row.get("status_raw") or "").upper() == "DVOJÍ POJIŠTĚNÍ" and str(row.get("workflow_status") or "").upper() != "VYŘEŠENO")
     summary["unverified"] = raw_counts.get("NELZE OVĚŘIT", 0)
 
     resolved_statuses = {"VYŘEŠENO"}
@@ -967,6 +968,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         if str(row.get("status_raw") or "").upper() in {
             "CHYBÍ V UNIQA",
             "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+            "DVOJÍ POJIŠTĚNÍ",
         }
     ]
     summary["ok_total"] = int(summary.get("ok_total") or 0) + len(resolved_active_rows)

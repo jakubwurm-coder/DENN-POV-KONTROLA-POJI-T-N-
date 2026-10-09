@@ -51,6 +51,8 @@ def windows_status():
         "DEPOZIT, ALE POJIŠTĚNÉ",
         "PRODANÉ, ALE POJIŠTĚNÉ",
         "NAVÍC V UNIQA",
+        "NAVÍC V ALLIANZ",
+        "DVOJÍ POJIŠTĚNÍ",
         "SPZ NESOUHLASÍ",
         "NELZE OVĚŘIT",
     }

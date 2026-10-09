@@ -76,9 +76,11 @@ def compare_vehicles(
     allianz: list[Any] | None = None,
     allianz_available: bool = False,
     allianz_error: str = "",
+    known_tir_vins: set[str] | None = None,
 ) -> list[ComparisonResult]:
 
     allianz = allianz or []
+    known_tir_vins = {normalize_vin(x) for x in known_tir_vins} if known_tir_vins is not None else None
 
     results: list[ComparisonResult] = []
 
@@ -136,14 +138,14 @@ def compare_vehicles(
             if allianz_available:
                 allianz_vehicle = allianz_by_vin.get(vin)
                 if allianz_vehicle is None and tir_spz:
-                    allianz_vehicle = allianz_by_spz.get(tir_spz)
+                    allianz_vehicle = None  # ALLIANZ: pouze VIN
 
             if uniqa_available and uniqa_vehicle:
                 results.append(ComparisonResult(
                     oid=vehicle.oid, vin=vin, tir_spz=tir_spz,
                     uniqa_spz=normalize_spz(uniqa_vehicle.spz),
                     status="DEPOZIT, ALE POJIŠTĚNÉ",
-                    detail="Vozidlo je v depozitu, ale je stále pojištěné v UNIQA – správný stav je NEPOJIŠTĚNO.",
+                    detail=("Depozit je pojištěn současně v UNIQA a ALLIANZ, správně má být NEPOJIŠTĚNO." if allianz_vehicle is not None else "Vozidlo je v depozitu, ale je stále pojištěné v UNIQA – správný stav je NEPOJIŠTĚNO."),
                     datum_vykupu=vehicle.datum_vykupu, datum_prodeje="",
                 ))
                 continue
@@ -191,7 +193,7 @@ def compare_vehicles(
                 if allianz_vehicle is not None:
                     allianz_match = "VIN"
                 elif tir_spz:
-                    allianz_vehicle = allianz_by_spz.get(tir_spz)
+                    allianz_vehicle = None  # ALLIANZ: pouze VIN
                     if allianz_vehicle is not None:
                         allianz_match = "SPZ"
 
@@ -203,7 +205,7 @@ def compare_vehicles(
                         tir_spz=tir_spz,
                         uniqa_spz=normalize_spz(uniqa_vehicle.spz),
                         status="NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-                        detail="Vykoupené, nepřítomné, ale pojištěné – správný stav je NEPOJIŠTĚNO.",
+                        detail=("Nepřítomné pojištěné současně v UNIQA a ALLIANZ, správně NEPOJIŠTĚNO." if allianz_vehicle is not None else "Vykoupené, nepřítomné, ale pojištěné – správný stav je NEPOJIŠTĚNO."),
                         datum_vykupu=vehicle.datum_vykupu,
                         datum_prodeje="",
                     )
@@ -218,7 +220,7 @@ def compare_vehicles(
                         tir_spz=tir_spz,
                         uniqa_spz="",
                         status="NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-                        detail="Vykoupené, nepřítomné, ale pojištěné – správný stav je NEPOJIŠTĚNO.",
+                        detail=("Nepřítomné pojištěné současně v UNIQA a ALLIANZ, správně NEPOJIŠTĚNO." if allianz_vehicle is not None else "Vykoupené, nepřítomné, ale pojištěné – správný stav je NEPOJIŠTĚNO."),
                         datum_vykupu=vehicle.datum_vykupu,
                         datum_prodeje="",
                     )
@@ -269,6 +271,7 @@ def compare_vehicles(
         # ====================================================
 
         if sold and not _is_sold_to_vans_renting(vehicle):
+            allianz_vehicle = allianz_by_vin.get(vin) if allianz_available else None
 
             # Prodané vozidlo už nemá být pojištěné. Nezahazujeme ho ale
             # před porovnáním: pokud zůstalo v UNIQA nebo Allianz, jde o
@@ -284,7 +287,7 @@ def compare_vehicles(
                         detail=(
                             "Vozidlo má v TIRBazar evidovaný prodej, "
                             "ale VIN je stále veden mezi aktivními vozidly UNIQA. "
-                            "Pojištění je vedeno navíc."
+                            ("Pojištění je vedeno navíc v UNIQA i ALLIANZ." if allianz_vehicle is not None else "Pojištění je vedeno navíc.")
                         ),
                         datum_vykupu=vehicle.datum_vykupu,
                         datum_prodeje=vehicle.datum_prodeje,
@@ -296,7 +299,7 @@ def compare_vehicles(
             if allianz_available:
                 allianz_vehicle = allianz_by_vin.get(vin)
                 if allianz_vehicle is None and tir_spz:
-                    allianz_vehicle = allianz_by_spz.get(tir_spz)
+                    allianz_vehicle = None  # ALLIANZ: pouze VIN
 
             if allianz_vehicle is not None:
                 results.append(
@@ -351,6 +354,16 @@ def compare_vehicles(
         # ====================================================
         # 1. UNIQA
         # ====================================================
+
+        if uniqa_available and uniqa_vehicle and allianz_available and vin in allianz_by_vin:
+            results.append(ComparisonResult(
+                oid=vehicle.oid, vin=vin, tir_spz=tir_spz,
+                uniqa_spz=normalize_spz(uniqa_vehicle.spz),
+                status="DVOJÍ POJIŠTĚNÍ",
+                detail="VIN je nalezen v UNIQA i ALLIANZ. Prověřte souběh pojištění.",
+                datum_vykupu=vehicle.datum_vykupu, datum_prodeje="",
+            ))
+            continue
 
         if uniqa_available and uniqa_vehicle:
 
@@ -568,9 +581,7 @@ def compare_vehicles(
 
     if uniqa_available:
 
-        tir_vins = set(
-            tir_by_vin.keys()
-        )
+        tir_vins = known_tir_vins if known_tir_vins is not None else set(tir_by_vin.keys())
 
         for vin, uniqa_vehicle in uniqa_by_vin.items():
 
@@ -596,7 +607,20 @@ def compare_vehicles(
                 )
             )
 
+    if allianz_available:
+        tir_vins = known_tir_vins if known_tir_vins is not None else set(tir_by_vin.keys())
+        for vin, insured in allianz_by_vin.items():
+            if vin not in tir_vins:
+                results.append(ComparisonResult(
+                    oid=None, vin=vin, tir_spz="", uniqa_spz="",
+                    status="NAVÍC V ALLIANZ",
+                    detail="VIN je v ALLIANZ, ale není v kompletní evidenci TIRBazar.",
+                    datum_vykupu="", datum_prodeje="",
+                ))
+
     order = {
+        "DVOJÍ POJIŠTĚNÍ": 1,
+        "NAVÍC V ALLIANZ": 5,
         "CHYBÍ V UNIQA": 1,
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ": 2,
         "NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ": 9,

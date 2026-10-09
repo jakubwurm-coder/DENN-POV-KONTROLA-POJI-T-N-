@@ -44,6 +44,8 @@ def install_assistant_api(app, load_state: Callable[[], dict[str, Any]], public_
             "PRODANÉ, ALE POJIŠTĚNÉ",
             "DEPOZIT, ALE POJIŠTĚNÉ",
             "NAVÍC V UNIQA",
+        "NAVÍC V ALLIANZ",
+        "DVOJÍ POJIŠTĚNÍ",
             "SPZ NESOUHLASÍ",
             "NELZE OVĚŘIT",
         }

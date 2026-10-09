@@ -139,7 +139,9 @@ def _summary(results, active_count: int) -> dict[str, int]:
         "deposit": deposit,
         "deposit_insured": counts.get("DEPOZIT, ALE POJIŠTĚNÉ", 0),
         "sold_uniqa": counts.get("PRODANÉ, ALE POJIŠTĚNÉ", 0),
-        "extra_uniqa": counts.get("NAVÍC V UNIQA", 0),
+        "extra_uniqa": counts.get("NAVÍC V UNIQA", 0) + counts.get("NAVÍC V ALLIANZ", 0),
+        "extra_allianz": counts.get("NAVÍC V ALLIANZ", 0),
+        "double_insured": counts.get("DVOJÍ POJIŠTĚNÍ", 0),
         "spz_mismatch": counts.get("SPZ NESOUHLASÍ", 0),
         "unverified": counts.get("NELZE OVĚŘIT", 0),
     }
@@ -372,6 +374,7 @@ def _run_check_worker() -> None:
             allianz=allianz.vehicles,
             allianz_available=allianz.available,
             allianz_error=allianz.error,
+            known_tir_vins={v.vin for v in vehicles if v.vin},
         )
 
         # Auditní data patří ke stejnému běhu jako výsledek. Díky tomu Excel

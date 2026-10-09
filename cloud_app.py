@@ -922,10 +922,14 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         "DVOJÍ POJIŠTĚNÍ",
         "NELZE OVĚŘIT",
     }
-    summary["active"] = sum(
-        1 for row in rows
-        if str(row.get("status_raw") or "").upper() in active_statuses
-    )
+    source_active = (data.get("summary") or {}).get("active")
+    try:
+        summary["active"] = int(source_active)
+    except (TypeError, ValueError):
+        summary["active"] = sum(
+            1 for row in rows
+            if str(row.get("status_raw") or "").upper() in active_statuses
+        )
     summary["ok_total"] = raw_counts.get("OK", 0)
     summary["absent_uninsured"] = raw_counts.get("NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ", 0)
     summary["deposit"] = raw_counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0)
@@ -1753,11 +1757,25 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
 
     sql_rows = audit.get("sql") if isinstance(audit.get("sql"), list) else []
     add_audit_sheet("SQL audit", sql_rows, [
+        ("zarazeni", "Zařazení"), ("duvod", "Důvod rozhodnutí"),
         ("oid", "OID"), ("vin", "VIN"), ("spz", "SPZ"), ("stav", "Stav"),
         ("zeme_puvodu", "Země"), ("datum_vykupu", "Datum výkupu"),
         ("datum_prodeje", "Datum prodeje"), ("ocekavani", "Očekávání"),
         ("uniqa", "UNIQA"), ("allianz", "ALLIANZ"), ("vysledek", "Výsledek"),
         ("filtr", "Důvod filtru"),
+    ])
+    breakdown = audit.get("breakdown") if isinstance(audit.get("breakdown"), dict) else {}
+    breakdown_rows = []
+    for group_key, label in (
+        ("decisions", "Kategorie rozhodnutí"),
+        ("states_active", "Stav – aktivní POV"),
+        ("reasons", "Důvod zařazení / vyřazení"),
+    ):
+        values = breakdown.get(group_key) if isinstance(breakdown.get(group_key), dict) else {}
+        for name, count in sorted(values.items()):
+            breakdown_rows.append({"skupina": label, "polozka": name, "pocet": count})
+    add_audit_sheet("Rozpad TIRBazar", breakdown_rows, [
+        ("skupina", "Skupina"), ("polozka", "Kategorie / důvod"), ("pocet", "Počet"),
     ])
     uniqa_rows = audit.get("uniqa") if isinstance(audit.get("uniqa"), list) else []
     add_audit_sheet("UNIQA", uniqa_rows, [

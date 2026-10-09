@@ -20,14 +20,30 @@ function Log([string]$message) {
 }
 
 if ($Install) {
-    $scriptPath = Join-Path $app "AUTO_UPDATE_WINDOWS_AGENT.ps1"
-    $quoted = '"' + $scriptPath + '"'
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File $quoted"
-    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 15)
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
-    Log "Naplanovano: kazdych 15 minut (jen kdyz je uzivatel prihlaseny)."
+    # Zadani hesla pouze pri instalaci: Windows Task Scheduler je ulozi
+    # bezpecne pro batch logon, skript samotny heslo nikam nezapisuje.
+    $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $secure = Read-Host "Zadej heslo uctu $identity pro beh bez prihlaseni" -AsSecureString
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+        $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+    }
+    if ([string]::IsNullOrEmpty($password)) { throw "Heslo nebylo zadano; uloha nezmenena." }
+    try {
+        $scriptPath = Join-Path $app "AUTO_UPDATE_WINDOWS_AGENT.ps1"
+        $quoted = '"' + $scriptPath + '"'
+        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $quoted"
+        $startup = New-ScheduledTaskTrigger -AtStartup
+        $periodic = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 15)
+        $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($startup, $periodic) -Settings $settings -User $identity -Password $password -RunLevel Limited -Force | Out-Null
+        Log "Naplanovano: pri startu Windows a kazdych 15 minut bez prihlaseni ($identity)."
+    } finally {
+        $password = $null
+        $secure.Dispose()
+    }
     exit 0
 }
 

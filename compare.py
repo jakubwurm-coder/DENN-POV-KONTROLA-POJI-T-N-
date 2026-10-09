@@ -190,8 +190,6 @@ def compare_vehicles(
                 allianz_vehicle = allianz_by_vin.get(vin)
                 if allianz_vehicle is not None:
                     allianz_match = "VIN"
-                    if allianz_vehicle is not None:
-                        allianz_match = "SPZ"
 
             if uniqa_available and uniqa_vehicle:
                 results.append(
@@ -283,7 +281,7 @@ def compare_vehicles(
                         detail=(
                             "Vozidlo má v TIRBazar evidovaný prodej, "
                             "ale VIN je stále veden mezi aktivními vozidly UNIQA. "
-                            ("Pojištění je vedeno navíc v UNIQA i ALLIANZ." if allianz_vehicle is not None else "Pojištění je vedeno navíc.")
+                            + ("Pojištění je vedeno navíc v UNIQA i ALLIANZ." if allianz_vehicle is not None else "Pojištění je vedeno navíc.")
                         ),
                         datum_vykupu=vehicle.datum_vykupu,
                         datum_prodeje=vehicle.datum_prodeje,

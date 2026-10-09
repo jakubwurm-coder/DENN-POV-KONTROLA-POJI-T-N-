@@ -231,6 +231,28 @@ def _audit_filter_reason(vehicle) -> str:
     return f"Stav mimo POV: {getattr(vehicle, 'stav', '') or 'neuveden'}"
 
 
+def _audit_decision(vehicle) -> tuple[str, str]:
+    """Jednoznačné zařazení podle stejných pravidel jako skutečná POV kontrola."""
+    if not getattr(vehicle, "vin", ""):
+        return "VYŘAZENO", "Bez VIN"
+    if not _is_czech_for_pov(vehicle):
+        return "VYŘAZENO", "Mimo pravidla země / registrační značky"
+    if not _requires_pov_check(vehicle):
+        return "VYŘAZENO", _audit_filter_reason(vehicle)
+    if _is_effectively_sold(vehicle):
+        return "KONTROLA NAVÍC", "Prodané – ověřuje se zbylé pojištění v obou pojišťovnách"
+    if _is_deposit_vehicle(vehicle):
+        return "DEPOZIT", "Depozit – správný stav nepojištěno"
+    state = " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
+    if state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}:
+        return "AKTIVNÍ KONTROLA", "Nepřítomné s výkupem – správně nepojištěno"
+    if state in {"REZERVOVANÉ", "REZERVOVANE", "V KOMISI"}:
+        return "AKTIVNÍ KONTROLA", "Rezervace/komise s evidovaným výkupem"
+    if state in {"VYKOUPENÉ", "VYKOUPENE"}:
+        return "AKTIVNÍ KONTROLA", "Vykoupené vozidlo"
+    return "AKTIVNÍ KONTROLA", "Splňuje pravidla POV"
+
+
 def _audit_vehicle_row(vehicle, eligible: bool) -> dict[str, object]:
     state = " ".join(str(getattr(vehicle, "stav", "") or "").strip().upper().split())
     absent = state in {"NEPŘÍTOMNÉ", "NEPRITOMNE"} and bool(getattr(vehicle, "datum_vykupu", ""))
@@ -243,7 +265,10 @@ def _audit_vehicle_row(vehicle, eligible: bool) -> dict[str, object]:
         else "MÁ BÝT POJIŠTĚNO" if eligible
         else "MIMO POV"
     )
+    decision, reason = _audit_decision(vehicle)
     return {
+        "zarazeni": decision,
+        "duvod": reason,
         "oid": getattr(vehicle, "oid", None),
         "vin": getattr(vehicle, "vin", "") or "",
         "spz": getattr(vehicle, "spz", "") or "",
@@ -396,13 +421,22 @@ def _run_check_worker() -> None:
             spz = getattr(vehicle, "spz", "") or ""
             result = result_by_oid.get(getattr(vehicle, "oid", None))
             row["uniqa"] = "ANO" if vin and vin in uniqa_vins else "NE"
-            row["allianz"] = "ANO" if (vin and vin in allianz_vins) or (spz and spz in allianz_spz) else "NE"
+            row["allianz"] = "ANO" if vin and vin in allianz_vins else "NE"
             row["vysledek"] = _display_status(result) if result is not None else (
                 "SPRÁVNĚ NEPOJIŠTĚNO" if row["ocekavani"] == "NEMÁ BÝT POJIŠTĚNO" else row["filtr"]
             )
             sql_rows.append(row)
 
+        from collections import Counter
+        state_breakdown = Counter(row["stav"] or "NEUVEDENO" for row in sql_rows if row["zarazeni"] == "AKTIVNÍ KONTROLA")
+        decision_breakdown = Counter(row["zarazeni"] for row in sql_rows)
+        reason_breakdown = Counter(row["duvod"] for row in sql_rows)
         audit = {
+            "breakdown": {
+                "states_active": dict(sorted(state_breakdown.items())),
+                "decisions": dict(sorted(decision_breakdown.items())),
+                "reasons": dict(sorted(reason_breakdown.items())),
+            },
             "counts": {
                 **dict(tirbazar.LAST_LOAD_STATS),
                 "eligible_total": len(eligible_vehicles),

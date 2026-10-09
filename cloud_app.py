@@ -1021,10 +1021,16 @@ def _token_authorized() -> bool:
 
 def _authorized() -> bool:
     if not _token_authorized():
+        print("POV_AUTH_REJECT reason=token endpoint=" + request.path, flush=True)
         return False
     supplied_agent = _normalize_agent_id(request.headers.get("X-Denni-Pov-Agent", ""))
     expected_agent = _expected_agent_id()
-    return bool(expected_agent and hmac.compare_digest(supplied_agent, expected_agent))
+    valid_agent = bool(expected_agent and hmac.compare_digest(supplied_agent, expected_agent))
+    if not valid_agent:
+        print("POV_AUTH_REJECT reason=agent_id endpoint=" + request.path
+              + " supplied=" + (supplied_agent or "EMPTY")
+              + " expected=" + (expected_agent or "EMPTY"), flush=True)
+    return valid_agent
 
 
 @app.get("/")
@@ -1346,6 +1352,8 @@ def agent_command():
         # VCSERVER jednou ověří, požadavky bez identity jsou trvale odmítnuty.
         legacy_bootstrap = not supplied_agent and verified_agent != expected_agent
         if not legacy_bootstrap and supplied_agent != expected_agent:
+            print("POV_AUTH_REJECT reason=agent_command_id supplied="
+                  + (supplied_agent or "EMPTY") + " expected=" + (expected_agent or "EMPTY"), flush=True)
             return jsonify({"ok": False, "message": "Tento počítač není povolený agent."}), 403
         command = data.get("_command")
     return jsonify({"ok": True, "command": command})

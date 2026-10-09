@@ -49,7 +49,8 @@ try {
         & git merge-base --is-ancestor $old $new
         if ($LASTEXITCODE -ne 0) { Log "Nepovolena nefast-forward aktualizace."; exit 1 }
         $py = Join-Path $app ".venv\Scripts\python.exe"
-        if (-not (Test-Path $py)) { Log "Chybi Python prostredi; aktualizace zastavena."; exit 1 }
+        if (-not (Test-Path $py)) { $py = Join-Path $root "python-portable\python.exe" }
+        if (-not (Test-Path $py)) { Log "Chybi virtualni i portable Python; aktualizace zastavena."; exit 1 }
         & git merge --ff-only $new
         if ($LASTEXITCODE -ne 0) { Log "Git merge selhal."; exit 1 }
         & $py -m compileall -q $app

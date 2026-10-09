@@ -31,7 +31,7 @@ if ($Install) {
     exit 0
 }
 
-$mutex = New-Object System.Threading.Mutex($false, "Global\\DenniPovAutoUpdate")
+$mutex = New-Object System.Threading.Mutex($false, "Global\DenniPovAutoUpdate")
 if (-not $mutex.WaitOne(0)) { exit 0 }
 try {
     Push-Location $app

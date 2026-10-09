@@ -137,8 +137,6 @@ def compare_vehicles(
             allianz_vehicle = None
             if allianz_available:
                 allianz_vehicle = allianz_by_vin.get(vin)
-                if allianz_vehicle is None and tir_spz:
-                    allianz_vehicle = None  # ALLIANZ: pouze VIN
 
             if uniqa_available and uniqa_vehicle:
                 results.append(ComparisonResult(
@@ -192,8 +190,6 @@ def compare_vehicles(
                 allianz_vehicle = allianz_by_vin.get(vin)
                 if allianz_vehicle is not None:
                     allianz_match = "VIN"
-                elif tir_spz:
-                    allianz_vehicle = None  # ALLIANZ: pouze VIN
                     if allianz_vehicle is not None:
                         allianz_match = "SPZ"
 
@@ -298,8 +294,6 @@ def compare_vehicles(
             allianz_vehicle = None
             if allianz_available:
                 allianz_vehicle = allianz_by_vin.get(vin)
-                if allianz_vehicle is None and tir_spz:
-                    allianz_vehicle = None  # ALLIANZ: pouze VIN
 
             if allianz_vehicle is not None:
                 results.append(
@@ -427,15 +421,6 @@ def compare_vehicles(
             if allianz_vehicle is not None:
 
                 allianz_match = "VIN"
-
-            elif tir_spz:
-
-                allianz_vehicle = allianz_by_spz.get(
-                    tir_spz
-                )
-
-                if allianz_vehicle is not None:
-                    allianz_match = "SPZ"
 
         if allianz_vehicle is not None:
 

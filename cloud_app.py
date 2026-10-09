@@ -930,6 +930,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     summary["deposit"] = raw_counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0)
     summary["deposit_insured"] = raw_counts.get("DEPOZIT, ALE POJIŠTĚNÉ", 0)
     summary["spz_mismatch"] = raw_counts.get("SPZ NESOUHLASÍ", 0)
+    summary["double_insured"] = raw_counts.get("DVOJÍ POJIŠTĚNÍ", 0)
     summary["unverified"] = raw_counts.get("NELZE OVĚŘIT", 0)
 
     resolved_statuses = {"VYŘEŠENO"}
@@ -938,6 +939,8 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
         "PRODANÉ, ALE POJIŠTĚNÉ",
         "NAVÍC V UNIQA",
+        "NAVÍC V ALLIANZ",
+        "DVOJÍ POJIŠTĚNÍ",
         "DEPOZIT, ALE POJIŠTĚNÉ",
         "SPZ NESOUHLASÍ",
         "NELZE OVĚŘIT",
@@ -986,7 +989,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
     )
     summary["extra_uniqa"] = sum(
         1 for row in rows
-        if str(row.get("status_raw") or "").upper() == "NAVÍC V UNIQA"
+        if str(row.get("status_raw") or "").upper() in {"NAVÍC V UNIQA", "NAVÍC V ALLIANZ"}
         and str(row.get("workflow_status") or "").upper() not in resolved_statuses
     )
     summary["manual_ok"] = len(resolved_issue_rows)
@@ -1072,6 +1075,7 @@ def _send_push_for_state(data: dict[str, Any], tag: str = "denni-pov-check") -> 
         int(summary.get("absent_insured") or 0)
         + int(summary.get("sold_uniqa") or 0)
         + int(summary.get("extra_uniqa") or 0)
+        + int(summary.get("double_insured") or 0)
         + int(summary.get("deposit_insured") or 0)
     )
     other = int(summary.get("spz_mismatch") or 0) + int(summary.get("unverified") or 0)

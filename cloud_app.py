@@ -1579,6 +1579,14 @@ def api_sync():
 
     with _lock:
         previous = _load_state()
+        pending = previous.get("_command") if isinstance(previous.get("_command"), dict) else {}
+        pending_check_id = str(pending.get("id") or "") if pending.get("action") == "run_check" else ""
+        received_check_id = str(payload.get("check_id") or "").strip()
+        # Only the matching agent run can update a pending manual check.
+        if pending_check_id and received_check_id != pending_check_id:
+            return jsonify({"ok": False, "message": "Výsledek nepatří k právě spuštěné kontrole."}), 409
+        if received_check_id and not pending_check_id:
+            return jsonify({"ok": False, "message": "Neaktuální nebo dokončená kontrola."}), 409
         annotations = _annotations_load(previous.get("annotations"))
         data = _default_state()
         data["annotations"] = annotations
@@ -1598,6 +1606,9 @@ def api_sync():
             if not data.get("error"):
                 data["progress"] = {"percent": 100, "phase": "Hotovo", "eta_seconds": 0}
         data["synced_at"] = _now()
+        data["check_id"] = received_check_id
+        # Progress must not erase the pending run command.
+        data["_command"] = None if final_run else previous.get("_command")
         failed_final = final_run and bool(data.get("error"))
         # A failed/transport-interrupted run must not erase the last valid
         # vehicle list. Keep the error visible, but retain the prior results
@@ -1608,7 +1619,6 @@ def api_sync():
         elif final_run and not failed_final:
             data["last_successful_at"] = data.get("finished_at")
         data["csv_available"] = bool(data.get("results"))
-        data["_command"] = None
         # Srovnáváme výhradně s posledním dokončeným snapshotem, ne s průběžným
         # stavem /api/sync. Průběžná synchronizace totiž může results dočasně
         # vyprázdnit a dříve pak vozidlo vypadalo jako nově nalezené bez vysvětlení.

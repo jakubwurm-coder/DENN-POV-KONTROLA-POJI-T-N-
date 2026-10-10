@@ -210,7 +210,7 @@ def _send_result_email(snapshot: dict[str, Any]) -> bool:
     # trvalé ruční stavy řešení a stejné počítání jako dashboard.
     email_snapshot = snapshot
     try:
-        response = requests.get(f"{CLOUD_URL}/api/state", timeout=20)
+        response = requests.get(f"{CLOUD_URL}/api/state", headers=_headers(), timeout=20)
         response.raise_for_status()
         cloud_state = response.json()
         if isinstance(cloud_state, dict) and isinstance(cloud_state.get("summary"), dict):
@@ -450,7 +450,7 @@ def _lookup_insurance_context(vin: str, spz: str) -> dict[str, Any]:
     vin_n = "".join(ch for ch in str(vin or "").upper() if ch.isalnum())
     spz_n = "".join(ch for ch in str(spz or "").upper() if ch.isalnum())
     try:
-        response = requests.get(f"{CLOUD_URL}/api/state", timeout=20)
+        response = requests.get(f"{CLOUD_URL}/api/state", headers=_headers(), timeout=20)
         response.raise_for_status()
         state = response.json()
         for row in state.get("results") or []:

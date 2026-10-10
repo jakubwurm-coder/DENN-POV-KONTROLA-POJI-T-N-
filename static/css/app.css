@@ -3517,3 +3517,32 @@ input,textarea{cursor:text}
     animation:none!important;
   }
 }
+
+/* 2026-10-10 · clickable insurance-extra count in existing summary */
+#overallCounts .overall-count-link{
+  appearance:none;-webkit-appearance:none;
+  font:inherit;text-align:left;color:inherit;
+  border:0;background:transparent;
+  cursor:pointer;width:100%;
+  display:flex;align-items:center;gap:10px;
+  border-radius:8px;
+  padding:5px 7px;
+  margin:-5px -7px;
+  transition:background .18s ease,color .18s ease;
+}
+#overallCounts .overall-count-link:hover,
+#overallCounts .overall-count-link:focus-visible{
+  background:rgba(18,125,201,.085);
+  outline:2px solid transparent;
+}
+#overallCounts .overall-count-link:focus-visible{
+  outline:2px solid #1788dc;outline-offset:2px;
+}
+#overallCounts .overall-count-link .overall-count-chevron{
+  font-size:20px;line-height:1;font-weight:700;
+  color:#278acb;opacity:.65;
+  transition:transform .18s ease,opacity .18s ease;
+}
+#overallCounts .overall-count-link:hover .overall-count-chevron{
+  transform:translateX(3px);opacity:1;
+}

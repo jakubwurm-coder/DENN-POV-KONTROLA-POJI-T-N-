@@ -1557,6 +1557,24 @@ def api_sync():
         return jsonify({"ok": False, "message": "Neplatný formát synchronizace."}), 400
 
     final_run = not bool(payload.get("running"))
+    if final_run and not payload.get("error"):
+        sources = payload["sources"]
+        tir = sources.get("tirbazar")
+        tir = tir if isinstance(tir, dict) else {}
+        source_state = str(tir.get("state") or "").strip().lower()
+        summary = payload["summary"]
+        results = payload["results"]
+        # Fail closed: an empty/failed SQL source must never produce a green check.
+        # Do not trust the browser or a cached snapshot as evidence of SQL access.
+        active = summary.get("active")
+        try:
+            active = int(active)
+        except (TypeError, ValueError):
+            active = 0
+        if source_state not in {"ok", "success", "done", "ready", "completed"} or active <= 0 or not results:
+            payload["error"] = "Kontrola neprovedena – aktuální a úplná data z TIRBazar SQL nebyla potvrzena."
+            payload["summary"] = {}
+            payload["results"] = []
     alert_sent = False
 
     with _lock:
@@ -1576,7 +1594,7 @@ def api_sync():
         if data["running"]:
             data["finished_at"] = None
         else:
-            data["finished_at"] = payload.get("finished_at") or _now()
+            data["finished_at"] = (payload.get("finished_at") or _now()) if not data.get("error") else None
             if not data.get("error"):
                 data["progress"] = {"percent": 100, "phase": "Hotovo", "eta_seconds": 0}
         data["synced_at"] = _now()

@@ -15,7 +15,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from typing import Any
 
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, session, redirect, url_for
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 import requests
@@ -23,6 +23,8 @@ from pywebpush import webpush, WebPushException
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
+app.secret_key = os.getenv("DENNI_POV_SESSION_SECRET", "")
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE="Strict", PERMANENT_SESSION_LIFETIME=28800)
 
 _lock = threading.Lock()
 _db_init_lock = threading.Lock()
@@ -1035,30 +1037,58 @@ def _authorized() -> bool:
 
 
 
-# Web users authenticate separately from the Windows agent.
-# Render health probes and the cron endpoint keep their own access rules.
+
+# Browser session is separate from the bearer-authenticated VCSERVER agent.
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if app.secret_key and session.get("denni_pov_authenticated"):
+        return redirect(url_for("index"))
+    error = ""
+    if request.method == "POST":
+        user = str(request.form.get("username") or "")
+        password = str(request.form.get("password") or "")
+        expected_user = os.getenv("DENNI_POV_WEB_USER", "vanscentre")
+        expected_password = os.getenv("DENNI_POV_WEB_PASSWORD", "")
+        valid = bool(app.secret_key and expected_password and
+                     hmac.compare_digest(user, expected_user) and
+                     hmac.compare_digest(password, expected_password))
+        if valid:
+            session.clear()
+            session.permanent = True
+            session["denni_pov_authenticated"] = True
+            return redirect(url_for("index"))
+        error = "Nesprávné jméno nebo heslo."
+    return Response(render_template("login.html", error=error), mimetype="text/html",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.post("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.before_request
 def _require_web_auth():
     path = request.path
-    if path == "/health" or path == "/api/push/send-scheduled":
+    if path in {"/health", "/api/push/send-scheduled", "/login"} or path.startswith("/static/"):
         return None
     if path.startswith("/api/agent/") or path == "/api/sync":
-        return None  # These endpoints perform their own bearer-token + agent checks.
-    if path == "/api/state" and request.method == "GET" and _authorized():
-        return None  # Windows agent needs to read the last snapshot.
-    username = os.getenv("DENNI_POV_WEB_USER", "vanscentre")
-    password = os.getenv("DENNI_POV_WEB_PASSWORD", "")
-    auth = request.authorization
-    valid = bool(password and auth and auth.type.lower() == "basic"
-                 and hmac.compare_digest(auth.username or "", username)
-                 and hmac.compare_digest(auth.password or "", password))
-    if not valid:
-        return Response(
-            "Pro pristup do DENNI POV je nutne prihlaseni.",
-            status=401,
-            headers={"WWW-Authenticate": 'Basic realm="Vans Centre DENNI POV", charset="UTF-8"',
-                     "Cache-Control": "no-store"},
-        )
+        return None  # Existing agent bearer + identity authorization.
+    if path == "/api/state" and request.method == "GET":
+        if request.headers.get("Authorization", "").startswith("Bearer ") and _authorized():
+            return None
+    if not app.secret_key or not session.get("denni_pov_authenticated"):
+        if path.startswith(("/api/", "/download/")):
+            return jsonify({"ok": False, "message": "Přihlášení je vyžadováno."}), 401
+        return redirect(url_for("login"))
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        origin = request.headers.get("Origin", "")
+        if origin:
+            from urllib.parse import urlparse
+            parsed = urlparse(origin)
+            if parsed.scheme != "https" or parsed.netloc != request.host:
+                return jsonify({"ok": False, "message": "Nepovolený původ požadavku."}), 403
     return None
 
 

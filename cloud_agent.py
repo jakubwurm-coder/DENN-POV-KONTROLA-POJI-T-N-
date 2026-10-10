@@ -72,6 +72,7 @@ MAX_CHECK_SECONDS = int(os.getenv("DENNI_POV_MAX_CHECK_SECONDS", "600"))
 SERVICE_MODE = os.getenv("DENNI_POV_SERVICE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 PRAGUE_TZ = ZoneInfo("Europe/Prague")
 AUTO_CHECK_TIMES = ((10, 0), (17, 0))
+_ACTIVE_CHECK_ID = ""  # ID ruční kontroly, prázdné při automatickém běhu
 
 
 def _next_scheduled_run(now: datetime | None = None) -> datetime:
@@ -180,6 +181,7 @@ def _decorate_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     snapshot = dict(snapshot)
     snapshot["progress"] = _progress_for(snapshot)
     snapshot["agent"] = {"id": AGENT_ID, "computer": platform.node(), "system": platform.system()}
+    snapshot["check_id"] = _ACTIVE_CHECK_ID
     # Velký audit se při běžné synchronizaci na web neposílá.
     snapshot.pop("audit", None)
     return snapshot
@@ -782,10 +784,13 @@ def _error_snapshot(exc: Exception) -> dict[str, Any]:
         },
         "summary": {"active": 0, "ok_total": 0, "ok_uniqa": 0, "ok_allianz": 0, "missing": 0, "deposit": 0, "sold_uniqa": 0, "extra_uniqa": 0},
         "results": [], "agent": {"id": AGENT_ID, "computer": platform.node(), "system": platform.system()},
+        "check_id": _ACTIVE_CHECK_ID,
     }
 
 
-def run_and_sync(reason: str) -> None:
+def run_and_sync(reason: str, command_id: str = "") -> None:
+    global _ACTIVE_CHECK_ID
+    _ACTIVE_CHECK_ID = str(command_id or "").strip()
     _auto_update_from_github()
     print(); print("=============================================="); print(" DENNI POV - ONLINE SYNCHRONIZACE"); print("==============================================")
     print(f"Důvod kontroly: {reason}")
@@ -868,7 +873,7 @@ def main() -> int:
                 elif action == "sample_tirbazar":
                     sample_tirbazar(command or {})
                 else:
-                    run_and_sync("požadavek z online webu")
+                    run_and_sync("požadavek z online webu", command_id=command_id)
             elif datetime.now(PRAGUE_TZ) >= next_auto:
                 run_and_sync(f"automatická kontrola {next_auto:%H:%M} Europe/Prague")
                 next_auto = _next_scheduled_run(datetime.now(PRAGUE_TZ))

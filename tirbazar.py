@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from datetime import datetime, timedelta
 from collections import defaultdict
 from pathlib import Path
 
@@ -171,6 +172,21 @@ def _is_effectively_sold(vehicle: TirVehicle) -> bool:
     return bool(sold_at and (not purchased_at or sold_at >= purchased_at))
 
 
+def _sold_within_last_seven_days(vehicle: TirVehicle) -> bool:
+    """Prodané kontrolujeme sedm kalendářních dní včetně dne prodeje."""
+    sold_at = str(getattr(vehicle, "datum_prodeje", "") or "").strip()
+    if not sold_at:
+        # Chyba evidence: raději ponechat v kontrole než tiše vyřadit.
+        return True
+    try:
+        sale_day = datetime.strptime(sold_at[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return True
+    days_ago = (datetime.now().date() - sale_day).days
+    # Budoucí datum je chyba evidence a nesmí způsobit tiché vyřazení.
+    return days_ago < 0 or days_ago <= 7
+
+
 def _is_control_pov_state(value: str) -> bool:
     return _normalize_state(value) in CONTROL_POV_STATE_VALUES
 
@@ -191,8 +207,9 @@ def _requires_pov_check(vehicle: TirVehicle) -> bool:
     # Aktuální stav určuje, zda karta vstoupí do porovnání. Samotné očekávání
     # POJIŠTĚNO/NEPOJIŠTĚNO pak zpřesní _is_effectively_sold() podle pořadí
     # posledního výkupu a prodeje.
-    if state in {"PRODANÉ", "PRODANE"}:
-        return True
+    # Prodej Vans Renting má trvalou výjimku: POV musí zůstat aktivní.
+    if _is_effectively_sold(vehicle):
+        return _is_sold_to_vans_renting(vehicle) or _sold_within_last_seven_days(vehicle)
 
     if state in {"VYKOUPENÉ", "VYKOUPENE"}:
         return True

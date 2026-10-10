@@ -1033,6 +1033,44 @@ def _authorized() -> bool:
     return valid_agent
 
 
+
+
+# Web users authenticate separately from the Windows agent.
+# Render health probes and the cron endpoint keep their own access rules.
+@app.before_request
+def _require_web_auth():
+    path = request.path
+    if path == "/health" or path == "/api/push/send-scheduled":
+        return None
+    if path.startswith("/api/agent/") or path == "/api/sync":
+        return None  # These endpoints perform their own bearer-token + agent checks.
+    if path == "/api/state" and request.method == "GET" and _authorized():
+        return None  # Windows agent needs to read the last snapshot.
+    username = os.getenv("DENNI_POV_WEB_USER", "vanscentre")
+    password = os.getenv("DENNI_POV_WEB_PASSWORD", "")
+    auth = request.authorization
+    valid = bool(password and auth and auth.type.lower() == "basic"
+                 and hmac.compare_digest(auth.username or "", username)
+                 and hmac.compare_digest(auth.password or "", password))
+    if not valid:
+        return Response(
+            "Pro pristup do DENNI POV je nutne prihlaseni.",
+            status=401,
+            headers={"WWW-Authenticate": 'Basic realm="Vans Centre DENNI POV", charset="UTF-8"',
+                     "Cache-Control": "no-store"},
+        )
+    return None
+
+
+@app.after_request
+def _sensitive_no_cache(response):
+    if request.path != "/health":
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "DENY"
+    return response
+
 @app.get("/")
 def index():
     return render_template("index.html")

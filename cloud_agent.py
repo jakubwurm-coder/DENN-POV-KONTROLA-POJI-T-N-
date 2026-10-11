@@ -841,6 +841,7 @@ def send_service_diagnostics(command: dict[str, Any]) -> None:
         root / "stdout.log",
         root / "stderr.log",
         root / "DENNI_POV_SERVICE.log",
+        Path(os.getenv("LOCALAPPDATA", str(root))) / "DENNI_POV_KONTROLA" / "online-agent.log",
         Path(os.getenv("LOCALAPPDATA", str(root))) / "DENNI_POV_KONTROLA" / "stuck-check.log",
     ]
     found = []

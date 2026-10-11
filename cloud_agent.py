@@ -827,6 +827,49 @@ def export_audit(command: dict[str, Any]) -> None:
     response.raise_for_status()
 
 
+def send_service_diagnostics(command: dict[str, Any]) -> None:
+    """Read-only, bounded diagnostic from the fixed service directory."""
+    import json
+    import re
+    command_id = str(command.get("id") or "")
+    base = Path(__file__).resolve().parent
+    root = base.parent
+    candidates = [
+        root / "logs" / "agent.log",
+        root / "logs" / "service.log",
+        root / "agent.log",
+        root / "service.log",
+        root / "stdout.log",
+        root / "stderr.log",
+        root / "DENNI_POV_SERVICE.log",
+        Path(os.getenv("LOCALAPPDATA", str(root))) / "DENNI_POV_KONTROLA" / "stuck-check.log",
+    ]
+    found = []
+    for path in candidates:
+        try:
+            if not path.is_file() or path.stat().st_size > 50_000_000:
+                continue
+            with path.open("rb") as stream:
+                stream.seek(max(0, path.stat().st_size - 12000))
+                tail = stream.read(12000).decode("utf-8", errors="replace")
+            # Do not send credentials, bearer headers or connection strings.
+            tail = re.sub(r"(?im)^(.*(?:password|passwd|secret|token|authorization|api.key|connection.string).*)$", "[REDACTED]", tail)
+            tail = re.sub(r"(?i)Bearer\\s+[^\\s\\\"']+", "Bearer [REDACTED]", tail)
+            found.append({"file": path.name, "modified_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(), "tail": tail[-8000:]})
+        except (OSError, ValueError):
+            continue
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=base, capture_output=True, text=True, timeout=10)
+    payload = {
+        "id": command_id,
+        "agent": AGENT_ID,
+        "commit": commit.stdout.strip() if commit.returncode == 0 else "",
+        "logs": found[:6],
+        "checked_at": datetime.now().isoformat(),
+        "message": "" if found else "Ve známých umístěních nebyl nalezen lokální log služby.",
+    }
+    requests.post(f"{CLOUD_URL}/api/agent/diagnostics-result", headers=_headers(), json=payload, timeout=30).raise_for_status()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="DENNI POV kancelářský agent pro Render")
     parser.add_argument("--once", action="store_true")
@@ -866,7 +909,9 @@ def main() -> int:
             if command_id and command_id != last_command_id:
                 last_command_id = command_id
                 action = str((command or {}).get("action") or "run_check")
-                if action == "lookup_vehicle":
+                if action == "service_diagnostics":
+                    send_service_diagnostics(command or {})
+                elif action == "lookup_vehicle":
                     lookup_vehicle(command or {})
                 elif action == "export_audit":
                     export_audit(command or {})

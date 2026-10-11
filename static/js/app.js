@@ -249,33 +249,45 @@ function setStatusCard(cardId,textId,ok,okText,badText){
 
 let connectionVisualPercent=0;
 
+let checkActivity=[];
+let checkActivityKey='';
 function renderProgress(){
   const running=!!state.running;
-  $('progressPanel').hidden=!running&&!state.error;
-  const percent=Math.max(0,Math.min(100,Number((state.progress||{}).percent)||0));
+  const failed=!!state.error;
+  const completed=!running&&!failed&&sessionCheckStarted&&!!state.finished_at;
+  const panel=$('progressPanel');
+  panel.hidden=!running&&!failed&&!completed;
+  panel.dataset.status=failed?'error':completed?'done':'running';
+  const percent=completed?100:Math.max(0,Math.min(100,Number((state.progress||{}).percent)||0));
   connectionVisualPercent=running?percent:100;
-  $('progressPercent').textContent=state.error?'!':Math.round(percent)+' %';
-  $('progressEta').textContent=state.error?'Chyba':'Probíhá';
-  $('progressHeadline').textContent=state.error?'Kontrola se nezdařila':'Kontroluji pojištění';
-  const progressSteps=[
-    [10,'Připravuji kontrolu'],
-    [20,'Připojuji se k databázi vozidel'],
-    [30,'Načítám aktivní vozidla'],
-    [40,'Kontroluji údaje vozidel'],
-    [50,'Načítám evidenci pojištění'],
-    [60,'Páruji vozidla podle VIN'],
-    [70,'Kontroluji stav pojištění vozidel'],
-    [80,'Vyhodnocuji výjimky a nesrovnalosti'],
-    [90,'Porovnávám a zpracovávám výsledky'],
-    [100,'Ukládám a připravuji výsledky']
-  ];
-  const displayPhase=progressSteps.find(([limit])=>percent<=limit)?.[1]||'Ukládám a připravuji výsledky';
-  $('progressPhase').textContent=state.error?'Výsledek není úplný. Zkuste kontrolu znovu nebo otevřete stav datových zdrojů.':displayPhase;
+  $('progressPercent').textContent=failed?'!':Math.round(percent)+' %';
+  $('progressEta').textContent=failed?'Přerušeno':completed?'Dokončeno':'Probíhá';
+  $('checkLiveBadge').textContent=failed?'CHYBA':completed?'DOKONČENO':'ŽIVĚ';
+  $('progressHeadline').textContent=failed?'Kontrola vyžaduje pozornost':completed?'Kontrola dokončena':'Kontrola pojištění probíhá';
+  const phase=failed?'Kontrola přerušena: '+visibleSystemText(state.error):completed?'Výsledky jsou připravené k prohlédnutí.':visibleSystemText((state.progress||{}).phase||'Předávám požadavek ke kontrole');
+  $('progressPhase').textContent=phase;
   $('progressBar').style.width=percent+'%';
-  const connectionVisual=$('connectionVisual');
-  if(connectionVisual) connectionVisual.style.setProperty('--connection-progress',String(percent));
-  $('connectionVisual').className='connection-visual '+(state.error?'error':'running');
-  $('connectionVisualIcon').textContent=state.error?'!':'↻';
+  panel.querySelector('[role="progressbar"]').setAttribute('aria-valuenow',String(percent));
+  const visual=$('connectionVisual');
+  visual.style.setProperty('--connection-progress',String(percent));
+  visual.className='connection-visual '+(failed?'error':completed?'done':'running');
+  $('connectionVisualIcon').textContent=failed?'!':completed?'✓':'↻';
+  const stageIndex=percent<=8?0:percent<=15?1:percent<=82?2:3;
+  [...$('checkStages').children].forEach((step,index)=>{
+    const sourceError=index===1?(state.sources?.tirbazar?.state==='error'):index===2?['uniqa','allianz'].some(name=>state.sources?.[name]?.state==='error'):false;
+    const status=sourceError?'error':completed?'done':index<stageIndex?'done':index===stageIndex?(failed?'error':'active'):'waiting';
+    step.className='check-stage '+status;
+    step.querySelector('.check-step-icon').textContent=status==='done'?'✓':String(index+1).padStart(2,'0');
+    step.querySelector('small').textContent={done:'Dokončeno',active:'Probíhá',waiting:'Čeká',error:'Přerušeno'}[status];
+  });
+  const key=String(state.started_at||'');
+  if(key!==checkActivityKey){checkActivity=[];checkActivityKey=key;}
+  if(!panel.hidden&&checkActivity.at(-1)?.phase!==phase){
+    checkActivity.push({phase,time:new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit',second:'2-digit'})});
+    checkActivity=checkActivity.slice(-4);
+  }
+  $('checkActivityLog').innerHTML=checkActivity.map(item=>'<li><time>'+esc(item.time)+'</time><span>'+esc(item.phase)+'</span></li>').join('');
+  $('checkRunTime').textContent=state.started_at?'Spuštěno '+shortDateTime(state.started_at):'';
 }
 
 function renderChanges(){
@@ -454,6 +466,8 @@ async function run(){
   state.results=[];
   state.changes={count:0,items:[]};
   connectionVisualPercent=0;
+  checkActivity=[];checkActivityKey='';
+  state.started_at=null;state.progress={percent:0,phase:'Předávám požadavek ke kontrole'};
   state.error=null;
   activeFilter='ATTENTION';
   render();

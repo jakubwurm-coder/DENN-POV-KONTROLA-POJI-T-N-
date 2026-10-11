@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261004ui3">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261011status">
 </head>
 <body>
   <div class="app-shell">
@@ -103,7 +103,8 @@
 
         </section>
 
-        <section id="progressPanel" class="connection-check-panel" hidden>
+        <section id="progressPanel" class="connection-check-panel" aria-label="Průběh kontroly pojištění" hidden>
+          <div class="status-topline"><span>DENNÍ POV / STAV KONTROLY</span><span id="checkLiveBadge" class="check-live-badge">PROBÍHÁ</span></div>
           <div class="connection-check-main">
             <div id="connectionVisual" class="connection-visual idle" aria-hidden="true">
               <div class="connection-ring"></div>
@@ -114,7 +115,7 @@
               <div class="progress-headline-row">
                 <strong id="progressHeadline">Kontrola připojení</strong>
               </div>
-              <span id="progressPhase">Připraveno ke spuštění kontroly.</span>
+              <span id="progressPhase" role="status" aria-live="polite">Připraveno ke spuštění kontroly.</span>
             </div>
             <div class="progress-number">
               <strong id="progressPercent">0 %</strong>
@@ -122,7 +123,15 @@
             </div>
           </div>
 
-          <div class="connection-progress-track"><div id="progressBar"></div></div>
+          <div class="connection-progress-track" role="progressbar" aria-label="Průběh kontroly" aria-valuemin="0" aria-valuemax="100"><div id="progressBar"></div></div>
+          <div id="checkStages" class="check-stages">
+            <div><span class="check-step-icon">01</span><strong>Připojení</strong><small>Čeká</small></div>
+            <div><span class="check-step-icon">02</span><strong>Vozidla</strong><small>Čeká</small></div>
+            <div><span class="check-step-icon">03</span><strong>Pojišťovny</strong><small>Čeká</small></div>
+            <div><span class="check-step-icon">04</span><strong>Porovnání</strong><small>Čeká</small></div>
+          </div>
+          <div class="check-log-heading">PRŮBĚŽNÉ ZPRÁVY <span id="checkRunTime"></span></div>
+          <ol id="checkActivityLog" class="check-activity-log"></ol>
 
         </section>
 
@@ -460,6 +469,6 @@
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261004sidebar1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261011status"></script>
 </body>
 </html>

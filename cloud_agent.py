@@ -829,7 +829,6 @@ def export_audit(command: dict[str, Any]) -> None:
 
 def send_service_diagnostics(command: dict[str, Any]) -> None:
     """Read-only, bounded diagnostic from the fixed service directory."""
-    import json
     import re
     command_id = str(command.get("id") or "")
     base = Path(__file__).resolve().parent

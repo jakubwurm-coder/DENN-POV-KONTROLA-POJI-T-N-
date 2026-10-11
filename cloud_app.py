@@ -1041,8 +1041,9 @@ def _authorized() -> bool:
 # Browser session is separate from the bearer-authenticated VCSERVER agent.
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if app.secret_key and session.get("denni_pov_authenticated"):
-        return redirect(url_for("index"))
+    # Opening the login page always requires an explicit form submission.
+    if request.method == "GET":
+        session.clear()
     error = ""
     if request.method == "POST":
         user = str(request.form.get("username") or "")
@@ -1054,8 +1055,9 @@ def login():
                      hmac.compare_digest(password, expected_password))
         if valid:
             session.clear()
-            session.permanent = True
+            session.permanent = False
             session["denni_pov_authenticated"] = True
+            session["denni_pov_login_entry"] = True
             return redirect(url_for("index"))
         error = "Nesprávné jméno nebo heslo."
     return Response(render_template("login.html", error=error), mimetype="text/html",
@@ -1078,6 +1080,12 @@ def _require_web_auth():
     if path == "/api/state" and request.method == "GET":
         if request.headers.get("Authorization", "").startswith("Bearer ") and _authorized():
             return None
+    # Only the immediate redirect after a successful login may open the dashboard.
+    # A reload/new navigation requires login again; API polling stays authenticated.
+    if path == "/" and request.method == "GET":
+        if not session.pop("denni_pov_login_entry", False):
+            session.clear()
+            return redirect(url_for("login"))
     if not app.secret_key or not session.get("denni_pov_authenticated"):
         if path.startswith(("/api/", "/download/")):
             return jsonify({"ok": False, "message": "Přihlášení je vyžadováno."}), 401

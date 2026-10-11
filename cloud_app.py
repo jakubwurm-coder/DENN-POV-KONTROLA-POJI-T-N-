@@ -1504,6 +1504,59 @@ def agent_known_sold_result():
     print("KNOWN_SOLD_RESULT " + json.dumps(result, ensure_ascii=False), flush=True)
     return jsonify({"ok": True})
 
+@app.post("/api/service-diagnostics")
+def request_service_diagnostics():
+    """Authenticated browser can request a fixed, read-only log snapshot."""
+    with _lock:
+        data = _load_state()
+        if data.get("_command"):
+            return jsonify({"ok": False, "message": "Agent má rozpracovaný požadavek."}), 409
+        command_id = uuid.uuid4().hex
+        data["_service_diagnostics"] = {"id": command_id, "status": "pending", "requested_at": _now()}
+        data["_command"] = {"id": command_id, "action": "service_diagnostics", "requested_at": _now()}
+        _save_state(data)
+    return jsonify({"ok": True, "status": "pending", "id": command_id}), 202
+
+
+@app.get("/api/service-diagnostics")
+def get_service_diagnostics():
+    with _lock:
+        result = (_load_state().get("_service_diagnostics") or {})
+    return jsonify({"ok": True, **result})
+
+
+@app.post("/api/agent/diagnostics-result")
+def receive_service_diagnostics():
+    if not _authorized():
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "message": "Neplatný formát."}), 400
+    with _lock:
+        data = _load_state()
+        pending = data.get("_service_diagnostics") or {}
+        command_id = str(payload.get("id") or "")
+        if not command_id or command_id != str(pending.get("id") or ""):
+            return jsonify({"ok": False, "message": "Neaktuální požadavek."}), 409
+        if str(payload.get("agent") or "").upper() != _expected_agent_id():
+            return jsonify({"ok": False, "message": "Neplatná identita agenta."}), 403
+        logs = payload.get("logs") if isinstance(payload.get("logs"), list) else []
+        data["_service_diagnostics"] = {
+            "id": command_id, "status": "ready", "agent": _expected_agent_id(),
+            "commit": str(payload.get("commit") or "")[:64],
+            "checked_at": str(payload.get("checked_at") or "")[:40],
+            "message": str(payload.get("message") or "")[:300],
+            "logs": [{"file": str(item.get("file") or "")[:100],
+                      "modified_at": str(item.get("modified_at") or "")[:40],
+                      "tail": str(item.get("tail") or "")[-8000:]}
+                     for item in logs[:6] if isinstance(item, dict)],
+        }
+        if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:
+            data["_command"] = None
+        _save_state(data)
+    return jsonify({"ok": True})
+
+
 @app.post("/api/audit-export")
 def request_audit_export():
     with _lock:

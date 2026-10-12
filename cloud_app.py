@@ -1077,6 +1077,10 @@ def _require_web_auth():
         return None
     if path.startswith("/api/agent/") or path == "/api/sync":
         return None  # Existing agent bearer + identity authorization.
+    if path.startswith("/mcp/") or path in {"/api/assistant/run", "/api/assistant/status"}:
+        # Machine API routes enforce their own capability/bearer tokens.
+        # Do not redirect MCP JSON-RPC clients to the HTML login page.
+        return None
     if path == "/api/state" and request.method == "GET":
         if request.headers.get("Authorization", "").startswith("Bearer ") and _authorized():
             return None

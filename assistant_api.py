@@ -69,6 +69,7 @@ def install_assistant_api(app, load_state: Callable[[], dict[str, Any]], public_
 
         return jsonify({
             "ok": True,
+            "check_id": state.get("check_id"),
             "generated_at": state.get("finished_at") or state.get("synced_at"),
             "running": bool(state.get("running")),
             "started_at": state.get("started_at"),

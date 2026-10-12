@@ -60,6 +60,7 @@ def install_mcp_api(
                 })
 
         return {
+            "check_id": state.get("check_id"),
             "generated_at": state.get("finished_at") or state.get("synced_at"),
             "running": bool(state.get("running")),
             "started_at": state.get("started_at"),

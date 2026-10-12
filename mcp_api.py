@@ -136,8 +136,9 @@ def install_mcp_api(
                         "name": "get_insurance_status",
                         "title": "Aktuální stav DENNÍ POV",
                         "description": (
-                            "Načte aktuální souhrn kontroly pojištění "
-                            "a nevyřešená problémová vozidla."
+                            "Spustí NOVOU kontrolu DENNÍ POV, čeká na dokončení a vrátí "
+                            "výhradně výsledek stejného request_id/check_id. "
+                            "Nikdy nevrací starou kontrolu jako aktuální."
                         ),
                         "inputSchema": {
                             "type": "object",
@@ -145,9 +146,9 @@ def install_mcp_api(
                             "additionalProperties": False,
                         },
                         "annotations": {
-                            "readOnlyHint": True,
+                            "readOnlyHint": False,
                             "destructiveHint": False,
-                            "openWorldHint": False,
+                            "openWorldHint": True,
                         },
                     }, {
                         "name": "lookup_vehicle",
@@ -242,17 +243,62 @@ def install_mcp_api(
                     "error": {"code": -32602, "message": "Unknown tool"},
                 }), 400
 
-            data = current_status()
+            # Legacy ChatGPT connector only exposes get_insurance_status.
+            # For this dedicated check-on-demand integration it MUST initiate
+            # a new run, never interpret an older snapshot as a fresh result.
+            if start_check is None:
+                data = {"ok": False, "error": "Spuštění kontroly není dostupné.",
+                        "fresh_check_completed": False}
+            else:
+                start_response = app.make_response(start_check())
+                started = start_response.get_json(silent=True) or {}
+                request_id = str(started.get("request_id") or "")
+                if start_response.status_code != 202 or not request_id:
+                    data = {"ok": False, "error": started.get("message") or "Kontrolu nelze spustit.",
+                            "fresh_check_completed": False, "request_id": None}
+                else:
+                    data = {"ok": False, "request_id": request_id,
+                            "fresh_check_completed": False, "running": True,
+                            "error": "Nová kontrola dosud nebyla dokončena."}
+                    deadline = time.monotonic() + 105
+                    while time.monotonic() < deadline:
+                        time.sleep(2)
+                        with lock:
+                            snapshot = public_state(load_state())
+                        if str(snapshot.get("check_id") or "") != request_id:
+                            continue
+                        if snapshot.get("running"):
+                            continue
+                        if snapshot.get("error"):
+                            data = {"ok": False, "request_id": request_id,
+                                    "check_id": request_id, "fresh_check_completed": False,
+                                    "error": str(snapshot.get("error"))}
+                            break
+                        if not snapshot.get("finished_at"):
+                            continue
+                        status = current_status()
+                        if str(status.get("check_id") or "") != request_id or status.get("running"):
+                            continue
+                        source_states = status.get("sources") or {}
+                        source_ok = all(
+                            str((source_states.get(name) or {}).get("state") or "").lower()
+                            in {"ok", "success", "done", "ready", "completed"}
+                            for name in ("tirbazar", "uniqa", "allianz")
+                        )
+                        if not source_ok:
+                            data = {"ok": False, "request_id": request_id,
+                                    "check_id": request_id, "fresh_check_completed": False,
+                                    "error": "Nebylo potvrzeno úspěšné načtení všech tří zdrojů."}
+                        else:
+                            data = {**status, "ok": True, "request_id": request_id,
+                                    "fresh_check_completed": True, "result_is_current": True}
+                        break
             return jsonify({
-                "jsonrpc": "2.0",
-                "id": rpc_id,
+                "jsonrpc": "2.0", "id": rpc_id,
                 "result": {
-                    "content": [{
-                        "type": "text",
-                        "text": json.dumps(data, ensure_ascii=False),
-                    }],
+                    "content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
                     "structuredContent": data,
-                    "isError": False,
+                    "isError": not bool(data.get("fresh_check_completed")),
                 },
             })
 

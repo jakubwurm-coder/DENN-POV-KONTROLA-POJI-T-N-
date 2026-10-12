@@ -111,8 +111,8 @@ def install_mcp_api(
                     "capabilities": {"tools": {"listChanged": False}},
                     "serverInfo": {"name": "denni-pov", "version": "1.1.0"},
                     "instructions": (
-                        "Aktuální přehled DENNÍ POV. Spuštění kontroly je dostupné pouze "
-                        "s řídicím tokenem. Po spuštění načítejte stav; při running=true "
+                        "Aktuální přehled DENNÍ POV. Spuštění bezpečné read-only kontroly je dostupné "
+                        "pro autorizované připojení. Po spuštění načítejte stav; při running=true "
                         "jsou souhrny průběžné nebo z předchozí kontroly."
                     ),
                 },
@@ -132,7 +132,7 @@ def install_mcp_api(
                         "description": "Odešle stejný požadavek jako tlačítko Spustit kontrolu. Výsledek sledujte přes get_insurance_status. Při souběhu vrátí busy.",
                         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
                         "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
-                    }] if control_authorized(capability) and start_check else []) + [{
+                    }] if authorized(capability) and start_check else []) + [{
                         "name": "get_insurance_status",
                         "title": "Aktuální stav DENNÍ POV",
                         "description": (
@@ -177,7 +177,7 @@ def install_mcp_api(
             params = body.get("params") if isinstance(body.get("params"), dict) else {}
             tool_name = str(params.get("name") or "")
             if tool_name == "start_insurance_check":
-                if not control_authorized(capability) or start_check is None:
+                if not authorized(capability) or start_check is None:
                     return jsonify({"jsonrpc": "2.0", "id": rpc_id,
                                     "error": {"code": -32602, "message": "Spuštění kontroly není povoleno."}}), 403
                 arguments = params.get("arguments", {})

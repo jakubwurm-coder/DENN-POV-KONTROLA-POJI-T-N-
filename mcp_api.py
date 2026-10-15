@@ -243,24 +243,32 @@ def install_mcp_api(
                     "error": {"code": -32602, "message": "Unknown tool"},
                 }), 400
 
-            # Legacy ChatGPT connector only exposes get_insurance_status.
-            # For this dedicated check-on-demand integration it MUST initiate
-            # a new run, never interpret an older snapshot as a fresh result.
+            # Each voice request must launch its own fresh check. If the agent
+            # is occupied, wait for the previous operation to finish first.
             if start_check is None:
                 data = {"ok": False, "error": "Spuštění kontroly není dostupné.",
                         "fresh_check_completed": False}
             else:
-                start_response = app.make_response(start_check())
-                started = start_response.get_json(silent=True) or {}
-                request_id = str(started.get("request_id") or "")
-                if start_response.status_code != 202 or not request_id:
-                    data = {"ok": False, "error": started.get("message") or "Kontrolu nelze spustit.",
-                            "fresh_check_completed": False, "request_id": None}
-                else:
+                data = {"ok": False, "fresh_check_completed": False,
+                        "error": "Nová kontrola nebyla dokončena."}
+                deadline = time.monotonic() + 105
+                request_id = None
+                while time.monotonic() < deadline:
+                    response = app.make_response(start_check())
+                    started = response.get_json(silent=True) or {}
+                    if response.status_code == 202 and started.get("request_id"):
+                        request_id = str(started["request_id"])
+                        break
+                    if response.status_code != 409:
+                        data["error"] = started.get("message") or "Kontrolu nelze spustit."
+                        break
+                    # A running check or pending agent command is not our own
+                    # result. Wait until it releases the slot, then retry.
+                    time.sleep(2)
+                if request_id:
                     data = {"ok": False, "request_id": request_id,
                             "fresh_check_completed": False, "running": True,
                             "error": "Nová kontrola dosud nebyla dokončena."}
-                    deadline = time.monotonic() + 105
                     while time.monotonic() < deadline:
                         time.sleep(2)
                         with lock:
@@ -293,6 +301,8 @@ def install_mcp_api(
                             data = {**status, "ok": True, "request_id": request_id,
                                     "fresh_check_completed": True, "result_is_current": True}
                         break
+                elif time.monotonic() >= deadline:
+                    data["error"] = "Vypršel čas čekání na uvolnění kontroly."
             return jsonify({
                 "jsonrpc": "2.0", "id": rpc_id,
                 "result": {

@@ -4,6 +4,8 @@ import hmac
 import os
 from typing import Any, Callable
 
+from status_projection import project_status
+
 from flask import jsonify, request
 
 
@@ -36,36 +38,8 @@ def install_assistant_api(app, load_state: Callable[[], dict[str, Any]], public_
         with lock:
             state = public_state(load_state())
 
-        summary = dict(state.get("summary") or {})
-        rows = list(state.get("results") or [])
-        problem_raw = {
-            "CHYBÍ V UNIQA",
-            "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-            "PRODANÉ, ALE POJIŠTĚNÉ",
-            "DEPOZIT, ALE POJIŠTĚNÉ",
-            "NAVÍC V UNIQA",
-        "NAVÍC V ALLIANZ",
-        "DVOJÍ POJIŠTĚNÍ",
-            "SPZ NESOUHLASÍ",
-            "NELZE OVĚŘIT",
-        }
-        resolved = {"VYŘEŠENO", "V POŘÁDKU"}
-        problems = []
-        for row in rows:
-            raw = str(row.get("status_raw") or row.get("status") or "").upper()
-            workflow = str(row.get("workflow_status") or "").upper()
-            if raw not in problem_raw or workflow in resolved:
-                continue
-            problems.append({
-                "vin": str(row.get("vin") or ""),
-                "spz": str(row.get("spz_tir") or row.get("spz_uniqa") or ""),
-                "vozidlo": str(row.get("vozidlo") or ""),
-                "status": str(row.get("status") or raw),
-                "status_raw": raw,
-                "workflow_status": str(row.get("workflow_status") or ""),
-                "note": str(row.get("note") or ""),
-                "detail": str(row.get("detail") or ""),
-            })
+        return jsonify({"ok": True, **project_status(state)})
+
 
         return jsonify({
             "ok": True,

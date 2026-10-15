@@ -1073,7 +1073,7 @@ def logout():
 @app.before_request
 def _require_web_auth():
     path = request.path
-    if path in {"/health", "/api/push/send-scheduled", "/login"} or path.startswith("/static/"):
+    if path in {"/health", "/api/push/send-scheduled", "/login", "/dmsdata", "/dmsdata/"} or path.startswith("/static/"):
         return None
     if path.startswith("/api/agent/") or path == "/api/sync":
         return None  # Existing agent bearer + identity authorization.
@@ -1992,19 +1992,52 @@ def download_xlsx():
     )
 
 
-@app.get("/download/csv")
-def download_csv():
+def _build_csv_report(data: dict[str, Any]) -> str:
+    """Build the stable UTF-8 CSV representation of the latest POV check."""
+    rows = list(data.get("results") or [])
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream, delimiter=";")
+    writer.writerow(["Stav", "Pojišťovna", "VIN", "SPZ", "Datum výkupu", "Datum prodeje", "Výsledek", "Poznámka"])
+    for row in rows:
+        writer.writerow([
+            row.get("status", ""),
+            row.get("pojistovna", ""),
+            row.get("vin", ""),
+            row.get("spz_tir") or row.get("spz_uniqa") or "",
+            row.get("vykup", ""),
+            row.get("prodej", ""),
+            row.get("detail", ""),
+            row.get("note", ""),
+        ])
+    return "\ufeff" + stream.getvalue()
+
+
+def _csv_response(filename: str, *, inline: bool = False) -> Response:
     with _lock:
         data = _public_state(_load_state())
         rows = list(data.get("results") or [])
     if not rows: return jsonify({"ok": False, "message": "CSV zatím není k dispozici."}), 404
-    stream = io.StringIO()
-    writer = csv.writer(stream, delimiter=";")
-    writer.writerow(["Stav", "Pojišťovna", "VIN", "SPZ", "Datum výkupu", "Datum prodeje", "Výsledek", "Poznámka"])
-    for row in rows:
-        writer.writerow([row.get("status", ""), row.get("pojistovna", ""), row.get("vin", ""), row.get("spz_tir") or row.get("spz_uniqa") or "", row.get("vykup", ""), row.get("prodej", ""), row.get("detail", ""), row.get("note", "")])
-    body = "\ufeff" + stream.getvalue()
-    return Response(body, mimetype="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=denni_pov_online.csv"})
+    disposition = "inline" if inline else "attachment"
+    return Response(
+        _build_csv_report(data),
+        mimetype="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{filename}"',
+            "Cache-Control": "no-store, max-age=0",
+        },
+    )
+
+
+@app.get("/download/csv")
+def download_csv():
+    return _csv_response("denni_pov_online.csv")
+
+
+@app.get("/dmsdata")
+@app.get("/dmsdata/")
+def dmsdata_csv():
+    """Stable URL for DMS and other systems consuming the latest POV result."""
+    return _csv_response("denni_pov_kontrola.csv", inline=True)
 
 
 @app.get("/health")

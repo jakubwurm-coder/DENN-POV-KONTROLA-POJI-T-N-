@@ -57,6 +57,14 @@ class WebLoginTests(unittest.TestCase):
                                        headers={'Authorization': 'Bearer test-agent'})
         self.assertEqual(response.status_code, 200)
 
+    def test_dmsdata_csv_does_not_require_browser_login(self):
+        with patch.object(module, '_load_state', return_value={
+            'results': [{'vin': 'TESTVIN1234567890', 'status': 'OK', 'status_raw': 'OK'}],
+        }), patch.object(module, '_annotations_load', return_value={}):
+            response = self.get('/dmsdata')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, 'text/csv')
+
 
 if __name__ == '__main__':
     unittest.main()

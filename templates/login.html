@@ -1,19 +1,83 @@
 <!doctype html>
-<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Přihlášení | DENNÍ POV</title>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#07111f">
+<meta name="robots" content="noindex,nofollow">
+<title>Přihlášení | DENNÍ POV · Vans Centre</title>
 <style>
-:root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;--blue:#14467e}*{box-sizing:border-box}
-body{margin:0;min-height:100vh;min-height:100svh;background:#081a2e;position:relative;display:flex;flex-direction:column}
-body:before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(110deg,rgba(6,19,34,.94),rgba(9,31,55,.86) 55%,rgba(7,22,38,.83)),url("https://www.vanscentre.com/public/galleries/104/103417/vc1.jpg") center/cover no-repeat}
-header,main,footer{position:relative;z-index:1}header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:28px clamp(24px,6vw,96px);border-bottom:1px solid #ffffff12}.brand{display:flex;align-items:center;gap:16px;font-size:20px;font-weight:750;letter-spacing:-.03em}.brand-logo{display:flex;align-items:center;justify-content:center;width:120px;padding:10px;background:rgba(255,255,255,.94);border-radius:10px}.brand-logo img{display:block;width:100%;height:auto}.brand-divider{color:#91a9c1;font-weight:400}.brand-name{color:#fff;white-space:nowrap}.system-label{font-size:11px;letter-spacing:.18em;color:#b5c8dd;text-transform:uppercase}
-main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 390px;align-items:center;gap:clamp(40px,6vw,100px);width:min(100%,1480px);margin:auto;padding:54px clamp(24px,6vw,96px)}
-
-h1{font-size:clamp(24px,2.9vw,46px);letter-spacing:-.045em;line-height:1.15;margin:22px 0;white-space:nowrap}.intro p{font-size:17px;line-height:1.75;color:#bdcddd;max-width:600px;margin:0}
-.card{background:rgba(248,250,253,.89);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid #ffffff8c;border-radius:20px;padding:36px;color:#123659;box-shadow:0 24px 70px #0005}.card-kicker{font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--blue);text-transform:uppercase}h2{font-size:28px;letter-spacing:-.04em;margin:12px 0 8px}.desc{font-size:13px;line-height:1.6;color:#61778d;margin:0 0 27px}label{display:block;font-size:12px;font-weight:750;margin-bottom:9px}.field{margin-bottom:20px}input{width:100%;border:1px solid #ccd8e4;border-radius:9px;padding:14px;font-size:16px;color:#123659;background:#fff;outline:none}input:focus{border-color:var(--blue);box-shadow:0 0 0 3px #14467e18}button{width:100%;padding:16px;border:0;border-radius:9px;background:var(--blue);color:#fff;font-size:15px;font-weight:800;cursor:pointer;transition:background .2s,transform .2s}button:hover{background:#0d3767;transform:translateY(-1px)}button:focus-visible{outline:3px solid var(--blue);outline-offset:4px}.hint{color:#6d8093;font-size:11px;text-align:center;line-height:1.6;margin:23px 0 0}.error{background:#fff0f0;color:#af1217;padding:12px;border-radius:8px;font-size:13px;margin-bottom:20px}footer{display:flex;justify-content:space-between;gap:16px;padding:22px clamp(24px,6vw,96px);color:#90a9c0;font-size:10px;letter-spacing:.08em}
-@media(max-width:1050px){main{grid-template-columns:minmax(0,1fr) 350px;gap:32px;padding-inline:32px}h1{white-space:normal;text-wrap:balance;font-size:34px}.card{padding:28px}.intro p{font-size:15px}}
-@media(max-width:760px){header{padding:18px 24px}.brand{gap:12px;font-size:18px}.brand-logo{width:100px;padding:8px}.system-label{display:none}main{grid-template-columns:1fr;gap:28px;padding:32px 24px;width:min(100%,540px)}h1{font-size:clamp(27px,7vw,36px);margin:16px 0}.intro p{font-size:14px;line-height:1.65}.card{padding:28px}footer{padding:16px 24px;flex-wrap:wrap}}
-</style></head><body>
-<header><div class="brand"><span class="brand-logo"><img src="{{ url_for('static', filename='images/vans-centre-logo.png') }}" alt="Vans Centre" width="300" height="238"></span><span class="brand-divider" aria-hidden="true">/</span><span class="brand-name">DENNÍ POV</span></div><span class="system-label">Interní informační systém</span></header>
-<main><section class="intro"><h1>Kontrola pojištění vozidel</h1><p>Automatizovaná kontrola pojištění vozidel a identifikace nesrovnalostí.</p></section>
-<section class="card" aria-labelledby="loginTitle"><span class="card-kicker">Vstup do systému</span><h2 id="loginTitle">Přihlášení</h2><p class="desc">Přihlaste se do systému DENNÍ POV.</p>
-{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
-<form method="post" action="/login" autocomplete="on"><div class="field"><label for="username">Uživatelské jméno</label><input id="username" name="username" autocomplete="username" required autofocus placeholder="Zadejte uživatelské jméno"></div><div class="field"><label for="password">Heslo</label><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Zadejte heslo"></div><button type="submit">Přihlásit se →</button></form><p class="hint">Zabezpečené připojení HTTPS<br>Přístup pouze oprávněným uživatelům</p></section></main><footer><span>VANS CENTRE · INTERNÍ PŘÍSTUP</span><span>DENNÍ POV</span></footer></body></html>
+:root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f5f7fb;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;min-height:100svh;background:#07111f;display:flex;flex-direction:column;position:relative;isolation:isolate}
+body::before{content:"";position:fixed;inset:0;z-index:-2;background:url("https://www.vanscentre.com/public/galleries/104/103417/vc1.jpg") center 55%/cover no-repeat;filter:saturate(.6)}
+body::after{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(110deg,rgba(3,12,23,.96) 0%,rgba(7,21,37,.87) 44%,rgba(5,14,27,.75) 100%),linear-gradient(0deg,#07111f 0%,transparent 55%)}
+header{width:min(100%,1480px);margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:27px clamp(22px,5vw,72px)}
+.brand{display:flex;align-items:center;gap:19px;text-decoration:none;color:inherit}
+.brand-logo{display:grid;place-items:center;width:85px;height:74px;padding:8px;border:1px solid #ffffff38;background:#ffffffeb;border-radius:14px;box-shadow:0 10px 35px #0005}
+.brand-logo img{max-width:100%;max-height:100%;object-fit:contain}
+.brand-name{font-weight:800;letter-spacing:-.04em;font-size:20px}
+.brand-name span{font-weight:400;color:#8194aa;margin-right:14px}
+.system-label{font-size:10px;font-weight:700;letter-spacing:.2em;color:#a4b6c9;text-transform:uppercase}
+main{width:min(100%,1480px);flex:1;margin:0 auto;padding:42px clamp(22px,5vw,72px) 70px;display:grid;grid-template-columns:minmax(0,1fr) minmax(350px,430px);align-items:center;gap:clamp(38px,8vw,130px)}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;color:#aebed1;font-size:11px;font-weight:750;letter-spacing:.2em;text-transform:uppercase}
+.eyebrow::before{content:"";width:27px;height:2px;background:#d52f42}
+h1{max-width:700px;margin:24px 0 19px;font-size:clamp(40px,4.6vw,70px);line-height:1.06;letter-spacing:-.065em;font-weight:820;text-wrap:balance}
+.intro p{max-width:610px;margin:0;color:#bbc9d9;font-size:clamp(15px,1.4vw,18px);line-height:1.75}
+.intro .accent{color:#e14a59}
+.feature{display:flex;align-items:center;gap:10px;margin-top:32px;color:#8fa8c0;font-size:12px}
+.feature-dot{width:8px;height:8px;border-radius:50%;background:#d83246;box-shadow:0 0 15px #e13750}
+.card{position:relative;overflow:hidden;padding:clamp(28px,3vw,42px);border:1px solid #ffffff28;border-radius:22px;background:linear-gradient(145deg,rgba(25,43,63,.84),rgba(10,25,43,.79));-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);box-shadow:0 34px 95px #0008, inset 0 1px #ffffff12}
+.card::before{content:"";position:absolute;left:0;top:0;width:100%;height:3px;background:linear-gradient(90deg,#c41d34,#ee4d5c 46%,transparent 90%)}
+.kicker{font-size:10px;color:#e77b86;font-weight:800;letter-spacing:.2em;text-transform:uppercase}
+h2{font-size:33px;letter-spacing:-.055em;margin:12px 0 9px;line-height:1.2}
+.desc{font-size:13px;color:#aebdd0;line-height:1.6;margin:0 0 30px}
+.field{margin-bottom:19px}
+label{display:block;font-size:12px;font-weight:700;color:#e0e9f3;margin-bottom:10px}
+input{width:100%;min-height:52px;border:1px solid #ffffff32;border-radius:11px;padding:13px 15px;background:#08182bd9;color:#fff;font:inherit;font-size:15px;outline:0;transition:border-color .2s,box-shadow .2s}
+input::placeholder{color:#8497ac}
+input:focus{border-color:#e14a59;box-shadow:0 0 0 3px #d52f4229}
+button{width:100%;min-height:54px;margin-top:8px;border:0;border-radius:11px;background:#c5253b;color:white;font:inherit;font-size:15px;font-weight:780;cursor:pointer;transition:background .2s,transform .2s}
+button:hover{background:#df344c;transform:translateY(-1px)}
+button:active{transform:translateY(0)}
+button:focus-visible{outline:3px solid white;outline-offset:3px}
+.hint{display:flex;align-items:center;justify-content:center;gap:9px;margin:24px 0 0;padding-top:22px;border-top:1px solid #ffffff1a;color:#9fb2c7;font-size:11px;text-align:center}
+.hint svg{width:15px;height:15px;flex:none;color:#8cb8a1}
+.error{background:#7d22303d;border:1px solid #f1708190;color:#ffd7dd;padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:20px}
+footer{width:min(100%,1480px);margin:0 auto;display:flex;justify-content:space-between;gap:16px;padding:22px clamp(22px,5vw,72px);border-top:1px solid #ffffff16;color:#91a5ba;font-size:10px;letter-spacing:.1em}
+@media(max-width:850px){main{grid-template-columns:1fr;max-width:560px;gap:34px;padding-top:28px;padding-bottom:40px}h1{font-size:clamp(36px,8vw,52px)}.feature{margin-top:18px}.card{padding:30px}}
+@media(max-width:520px){header{padding:17px 20px}.brand{gap:12px}.brand-logo{width:64px;height:60px;border-radius:11px}.brand-name{font-size:18px}.brand-name span{margin-right:7px}.system-label{display:none}main{padding:25px 20px 36px;gap:27px}h1{margin:16px 0 14px;font-size:37px}.intro p{font-size:14px}.card{padding:27px 22px;border-radius:18px}h2{font-size:29px}footer{padding:18px 20px;font-size:9px}}
+@media(prefers-reduced-motion:reduce){button,input{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="brand-logo"><img src="{{ url_for('static', filename='images/vans-centre-logo.png') }}" alt="Vans Centre" width="300" height="238"></span>
+    <span class="brand-name"><span>/</span> DENNÍ POV</span>
+  </div>
+  <span class="system-label">Interní informační systém</span>
+</header>
+<main>
+  <section class="intro">
+    <span class="eyebrow">Vans Centre · Fleet management</span>
+    <h1>Pojištění vozidel<br>pod <span class="accent">kontrolou.</span></h1>
+    <p>Automatizovaná kontrola pojištění vozidel, identifikace nesrovnalostí a evidence řešení.</p>
+    <div class="feature"><span class="feature-dot" aria-hidden="true"></span> Interní systém správy pojištění vozidel</div>
+  </section>
+  <section class="card" aria-labelledby="loginTitle">
+    <span class="kicker">Autorizovaný přístup</span>
+    <h2 id="loginTitle">Přihlášení</h2>
+    <p class="desc">Pro pokračování se přihlaste ke svému účtu.</p>
+    {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="/login" autocomplete="on">
+      <div class="field"><label for="username">Uživatelské jméno</label><input id="username" name="username" autocomplete="username" required autofocus placeholder="Uživatelské jméno"></div>
+      <div class="field"><label for="password">Heslo</label><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Heslo"></div>
+      <button type="submit">Přihlásit se &nbsp;→</button>
+    </form>
+    <p class="hint"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Zabezpečené připojení HTTPS · Interní přístup</p>
+  </section>
+</main>
+<footer><span>© Vans Centre · DENNÍ POV</span><span>INTERNÍ SYSTÉM</span></footer>
+</body>
+</html>

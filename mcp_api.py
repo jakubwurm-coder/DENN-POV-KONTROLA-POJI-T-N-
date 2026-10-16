@@ -88,9 +88,8 @@ def install_mcp_api(
                         "name": "get_insurance_status",
                         "title": "Aktuální stav DENNÍ POV",
                         "description": (
-                            "Spustí NOVOU kontrolu DENNÍ POV, čeká na dokončení a vrátí "
-                            "výhradně výsledek stejného request_id/check_id. "
-                            "Nikdy nevrací starou kontrolu jako aktuální."
+                            "Spustí NOVOU kontrolu a ihned vrátí request_id. "
+                            "Pro dokončení volejte get_check_result; starý výsledek není vydáván za nový."
                         ),
                         "inputSchema": {
                             "type": "object",
@@ -102,6 +101,12 @@ def install_mcp_api(
                             "destructiveHint": False,
                             "openWorldHint": True,
                         },
+                    }, {
+                        "name": "get_check_result",
+                        "title": "Průběh a výsledek kontroly",
+                        "description": "Načte stav přesně určeného request_id bez spuštění další kontroly. Opakujte až do fresh_check_completed=true.",
+                        "inputSchema": {"type": "object", "properties": {"request_id": {"type": "string"}}, "required": ["request_id"], "additionalProperties": False},
+                        "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
                     }, {
                         "name": "lookup_vehicle",
                         "title": "Vyhledat vozidlo v TIRBazar",
@@ -188,6 +193,23 @@ def install_mcp_api(
                         "isError": bool(result.get("error")) and result.get("status") == "error",
                     },
                 })
+            if tool_name == "get_check_result":
+                arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+                request_id = str(arguments.get("request_id") or "").strip()
+                if not re.fullmatch(r"[a-f0-9]{32}", request_id):
+                    return jsonify({"jsonrpc": "2.0", "id": rpc_id,
+                                    "error": {"code": -32602, "message": "Neplatné request_id."}}), 400
+                status = current_status()
+                same_run = str(status.get("check_id") or "") == request_id
+                completed = same_run and not status.get("running") and bool(status.get("generated_at")) and not status.get("error")
+                data = {**status, "ok": bool(completed), "request_id": request_id,
+                        "fresh_check_completed": bool(completed)} if same_run else {
+                    "ok": False, "request_id": request_id, "fresh_check_completed": False,
+                    "running": True, "message": "Výsledek požadované kontroly dosud není dostupný."}
+                return jsonify({"jsonrpc": "2.0", "id": rpc_id, "result": {
+                    "content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
+                    "structuredContent": data, "isError": bool(same_run and status.get("error")),
+                }})
             if tool_name != "get_insurance_status":
                 return jsonify({
                     "jsonrpc": "2.0",
@@ -195,74 +217,22 @@ def install_mcp_api(
                     "error": {"code": -32602, "message": "Unknown tool"},
                 }), 400
 
-            # Each voice request must launch its own fresh check. If the agent
-            # is occupied, wait for the previous operation to finish first.
-            if start_check is None:
-                data = {"ok": False, "error": "Spuštění kontroly není dostupné.",
-                        "fresh_check_completed": False}
+            # Never block the web worker while the Windows agent performs a check.
+            response = app.make_response(start_check()) if start_check else None
+            started = response.get_json(silent=True) if response else {}
+            started = started or {}
+            if response and response.status_code == 202 and started.get("request_id"):
+                data = {"ok": True, "running": True, "request_id": str(started["request_id"]),
+                        "fresh_check_completed": False,
+                        "message": "Kontrola spuštěna. Výsledek načítejte nástrojem get_check_result."}
             else:
                 data = {"ok": False, "fresh_check_completed": False,
-                        "error": "Nová kontrola nebyla dokončena."}
-                deadline = time.monotonic() + 105
-                request_id = None
-                while time.monotonic() < deadline:
-                    response = app.make_response(start_check())
-                    started = response.get_json(silent=True) or {}
-                    if response.status_code == 202 and started.get("request_id"):
-                        request_id = str(started["request_id"])
-                        break
-                    if response.status_code != 409:
-                        data["error"] = started.get("message") or "Kontrolu nelze spustit."
-                        break
-                    # A running check or pending agent command is not our own
-                    # result. Wait until it releases the slot, then retry.
-                    time.sleep(2)
-                if request_id:
-                    data = {"ok": False, "request_id": request_id,
-                            "fresh_check_completed": False, "running": True,
-                            "error": "Nová kontrola dosud nebyla dokončena."}
-                    while time.monotonic() < deadline:
-                        time.sleep(2)
-                        with lock:
-                            snapshot = public_state(load_state())
-                        if str(snapshot.get("check_id") or "") != request_id:
-                            continue
-                        if snapshot.get("running"):
-                            continue
-                        if snapshot.get("error"):
-                            data = {"ok": False, "request_id": request_id,
-                                    "check_id": request_id, "fresh_check_completed": False,
-                                    "error": str(snapshot.get("error"))}
-                            break
-                        if not snapshot.get("finished_at"):
-                            continue
-                        status = current_status()
-                        if str(status.get("check_id") or "") != request_id or status.get("running"):
-                            continue
-                        source_states = status.get("sources") or {}
-                        source_ok = all(
-                            str((source_states.get(name) or {}).get("state") or "").lower()
-                            in {"ok", "success", "done", "ready", "completed"}
-                            for name in ("tirbazar", "uniqa", "allianz")
-                        )
-                        if not source_ok:
-                            data = {"ok": False, "request_id": request_id,
-                                    "check_id": request_id, "fresh_check_completed": False,
-                                    "error": "Nebylo potvrzeno úspěšné načtení všech tří zdrojů."}
-                        else:
-                            data = {**status, "ok": True, "request_id": request_id,
-                                    "fresh_check_completed": True, "result_is_current": True}
-                        break
-                elif time.monotonic() >= deadline:
-                    data["error"] = "Vypršel čas čekání na uvolnění kontroly."
-            return jsonify({
-                "jsonrpc": "2.0", "id": rpc_id,
-                "result": {
-                    "content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
-                    "structuredContent": data,
-                    "isError": not bool(data.get("fresh_check_completed")),
-                },
-            })
+                        "busy": bool(response and response.status_code == 409),
+                        "error": started.get("message") or "Kontrolu nelze spustit."}
+            return jsonify({"jsonrpc": "2.0", "id": rpc_id, "result": {
+                "content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
+                "structuredContent": data, "isError": not data["ok"],
+            }})
 
         return jsonify({
             "jsonrpc": "2.0",

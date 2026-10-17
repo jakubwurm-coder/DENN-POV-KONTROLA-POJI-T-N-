@@ -51,8 +51,8 @@ def _write_stuck_log(snapshot: dict[str, Any]) -> None:
             f"FÁZE: {progress.get('phase') or '-'}",
             f"PROGRESS: {progress.get('percent') if progress.get('percent') is not None else '-'} %",
             f"TIRBAZAR: {(sources.get('tirbazar') or {}).get('state', '-')} | {(sources.get('tirbazar') or {}).get('status', '-')}",
-            f"UNIQA: {(sources.get('uniqa') or {}).get('state', '-')} | {(sources.get('uniqa') or {}).get('status', '-')}",
-            f"ALLIANZ: {(sources.get('allianz') or {}).get('state', '-')} | {(sources.get('allianz') or {}).get('status', '-')}",
+            f"Uniqa: {(sources.get('uniqa') or {}).get('state', '-')} | {(sources.get('uniqa') or {}).get('status', '-')}",
+            f"Allianz: {(sources.get('allianz') or {}).get('state', '-')} | {(sources.get('allianz') or {}).get('status', '-')}",
             f"CHYBA: {snapshot.get('error') or '-'}",
             "",
         ]
@@ -169,11 +169,11 @@ def _progress_for(snapshot: dict[str, Any]) -> dict[str, Any]:
     if tir == "loading":
         return {"percent": 15, "phase": "Načítám vstupní data přehledu vozidel", "eta_seconds": 70}
     if tir == "ok" and uniqa in {"idle", "loading"}:
-        return {"percent": 50, "phase": "Kontroluji přehled pojištěných vozidel – UNIQA", "eta_seconds": 35}
+        return {"percent": 50, "phase": "Kontroluji přehled pojištěných vozidel – Uniqa", "eta_seconds": 35}
     if uniqa in {"ok", "error"} and allianz in {"idle", "loading"}:
-        return {"percent": 82, "phase": "Kontroluji přehled pojištěných vozidel – ALLIANZ", "eta_seconds": 12}
+        return {"percent": 82, "phase": "Kontroluji přehled pojištěných vozidel – Allianz", "eta_seconds": 12}
     if allianz in {"ok", "error"}:
-        return {"percent": 94, "phase": "Porovnávám TIRBazar × UNIQA × ALLIANZ", "eta_seconds": 5}
+        return {"percent": 94, "phase": "Porovnávám TIRBazar × Uniqa × Allianz", "eta_seconds": 5}
     return {"percent": 8, "phase": "Připravuji kontrolu", "eta_seconds": 80}
 
 
@@ -545,7 +545,7 @@ def lookup_vehicle(command: dict[str, Any]) -> None:
                     insurance.update({
                         "status": "V POŘÁDKU · NEPOJIŠTĚNO",
                         "status_raw": "OK_NEPOJISTENO",
-                        "detail": "Vozidlo má být nepojištěné a nebylo nalezeno v UNIQA ani Allianz.",
+                        "detail": "Vozidlo má být nepojištěné a nebylo nalezeno v Uniqa ani Allianz.",
                         "insurer": "",
                         "spz_insurance": "",
                     })
@@ -794,7 +794,7 @@ def run_and_sync(reason: str, command_id: str = "") -> None:
     _auto_update_from_github()
     print(); print("=============================================="); print(" DENNI POV - ONLINE SYNCHRONIZACE"); print("==============================================")
     print(f"Důvod kontroly: {reason}")
-    print("Načítám TIRBazar -> UNIQA -> Allianz...")
+    print("Načítám TIRBazar -> Uniqa -> Allianz...")
     snapshot = run_local_check(progress_callback=push_snapshot)
     if snapshot.get("error"):
         print("Kontrola skončila chybou:", snapshot.get("error"))
@@ -884,7 +884,7 @@ def main() -> int:
     print("Povolený agent:", AGENT_ID)
     print("Online web:", CLOUD_URL)
     print("Automatická kontrola: denně v 10:00 a 17:00 (Europe/Prague).")
-    print("Tento proces musí běžet na počítači, který vidí TIRBazar SQL a má přístup do UNIQA.")
+    print("Tento proces musí běžet na počítači, který vidí TIRBazar SQL a má přístup do Uniqa.")
     # TEMP 2026-10-02: cílená read-only diagnostika dvou známých prodaných VIN.
     try:
         diagnose_known_sold_vins()

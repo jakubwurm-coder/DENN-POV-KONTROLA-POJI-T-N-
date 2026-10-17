@@ -139,6 +139,7 @@ def run_worker(folder):
     from xlsx_report import write_report
     import tempfile
     # Keep intermediate worksheet XML inside the private, expiring job directory.
+    original_tempdir = tempfile.tempdir
     tempfile.tempdir = str(folder)
     status = json.loads((folder / "status.json").read_text(encoding="utf-8"))
     last_update = 0.0
@@ -165,6 +166,7 @@ def run_worker(folder):
         atomic_json(folder / "status.json", status)
         (folder / "audit.part").unlink(missing_ok=True)
     finally:
+        tempfile.tempdir = original_tempdir
         (folder / "snapshot.json").unlink(missing_ok=True)
 
 

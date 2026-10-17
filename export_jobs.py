@@ -137,6 +137,9 @@ def run_worker(folder):
     from datetime import datetime
     from zoneinfo import ZoneInfo
     from xlsx_report import write_report
+    import tempfile
+    # Keep intermediate worksheet XML inside the private, expiring job directory.
+    tempfile.tempdir = str(folder)
     status = json.loads((folder / "status.json").read_text(encoding="utf-8"))
     last_update = 0.0
 

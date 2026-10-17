@@ -1893,7 +1893,7 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
         ("Má být pojištěno", counts.get("expected_insured", "")),
         ("Má být nepojištěno", counts.get("expected_uninsured", "")),
         ("Odfiltrováno", counts.get("filtered", "")),
-        ("UNIQA záznamů", counts.get("uniqa", "")),
+        ("Uniqa záznamů", counts.get("uniqa", "")),
         ("Allianz záznamů", counts.get("allianz", "")),
         ("Duplicitních VIN skupin", counts.get("duplicate_vin_groups", "")),
     ]
@@ -1930,7 +1930,7 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
         ("oid", "OID"), ("vin", "VIN"), ("spz", "SPZ"), ("stav", "Stav"),
         ("zeme_puvodu", "Země"), ("datum_vykupu", "Datum výkupu"),
         ("datum_prodeje", "Datum prodeje"), ("ocekavani", "Očekávání"),
-        ("uniqa", "UNIQA"), ("allianz", "ALLIANZ"), ("vysledek", "Výsledek"),
+        ("uniqa", "Uniqa"), ("allianz", "Allianz"), ("vysledek", "Výsledek"),
         ("filtr", "Důvod filtru"),
     ])
     breakdown = audit.get("breakdown") if isinstance(audit.get("breakdown"), dict) else {}
@@ -1947,12 +1947,12 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
         ("skupina", "Skupina"), ("polozka", "Kategorie / důvod"), ("pocet", "Počet"),
     ])
     uniqa_rows = audit.get("uniqa") if isinstance(audit.get("uniqa"), list) else []
-    add_audit_sheet("UNIQA", uniqa_rows, [
+    add_audit_sheet("Uniqa", uniqa_rows, [
         ("vin", "VIN"), ("spz", "SPZ"), ("cps", "ČPS"),
         ("poj_od", "Pojištění od"), ("poj_do", "Pojištění do"),
     ])
     allianz_rows = audit.get("allianz") if isinstance(audit.get("allianz"), list) else []
-    add_audit_sheet("ALLIANZ", allianz_rows, [
+    add_audit_sheet("Allianz", allianz_rows, [
         ("identifikator", "Identifikátor"), ("vin", "VIN"), ("spz", "SPZ"),
         ("pojistka", "Pojistka"), ("poj_od", "Pojištění od"), ("poj_do", "Pojištění do"),
     ])

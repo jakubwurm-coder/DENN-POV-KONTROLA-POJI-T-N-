@@ -1,0 +1,21 @@
+<dialog id="xlsxProgressDialog" class="xlsx-dialog" aria-labelledby="xlsxProgressTitle">
+  <h2 id="xlsxProgressTitle">Export auditu XLSX</h2>
+  <p class="xlsx-intro">Příprava souboru a jeho stažení mají samostatný průběh.</p>
+  <section aria-labelledby="xlsxPrepareLabel">
+    <h3 id="xlsxPrepareLabel">1. Příprava Excelu</h3>
+    <progress id="xlsxPrepare" max="100" aria-label="Příprava Excelu"></progress>
+    <p id="xlsxPrepareText" role="status" aria-live="polite">Čekám na zahájení…</p>
+  </section>
+  <section aria-labelledby="xlsxTransferLabel">
+    <h3 id="xlsxTransferLabel">2. Síťové stahování</h3>
+    <progress id="xlsxTransfer" max="100" value="0" aria-label="Síťové stahování"></progress>
+    <p id="xlsxTransferText" role="status" aria-live="polite">Čeká na připravený soubor.</p>
+  </section>
+  <p id="xlsxError" role="alert" hidden></p>
+  <p class="xlsx-intro">Procenta přípravy vyjadřují počet zapsaných datových řádků. Při čekání a dokončování souboru nelze zbývající práci změřit. Uložení na disk řídí váš prohlížeč.</p>
+  <div class="xlsx-actions">
+    <button id="xlsxRetry" class="btn btn-secondary" type="button" hidden>Zkusit znovu</button>
+    <a id="xlsxSave" class="btn btn-secondary" hidden>Uložit soubor znovu</a>
+    <button id="xlsxClose" class="btn btn-secondary" type="button">Zavřít</button>
+  </div>
+</dialog>

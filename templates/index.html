@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#06233d">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261011status">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261018xlsx">
 </head>
 <body>
   <div class="app-shell">
@@ -332,7 +332,7 @@
           </div>
 
           <div id="completeAuditPanel" style="margin:20px 0;padding:20px;border:1px solid #ccdce9;border-radius:16px;background:#f6faff;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px">
-            <div><strong style="font-size:16px;color:#12314e">Kompletní audit vozidel TIRBazar</strong><p style="margin:7px 0 0;color:#5c7188;font-size:13px;max-width:680px">Export zahrnutých a vyřazených vozidel, důvodů rozhodnutí, výsledků pojištění, přehledu Uniqa a Allianz a duplicit. Počet fyzických SQL záznamů se může lišit od počtu unikátních VIN.</p><p id="completeAuditStatus" role="status" aria-live="polite" style="margin:8px 0 0;color:#355f83;font-size:13px">Připraveno k načtení auditu.</p></div>
+            <div><strong style="font-size:16px;color:#12314e">Kompletní audit vozidel TIRBazar</strong><p style="margin:7px 0 0;color:#5c7188;font-size:13px;max-width:680px">Export zahrnutých a vyřazených vozidel, důvodů rozhodnutí, výsledků pojištění, přehledu Uniqa a Allianz a duplicit. Počet fyzických SQL záznamů se může lišit od počtu unikátních VIN.</p><progress id="completeAuditProgress" max="100" aria-label="Načítání kompletního auditu" hidden style="width:100%;margin-top:12px"></progress><p id="completeAuditStatus" role="status" aria-live="polite" style="margin:8px 0 0;color:#355f83;font-size:13px">Připraveno k načtení auditu.</p></div>
             <div style="display:flex;flex-wrap:wrap;gap:8px"><button id="completeAuditStart" type="button" class="btn btn-secondary">Načíst kompletní audit</button><a id="completeAuditDownload" class="btn btn-secondary" href="/download/xlsx" hidden>Stáhnout audit XLSX</a></div>
           </div>
           <div class="overview-group overview-group-attention">
@@ -472,8 +472,10 @@
     <div id="detailBody"></div>
   </dialog>
 
+  {% include '_xlsx_progress.html' %}
+  <script src="{{ url_for('static', filename='js/xlsx-export.js') }}?v=20261018"></script>
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261011status"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261018xlsx"></script>
   <script>
   (() => {
     const start = document.getElementById('completeAuditStart');
@@ -488,12 +490,14 @@
     };
     start.addEventListener('click', async () => {
       start.disabled = true;
+      document.getElementById('completeAuditProgress').hidden = false;
       download.hidden = true;
       status.textContent = 'Zadávám kompletní audit kancelářskému agentovi…';
       try {
         const created = await readJSON('/api/audit-export', {method:'POST'});
         if (!created.ok) throw new Error(created.message || 'Audit se nepodařilo zadat.');
-        for (let i = 0; i < 90; i++) {
+        const started = Date.now();
+        while (Date.now() - started < 30 * 60 * 1000) {
           const result = await readJSON('/api/audit-export');
           if (result.status === 'ready') {
             status.textContent = 'Audit je připraven. Stáhněte Excel včetně listu SQL audit.';
@@ -501,14 +505,15 @@
             return;
           }
           if (result.status === 'error' || result.status === 'failed') throw new Error(result.error || 'Audit skončil chybou.');
-          status.textContent = 'Agent zpracovává úplný audit… (' + (i + 1) + '/90)';
+          status.textContent = 'Agent zpracovává úplný audit… Procentuální průběh není dostupný.';
           await pause(2000);
         }
-        status.textContent = 'Audit stále běží. Kliknutím lze stav znovu ověřit.';
+        status.textContent = 'Agent dosud nevrátil audit. Ověřte jeho dostupnost a zkuste to znovu.';
       } catch (error) {
         status.textContent = 'Audit není dostupný: ' + (error.message || error);
       } finally {
         start.disabled = false;
+        document.getElementById('completeAuditProgress').hidden = true;
       }
     });
   })();

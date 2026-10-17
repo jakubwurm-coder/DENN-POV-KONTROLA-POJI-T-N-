@@ -554,27 +554,10 @@ let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return
 
 $('runBtn').addEventListener('click',run);
 $('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navOverview').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
-$('csvBtn').addEventListener('click',async event=>{
+$('csvBtn').addEventListener('click', event=>{
   event.preventDefault();
-  const btn=$('csvBtn');
-  if(btn.getAttribute('aria-disabled')==='true')return;
-  const original=btn.textContent;
-  btn.classList.add('disabled');btn.setAttribute('aria-disabled','true');btn.textContent='Připravuji Excel…';
-  try{
-    let r=await fetch('/api/audit-export',{method:'POST',headers:{'Content-Type':'application/json'}});
-    let data=await r.json();
-    for(let attempt=0;attempt<80 && data.status==='pending';attempt++){
-      await new Promise(resolve=>setTimeout(resolve,2000));
-      r=await fetch('/api/audit-export',{cache:'no-store'});
-      data=await r.json();
-    }
-    if(data.status!=='ready')throw new Error(data.error||'Audit se nepodařilo připravit v časovém limitu.');
-    window.location.href='/download/xlsx';
-  }catch(e){
-    alert(e.message||'Excel se nepodařilo připravit.');
-  }finally{
-    btn.textContent=original;btn.classList.remove('disabled');btn.setAttribute('aria-disabled','false');
-  }
+  if($('csvBtn').getAttribute('aria-disabled')==='true')return;
+  window.DenniExport.start({refresh:true});
 });
 setInterval(refresh,2000);refresh();
 

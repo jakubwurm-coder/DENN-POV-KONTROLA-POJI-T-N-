@@ -17,6 +17,8 @@ KEYCHAIN_ACCOUNT = "TB"
 
 # Diagnostika posledního SQL načtení pro auditní Excel.
 LAST_LOAD_STATS: dict[str, int] = {}
+# Každý fyzický nesmazaný SQL řádek podle OID, včetně prázdných a duplicitních VIN.
+LAST_RAW_ROWS: list[TirVehicle] = []
 
 FORBIDDEN_SQL = (
     "INSERT ",
@@ -788,6 +790,9 @@ def load_tirbazar_vehicles(
         buyer_ico, buyer_name = sale_buyer_meta.get(vehicle.oid, ("", ""))
         vehicle.kupujici_ico = buyer_ico
         vehicle.kupujici_nazev = buyer_name
+
+    LAST_RAW_ROWS.clear()
+    LAST_RAW_ROWS.extend(raw_rows)
 
     without_vin = [v for v in raw_rows if not v.vin]
     comparable = [v for v in raw_rows if v.vin]

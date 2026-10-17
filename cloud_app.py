@@ -1889,6 +1889,9 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
     ac.font = Font(name="Arial", size=11, bold=True, color=dark)
     audit_pairs = [
         ("SQL záznamů celkem", counts.get("sql_total", "")),
+        ("Řádků v auditu OID", counts.get("physical_audit_rows", "")),
+        ("Bez VIN – audit", counts.get("without_vin_audit", "")),
+        ("Duplicitní SQL karty", counts.get("duplicate_audit_rows", "")),
         ("Unikátních VIN", counts.get("unique_vins", "")),
         ("Má být pojištěno", counts.get("expected_insured", "")),
         ("Má být nepojištěno", counts.get("expected_uninsured", "")),
@@ -1919,14 +1922,16 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
                 if row_idx % 2 == 0:
                     cell.fill = PatternFill(fill_type="solid", fgColor="FBFDFE")
         if rows_data:
-            sheet.auto_filter.ref = f"A1:{chr(64 + min(len(columns), 26))}{len(rows_data) + 1}"
+            from openpyxl.utils import get_column_letter
+            sheet.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(rows_data) + 1}"
         for col_idx, (key, label) in enumerate(columns, start=1):
-            letter = chr(64 + col_idx)
+            from openpyxl.utils import get_column_letter
+            letter = get_column_letter(col_idx)
             sheet.column_dimensions[letter].width = min(42, max(12, len(label) + 3, 20 if key in {"vin", "vysledek", "filtr"} else 12))
 
     sql_rows = audit.get("sql") if isinstance(audit.get("sql"), list) else []
     add_audit_sheet("SQL audit", sql_rows, [
-        ("zarazeni", "Zařazení"), ("duvod", "Důvod rozhodnutí"),
+        ("kontrolovano", "Kontrolováno"), ("zarazeni", "Zařazení"), ("duvod", "Důvod rozhodnutí"),
         ("oid", "OID"), ("vin", "VIN"), ("spz", "SPZ"), ("stav", "Stav"),
         ("zeme_puvodu", "Země"), ("datum_vykupu", "Datum výkupu"),
         ("datum_prodeje", "Datum prodeje"), ("ocekavani", "Očekávání"),

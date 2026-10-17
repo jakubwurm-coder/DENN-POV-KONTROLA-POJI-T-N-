@@ -413,19 +413,40 @@ def _run_check_worker() -> None:
         allianz_vins = {getattr(v, "vin", "") for v in allianz.vehicles if getattr(v, "vin", "")}
         allianz_spz = {getattr(v, "spz", "") for v in allianz.vehicles if getattr(v, "spz", "")}
 
+        # Audit zahrnuje všechny fyzické nesmazané SQL záznamy (OID), nikoli
+        # pouze deduplikovaný seznam používaný běžnou POV kontrolou.
+        raw_vehicles = list(tirbazar.LAST_RAW_ROWS)
+        chosen_oids = {v.oid for v in vehicles}
+        chosen_by_vin = {v.vin: v.oid for v in vehicles if v.vin}
         sql_rows = []
-        for vehicle in vehicles:
-            eligible = _requires_pov_check(vehicle)
+        for vehicle in raw_vehicles:
+            is_chosen = vehicle.oid in chosen_oids
+            eligible = is_chosen and _requires_pov_check(vehicle)
             row = _audit_vehicle_row(vehicle, eligible)
             vin = getattr(vehicle, "vin", "") or ""
             spz = getattr(vehicle, "spz", "") or ""
-            result = result_by_oid.get(getattr(vehicle, "oid", None))
+            result = result_by_oid.get(getattr(vehicle, "oid", None)) if is_chosen else None
             row["uniqa"] = "ANO" if vin and vin in uniqa_vins else "NE"
-            row["allianz"] = "ANO" if vin and vin in allianz_vins else "NE"
-            row["vysledek"] = _display_status(result) if result is not None else (
-                "SPRÁVNĚ NEPOJIŠTĚNO" if row["ocekavani"] == "NEMÁ BÝT POJIŠTĚNO" else row["filtr"]
-            )
+            row["allianz"] = "ANO" if (vin and vin in allianz_vins) or (spz and spz in allianz_spz) else "NE"
+            row["kontrolovano"] = "ANO" if eligible else "NE"
+            if not vin:
+                row["zarazeni"] = "VYŘAZENO"
+                row["duvod"] = "Bez VIN – nelze provést porovnání podle VIN"
+                row["vysledek"] = "NEOVĚŘENO – chybí VIN"
+            elif not is_chosen:
+                row["zarazeni"] = "DUPLICITNÍ SQL KARTA"
+                row["duvod"] = f"Starší záznam VIN; do kontroly vybráno OID {chosen_by_vin.get(vin, '')}"
+                row["vysledek"] = "NEKONTROLOVÁNO SAMOSTATNĚ – shoda pojistky nenahrazuje vyhodnocení této karty"
+            else:
+                row["vysledek"] = _display_status(result) if result is not None else (
+                    "NEZAŘAZENO DO KONTROLY – " + str(row.get("duvod") or row.get("filtr") or "mimo pravidla")
+                )
             sql_rows.append(row)
+        expected_rows = int(tirbazar.LAST_LOAD_STATS.get("sql_total") or 0)
+        if not expected_rows or len(sql_rows) != expected_rows:
+            raise RuntimeError(
+                f"SQL audit není úplný: načteno {len(sql_rows)} OID, databáze hlásí {expected_rows}."
+            )
 
         from collections import Counter
         state_breakdown = Counter(row["stav"] or "NEUVEDENO" for row in sql_rows if row["zarazeni"] == "AKTIVNÍ KONTROLA")
@@ -440,6 +461,9 @@ def _run_check_worker() -> None:
             "counts": {
                 **dict(tirbazar.LAST_LOAD_STATS),
                 "eligible_total": len(eligible_vehicles),
+                "physical_audit_rows": len(sql_rows),
+                "without_vin_audit": sum(1 for row in sql_rows if not row["vin"]),
+                "duplicate_audit_rows": sum(1 for row in sql_rows if row["zarazeni"] == "DUPLICITNÍ SQL KARTA"),
                 "active_control": len(control_vehicles),
                 "deposit": len(deposit_vehicles),
                 "expected_insured": sum(1 for v in control_vehicles if " ".join(str(getattr(v, "stav", "") or "").strip().upper().split()) not in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}),

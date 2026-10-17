@@ -331,6 +331,10 @@
             </div>
           </div>
 
+          <div id="completeAuditPanel" style="margin:20px 0;padding:20px;border:1px solid #ccdce9;border-radius:16px;background:#f6faff;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px">
+            <div><strong style="font-size:16px;color:#12314e">Kompletní audit vozidel TIRBazar</strong><p style="margin:7px 0 0;color:#5c7188;font-size:13px;max-width:680px">Export zahrnutých a vyřazených vozidel, důvodů rozhodnutí, výsledků pojištění, přehledu Uniqa a Allianz a duplicit. Počet fyzických SQL záznamů se může lišit od počtu unikátních VIN.</p><p id="completeAuditStatus" role="status" aria-live="polite" style="margin:8px 0 0;color:#355f83;font-size:13px">Připraveno k načtení auditu.</p></div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px"><button id="completeAuditStart" type="button" class="btn btn-secondary">Načíst kompletní audit</button><a id="completeAuditDownload" class="btn btn-secondary" href="/download/xlsx" hidden>Stáhnout audit XLSX</a></div>
+          </div>
           <div class="overview-group overview-group-attention">
             <div class="overview-group-head">
               <div>
@@ -470,5 +474,44 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="{{ url_for('static', filename='js/app.js') }}?v=20261011status"></script>
+  <script>
+  (() => {
+    const start = document.getElementById('completeAuditStart');
+    const status = document.getElementById('completeAuditStatus');
+    const download = document.getElementById('completeAuditDownload');
+    if (!start || !status || !download) return;
+    const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const readJSON = async (url, options) => {
+      const response = await fetch(url, {credentials:'same-origin', cache:'no-store', ...options});
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    };
+    start.addEventListener('click', async () => {
+      start.disabled = true;
+      download.hidden = true;
+      status.textContent = 'Zadávám kompletní audit kancelářskému agentovi…';
+      try {
+        const created = await readJSON('/api/audit-export', {method:'POST'});
+        if (!created.ok) throw new Error(created.message || 'Audit se nepodařilo zadat.');
+        for (let i = 0; i < 90; i++) {
+          const result = await readJSON('/api/audit-export');
+          if (result.status === 'ready') {
+            status.textContent = 'Audit je připraven. Stáhněte Excel včetně listu SQL audit.';
+            download.hidden = false;
+            return;
+          }
+          if (result.status === 'error' || result.status === 'failed') throw new Error(result.error || 'Audit skončil chybou.');
+          status.textContent = 'Agent zpracovává úplný audit… (' + (i + 1) + '/90)';
+          await pause(2000);
+        }
+        status.textContent = 'Audit stále běží. Kliknutím lze stav znovu ověřit.';
+      } catch (error) {
+        status.textContent = 'Audit není dostupný: ' + (error.message || error);
+      } finally {
+        start.disabled = false;
+      }
+    });
+  })();
+  </script>
 </body>
 </html>

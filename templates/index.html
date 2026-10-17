@@ -3,19 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#06233d">
+  <meta name="theme-color" content="#07111f">
   <title>Denní POV · Vans Centre</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261018xlsx">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261018brand">
 </head>
-<body>
+<body class="vc-theme">
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-logo-wrap">
-          <img src="https://www.vanscentre.com/public/assets/dist/images/ac-dodavky/logo.png" class="brand-logo" alt="Vans Centre">
+          <img src="{{ url_for('static', filename='images/vans-centre-logo.png') }}" class="brand-logo" alt="Vans Centre">
         </div>
         <div class="brand-copy">
-          <strong>Denní POV</strong>
+          <strong>DENNÍ POV</strong>
           <span>Vans Centre · interní systém</span>
         </div>
       </div>

@@ -1,0 +1,162 @@
+/* Authenticated workspace: the same navy, showroom backdrop and red accent as login. */
+body.vc-theme{
+  --ink:#f5f7fb;--muted:#aebdd0;--muted-2:#91a5ba;
+  --line:#ffffff28;--line-2:#ffffff16;--surface:#102037;
+  --canvas:#07111f;--canvas-2:#0b1b2e;--blue:#e14a59;--blue-soft:#c5253b24;
+  --red:#e14a59;--red-dark:#c5253b;--green:#83d5ad;--green-soft:#153a30;
+  --shadow:0 18px 50px #0004;--shadow-lg:0 34px 95px #0008;
+  color:#f5f7fb;color-scheme:dark;background:#07111f;
+  min-height:100vh;min-height:100svh;position:relative;isolation:isolate;
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+body.vc-theme::before{content:"";position:fixed;inset:0;z-index:-2;background:url("https://www.vanscentre.com/public/galleries/104/103417/vc1.jpg") center 55%/cover no-repeat;filter:saturate(.6);pointer-events:none}
+body.vc-theme::after{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(110deg,rgba(3,12,23,.96),rgba(7,21,37,.87) 44%,rgba(5,14,27,.75)),linear-gradient(0deg,#07111f,transparent 55%);pointer-events:none}
+.vc-theme .app-shell{background:transparent}
+.vc-theme .sidebar{background:#07111fb3;border-right:1px solid #ffffff16;box-shadow:none;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+.vc-theme .sidebar::after{display:none}
+.vc-theme .brand{display:flex;align-items:center;gap:14px;padding:3px 8px 25px;border-color:#ffffff16}
+.vc-theme .brand-logo-wrap{display:grid;place-items:center;flex:0 0 85px;width:85px;height:74px;padding:8px;margin:0;border:1px solid #ffffff38;border-radius:14px;background:#ffffffeb;box-shadow:0 10px 35px #0005}
+.vc-theme .brand-logo{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;object-position:center}
+.vc-theme .brand-copy strong{font-size:18px;letter-spacing:-.04em;color:#f5f7fb}
+.vc-theme .brand-copy span{color:#91a5ba;font-size:10px;line-height:1.6}
+.vc-theme .nav-item{color:#aebdd0;border-radius:11px;font-weight:650}
+.vc-theme .nav-item:hover{background:#ffffff09;color:#fff}
+.vc-theme .nav-item.active{border-color:#e14a5955;background:linear-gradient(90deg,#c5253b30,#c5253b0c);box-shadow:inset 3px 0 #e14a59;color:#fff}
+.vc-theme .nav-icon,.vc-theme .sidebar-lookup-label{color:#e77b86}
+.vc-theme .nav-item.active .nav-icon{background:#c5253b35;color:#ffbdc5}
+.vc-theme :is(.sidebar-status,.sidebar-lookup){background:#0a192b99;border-color:#ffffff1a}
+.vc-theme .sidebar-status small{color:#91a5ba}
+.vc-theme .sidebar-lookup-form button{background:#c5253b}
+.vc-theme .topbar{padding:30px 34px 26px;background:transparent;border-color:#ffffff16;box-shadow:none}
+.vc-theme .topbar::after{display:none}
+.vc-theme .breadcrumb{display:flex;align-items:center;gap:9px;color:#aebed1;font-size:10px;letter-spacing:.19em;font-weight:750}
+.vc-theme .breadcrumb::before{content:"";width:27px;height:2px;background:#d52f42}
+.vc-theme .breadcrumb span{padding:0;color:#8194aa}
+.vc-theme .topbar h1{color:#f5f7fb;font-size:clamp(28px,3.2vw,44px);line-height:1.1;letter-spacing:-.055em;margin-top:14px}
+.vc-theme .header-last-check{border-color:#ffffff20;background:transparent}
+.vc-theme .header-last-check span{color:#91a5ba}
+.vc-theme .header-last-check strong{color:#e0e9f3}
+.vc-theme .content{padding-top:26px}
+.vc-theme :is(.summary-card,.source-card,.metric-card,.table-card,.lookup-main-panel,.manual-summary-main,.manual-flow-inline,.manual-quick-grid article,.manual-result-guide>div,.how-principle,.how-step,.how-source-card,.how-details,.quick-card,.how-safety-note,.tir-lookup-section,.xlsx-dialog,.detail-dialog,.toast){
+  background:linear-gradient(145deg,rgba(25,43,63,.9),rgba(10,25,43,.88));
+  color:#f5f7fb;border:1px solid #ffffff28;border-radius:18px;
+  box-shadow:0 18px 50px #0004;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+}
+.vc-theme .overview-sticky #overallCard{border-color:#ffffff28!important;border-width:1px;min-height:138px;padding:26px;border-radius:22px;box-shadow:0 24px 65px #0005}
+.vc-theme #overallCard::before,.vc-theme .xlsx-dialog::before{content:"";position:absolute;left:0;top:0;width:100%;height:3px;border-radius:22px 22px 0 0;background:linear-gradient(90deg,#c41d34,#ee4d5c 46%,transparent 90%)}
+.vc-theme .summary-copy>span{color:#aebdd0;font-weight:650}
+.vc-theme .summary-card .summary-copy strong{color:#f5f7fb}
+.vc-theme .summary-card .summary-icon{background:#ffffff0a;color:#e77b86;box-shadow:0 0 0 8px #ffffff04}
+.vc-theme .summary-card.status-ok .summary-icon{color:#83d5ad;background:#83d5ad14;box-shadow:0 0 0 8px #83d5ad08}
+.vc-theme .summary-card.status-ok .status-copy strong{color:#9de1bf}
+.vc-theme .summary-card.status-problem .summary-icon{color:#ff9eab;background:#c5253b22;box-shadow:0 0 0 8px #c5253b0b}
+.vc-theme .summary-card.status-problem .status-copy strong{color:#ffa1ae}
+.vc-theme .overall-counts{border-color:#ffffff20}
+.vc-theme .overall-count-item,.vc-theme #overallCounts .overall-count-link{background:transparent;color:#aebdd0;border-color:#ffffff20}
+.vc-theme .overall-count-item strong{color:#f5f7fb}
+.vc-theme .summary-card.status-problem .overall-count-item strong{color:#ffa1ae}
+.vc-theme .summary-card.status-ok .overall-count-item strong{color:#9de1bf}
+.vc-theme #overallCounts .overall-count-chevron{color:#e77b86}
+.vc-theme :is(.btn-primary,.run-check-cta){background:#c5253b;color:#fff;border-color:#c5253b;box-shadow:0 8px 25px #c5253b20}
+.vc-theme :is(.btn-primary,.run-check-cta):hover{background:#df344c;border-color:#df344c}
+.vc-theme .run-check-cta-copy strong{color:#fff}
+.vc-theme :is(.btn-secondary,.quick-link,.push-btn,.lookup-main-close,.dialog-close){background:#ffffff08;color:#e0e9f3;border-color:#ffffff28;box-shadow:none}
+.vc-theme :is(.btn-secondary,.quick-link,.push-btn,.lookup-main-close,.dialog-close):hover{background:#ffffff12;border-color:#ffffff50;color:#fff}
+.vc-theme :is(button,a,input,select,textarea,summary):focus-visible{outline:3px solid #e77b86;outline-offset:3px}
+.vc-theme :is(input,textarea,select),.vc-theme .search-control input{background:#08182bd9;color:#fff;border-color:#ffffff32;border-radius:11px}
+.vc-theme :is(input,textarea)::placeholder{color:#8497ac}
+.vc-theme :is(input,textarea,select):focus{border-color:#e14a59;box-shadow:0 0 0 3px #d52f4229;background:#08182b}
+.vc-theme :is(h1,h2,h3,h4),.vc-theme :is(.source-head,.source-body,.manual-summary-main,.manual-quick-grid,.manual-result-guide,.how-details summary,.how-step,.how-source-card) strong{color:#f5f7fb}
+.vc-theme :is(.section-kicker,.overview-group-kicker,.how-step-number,.how-source-icon){color:#e77b86}
+.vc-theme :is(.table-hint,.section-note,.quick-copy p,.manual-summary-main p,.manual-quick-grid p,.manual-result-guide span,.how-head p,.how-step p,.how-source-card p,.how-principle small,.how-details-body p,.logic-row>span,.how-safety-note p,.vehicle-name,.vehicle-vin,.note-indicator,.detail-grid dt,.kostka-heading p,.xlsx-intro){color:#aebdd0}
+.vc-theme :is(.table-footer,.dialog-head,.how-details-body,.logic-row,.detail-grid dt,.detail-grid dd,.kostka-section,.lookup-main-head){border-color:#ffffff16}
+.vc-theme :is(.dialog-head,.table-footer){background:#0e1e32;color:#aebdd0}
+.vc-theme :is(.table-footer strong,.detail-grid dd,.logic-row>strong,.logic-row b,.lookup-main-item strong,.lookup-main-grid h3){color:#e0e9f3}
+.vc-theme .view-switch{background:#08182bb3;border:1px solid #ffffff16}
+.vc-theme .view-switch button{color:#aebdd0}
+.vc-theme .view-switch button[aria-pressed="true"]{background:#ffffff10;color:#fff;box-shadow:0 2px 8px #0003}
+.vc-theme .table-scroll thead{background:#0b1b2e}
+.vc-theme .table-scroll th{background:#0b1b2e;color:#aebdd0;border-color:#ffffff20}
+.vc-theme .table-scroll td{color:#e0e9f3;border-color:#ffffff10}
+.vc-theme .table-scroll tbody tr{background:#0d1d30}
+.vc-theme .table-scroll tbody tr:nth-child(even){background:#112238}
+.vc-theme .table-scroll tbody tr:hover{background:#1b3049}
+.vc-theme .table-scroll tbody tr.problem-row,.vc-theme .table-scroll tbody tr.problem-row:nth-child(even){background:#371e30}
+.vc-theme .table-scroll tbody tr.problem-row:hover{background:#442238}
+.vc-theme .table-scroll tbody tr.problem-row td{color:#ffbdc7;border-color:#e14a5929}
+.vc-theme .table-scroll tbody tr.resolved-unusual-row,.vc-theme .table-scroll tbody tr.resolved-unusual-row:nth-child(even){background:#152f2b}
+.vc-theme .table-scroll tbody tr.resolved-unusual-row td{color:#b2dbc9;border-color:#83d5ad20}
+.vc-theme .vehicle-open{color:#f5f7fb}
+.vc-theme .badge-ok{background:#173c31;color:#a0e2be;border-color:#83d5ad44}
+.vc-theme .badge-missing{background:#562438;color:#ffc0cb;border-color:#e77b8655}
+.vc-theme :is(.badge-warning,.badge-deposit){background:#41351d;color:#f4d695;border-color:#f4d69544}
+.vc-theme .badge-sold{background:#302645;color:#d2beff;border-color:#b49ce344}
+.vc-theme .badge-extra{background:#163940;color:#a1e1e9;border-color:#a1e1e944}
+.vc-theme :is(.badge-neutral,.badge-error){background:#25364b;color:#c1cedd;border-color:#ffffff22}
+.vc-theme .status-badge{box-shadow:none}
+.vc-theme #breakdownSection .overview-group{background:#0a192b80;border-color:#ffffff20;box-shadow:none;border-radius:20px}
+.vc-theme #breakdownSection .metric-card{background:#14263c;border-color:#ffffff20;box-shadow:none}
+.vc-theme #breakdownSection .metric-card:hover{background:#1c3048;border-color:#e77b8670}
+.vc-theme #breakdownSection :is(.overview-group-head h3,.metric-card strong){color:#f5f7fb}
+.vc-theme #breakdownSection :is(.metric-label,.metric-card small){color:#aebdd0}
+.vc-theme #breakdownSection .overview-group-kicker{color:#e77b86}
+.vc-theme #breakdownSection .metric-card.metric-success strong{color:#9de1bf}
+.vc-theme #breakdownSection .metric-card.metric-danger strong{color:#ffa1ae}
+.vc-theme #breakdownSection .overview-group-badge{background:#ffffff0a;color:#c1cedd;border-color:#ffffff20}
+.vc-theme #breakdownSection .overview-group-badge.danger{background:#c5253b24;color:#ffa1ae;border-color:#e14a5944}
+.vc-theme #breakdownSection .overview-group-badge.success{background:#83d5ad14;color:#9de1bf;border-color:#83d5ad33}
+.vc-theme #completeAuditPanel{background:linear-gradient(145deg,#192b3fdf,#0a192bdf)!important;border-color:#ffffff28!important;border-radius:20px!important}
+.vc-theme #completeAuditPanel strong{color:#f5f7fb!important}
+.vc-theme #completeAuditPanel p,.vc-theme #breakdownSection .section-heading p,.vc-theme #changesComparedTo{color:#aebdd0!important}
+.vc-theme :is(.manual-flow-inline span,.manual-quick-grid article>span,.how-step-number,.lookup-main-ident span,.lookup-main-grid article,.lookup-status-card,.lookup-main-note,.tir-lookup-result-grid>div){background:#0a192b;border-color:#ffffff20;color:#c1cedd}
+.vc-theme :is(.how-principle strong,.how-safety-note strong,.lookup-status-card strong,.tir-lookup-result-grid strong,.lookup-main-note strong){color:#e0e9f3}
+.vc-theme :is(.lookup-state-ok strong,.push-btn.enabled){color:#9de1bf}
+.vc-theme .lookup-state-bad strong{color:#ffa1ae}
+.vc-theme .active-filter{background:#c5253b20;color:#c1cedd;border-color:#e14a5944}
+.vc-theme .active-filter strong{color:#ffc0cb}
+.vc-theme .xlsx-dialog{position:fixed;border-radius:22px;padding:30px}
+.vc-theme .xlsx-dialog section{border-color:#ffffff1a}
+.vc-theme .xlsx-dialog .xlsx-intro{color:#aebdd0}
+.vc-theme .xlsx-dialog progress,.vc-theme #completeAuditProgress{accent-color:#e14a59}
+.vc-theme :is(.xlsx-dialog,.detail-dialog)::backdrop{background:#030c17bf;backdrop-filter:blur(7px)}
+.vc-theme #xlsxError,.vc-theme .toast.error{background:#7d22303d;border-color:#f1708190;color:#ffd7dd}
+.vc-theme progress::-webkit-progress-bar{background:#ffffff12;border-radius:99px}
+.vc-theme progress::-webkit-progress-value{background:#e14a59;border-radius:99px}
+.vc-theme ::-webkit-scrollbar-track{background:#0b1b2e}
+.vc-theme ::-webkit-scrollbar-thumb{background:#40546a;border-color:#0b1b2e}
+@media(max-width:1000px){.vc-theme .topbar{padding:25px}.vc-theme .brand{justify-content:flex-start}}
+@media(max-width:760px){
+  .vc-theme .sidebar{background:#07111fe6;border-bottom:1px solid #ffffff16;border-right:0}
+  .vc-theme .brand{padding:0 0 18px;gap:15px}
+  .vc-theme .brand-logo-wrap{width:64px;height:60px;flex-basis:64px;border-radius:11px}
+  .vc-theme .topbar{padding:24px 20px;gap:20px;align-items:flex-start}
+  .vc-theme .topbar h1{font-size:32px}
+  .vc-theme .content{padding:20px 16px 36px}
+  .vc-theme .overview-sticky #overallCard{padding:23px 20px}
+  .vc-theme .overall-counts{border-color:#ffffff20}
+  .vc-theme .xlsx-dialog{padding:25px 22px}
+}
+/* The sticky wrapper used to add a pale frame around the result card. */
+.vc-theme .overview-sticky{background:transparent!important;padding:0;backdrop-filter:none;-webkit-backdrop-filter:none;border:0}
+.vc-theme #progressPanel.connection-check-panel{background:linear-gradient(145deg,rgba(25,43,63,.94),rgba(10,25,43,.94))!important;border-color:#ffffff28!important;box-shadow:0 18px 50px #0004!important}
+@media(max-width:900px){
+  .vc-theme .sidebar{display:block;position:relative;height:auto;padding:20px;background:#07111fd9;border-right:0;border-bottom:1px solid #ffffff16}
+  .vc-theme .brand{padding:0 0 18px;gap:15px}
+  .vc-theme .brand-copy strong{font-size:20px}
+  .vc-theme .nav{grid-template-columns:1fr 1fr;padding-top:16px;gap:8px}
+  .vc-theme .nav-item{padding:10px;font-size:12px;gap:8px;min-width:0}
+  .vc-theme #navHowItWorks{grid-column:1/-1;order:2}
+  .vc-theme .sidebar-lookup{grid-column:1/-1;order:3;margin:0;padding:12px}
+  .vc-theme :is(.sidebar-spacer,.sidebar-status){display:none}
+}
+@media(max-width:760px){
+  .vc-theme .view-switch{width:100%;min-width:0}
+  .vc-theme .view-switch button{flex:1;min-width:0;white-space:normal;padding:9px 6px;font-size:11px}
+  .vc-theme .view-switch span{margin-left:3px;min-width:12px}
+  .vc-theme #dataSection th{white-space:normal;overflow-wrap:anywhere;font-size:9px;letter-spacing:.03em}
+}
+.vc-theme .how-it-works-section{background:#0a192bd9;border-color:#ffffff28;box-shadow:0 18px 50px #0004;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+.vc-theme .how-head{border-color:#ffffff16}
+.vc-theme :is(.how-principle span,.how-details summary small,.lookup-main-item span,.lookup-status-card span,.lookup-status-card small,.tir-lookup-message,.empty){color:#aebdd0}
+.vc-theme #detailBody label{color:#aebdd0!important}
+.vc-theme #detailBody :is(select,textarea){border-color:#ffffff32!important}

@@ -160,3 +160,19 @@ body.vc-theme::after{content:"";position:fixed;inset:0;z-index:-1;background:lin
 .vc-theme :is(.how-principle span,.how-details summary small,.lookup-main-item span,.lookup-status-card span,.lookup-status-card small,.tir-lookup-message,.empty){color:#aebdd0}
 .vc-theme #detailBody label{color:#aebdd0!important}
 .vc-theme #detailBody :is(select,textarea){border-color:#ffffff32!important}
+
+/* Keep the active check in one status panel, with the same dark palette. */
+body.vc-theme.check-running .overview-sticky{display:none}
+.vc-theme .overview-sticky .summary-card.status-running{background:linear-gradient(145deg,rgba(25,43,63,.9),rgba(10,25,43,.88))!important}
+.vc-theme .overview-sticky .summary-card.status-running .summary-icon{background:#e14a5914!important;color:#e77b86!important;box-shadow:none!important}
+.vc-theme .overview-sticky .summary-card.status-running .status-copy strong{color:#f5f7fb!important}
+.vc-theme #progressPanel .connection-visual{background:transparent;border-radius:50%}
+.vc-theme #progressPanel .connection-visual.running .connection-visual-icon{background:transparent;font-size:0;animation:none!important}
+.vc-theme #progressPanel .connection-visual.running .connection-visual-icon::before{content:"";width:18px;height:18px;border:2px solid #ffffff26;border-top-color:#e77b86;border-radius:50%;animation:statusSpin 1s linear infinite}
+.vc-theme #progressPanel .check-live-badge{background:#c5253b1f;border-color:#e14a5940;color:#ffc0cb}
+.vc-theme #progressPanel .check-stage.active{background:#c5253b14;border-color:#e14a5960}
+@media(prefers-reduced-motion:reduce){
+  .vc-theme #progressPanel .connection-visual.running .connection-visual-icon::before,
+  .vc-theme #progressPanel .check-live-badge::before,
+  .vc-theme.check-running #progressPanel #progressBar::after{animation:none!important}
+}

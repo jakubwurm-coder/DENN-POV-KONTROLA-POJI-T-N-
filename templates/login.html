@@ -14,8 +14,8 @@ body::before{content:"";position:fixed;inset:0;z-index:-2;background:url("https:
 body::after{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(110deg,rgba(3,12,23,.96) 0%,rgba(7,21,37,.87) 44%,rgba(5,14,27,.75) 100%),linear-gradient(0deg,#07111f 0%,transparent 55%)}
 header{width:min(100%,1480px);margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:27px clamp(22px,5vw,72px)}
 .brand{display:flex;align-items:center;gap:19px;text-decoration:none;color:inherit}
-.brand-logo{display:grid;place-items:center;width:85px;height:74px;padding:8px;border:1px solid #ffffff38;background:#ffffffeb;border-radius:14px;box-shadow:0 10px 35px #0005}
-.brand-logo img{max-width:100%;max-height:100%;object-fit:contain}
+.brand-logo{display:grid;place-items:center;width:85px;height:74px;padding:0;border:0;background:transparent;border-radius:0;box-shadow:none}
+.brand-logo img{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;filter:none;background:transparent}
 .brand-name{font-weight:800;letter-spacing:-.04em;font-size:20px}
 .brand-name span{font-weight:400;color:#8194aa;margin-right:14px}
 .system-label{font-size:10px;font-weight:700;letter-spacing:.2em;color:#a4b6c9;text-transform:uppercase}
@@ -46,14 +46,14 @@ button:focus-visible{outline:3px solid white;outline-offset:3px}
 .error{background:#7d22303d;border:1px solid #f1708190;color:#ffd7dd;padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:20px}
 footer{width:min(100%,1480px);margin:0 auto;display:flex;justify-content:space-between;gap:16px;padding:22px clamp(22px,5vw,72px);border-top:1px solid #ffffff16;color:#91a5ba;font-size:10px;letter-spacing:.1em}
 @media(max-width:850px){main{grid-template-columns:1fr;max-width:560px;gap:34px;padding-top:28px;padding-bottom:40px}h1{font-size:clamp(36px,8vw,52px)}.feature{margin-top:18px}.card{padding:30px}}
-@media(max-width:520px){header{padding:17px 20px}.brand{gap:12px}.brand-logo{width:64px;height:60px;border-radius:11px}.brand-name{font-size:18px}.brand-name span{margin-right:7px}.system-label{display:none}main{padding:25px 20px 36px;gap:27px}h1{margin:16px 0 14px;font-size:37px}.intro p{font-size:14px}.card{padding:27px 22px;border-radius:18px}h2{font-size:29px}footer{padding:18px 20px;font-size:9px}}
+@media(max-width:520px){header{padding:17px 20px}.brand{gap:12px}.brand-logo{width:64px;height:60px}.brand-name{font-size:18px}.brand-name span{margin-right:7px}.system-label{display:none}main{padding:25px 20px 36px;gap:27px}h1{margin:16px 0 14px;font-size:37px}.intro p{font-size:14px}.card{padding:27px 22px;border-radius:18px}h2{font-size:29px}footer{padding:18px 20px;font-size:9px}}
 @media(prefers-reduced-motion:reduce){button,input{transition:none}}
 </style>
 </head>
 <body>
 <header>
   <div class="brand">
-    <span class="brand-logo"><img src="{{ url_for('static', filename='images/vans-centre-logo.png') }}" alt="Vans Centre" width="300" height="238"></span>
+    <span class="brand-logo"><img src="{{ url_for('static', filename='images/vans-centre-logo.png') }}?v=20261018alpha" alt="Vans Centre" width="942" height="712"></span>
     <span class="brand-name"><span>/</span> DENNÍ POV</span>
   </div>
   <span class="system-label">Interní informační systém</span>

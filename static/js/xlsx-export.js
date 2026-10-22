@@ -4,6 +4,7 @@
   const dialog = el('xlsxProgressDialog');
   if (!dialog) return;
   let busy = false, lastJob = null, blobURL = null, retryRefresh = false;
+  let currentAuditId = null;
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   const number = value => Number(value).toLocaleString('cs-CZ');
   const bytes = value => (value / 1048576).toLocaleString('cs-CZ', {maximumFractionDigits:2}) + ' MB';
@@ -23,13 +24,16 @@
     meter('xlsxPrepare', null);
     el('xlsxPrepareText').textContent = 'Čekám na kompletní audit od kancelářského agenta. Procenta nejsou dostupná.';
     let data = await json('/api/audit-export', {method:'POST'});
+    const requestedId = data.id;
     const started = Date.now();
     while (data.status === 'pending') {
       if (Date.now() - started > 30 * 60 * 1000) throw new Error('Agent dosud nevrátil audit. Ověřte, že kancelářský agent běží, a zkuste to znovu.');
       await pause(2000);
       data = await json('/api/audit-export');
+      if (data.id !== requestedId) throw new Error('Jiná kontrola nahradila požadovaný audit. Načtěte audit znovu.');
     }
     if (data.status !== 'ready') throw new Error(data.error || 'Audit není připraven.');
+    currentAuditId = data.id;
   }
   function transfer(job) {
     return new Promise((resolve, reject) => {
@@ -90,7 +94,8 @@
     try {
       if (!resume) lastJob = null;
       if (refresh && !lastJob) await refreshAudit();
-      let job = lastJob || await json('/api/xlsx-export', {method:'POST'});
+      if (!currentAuditId) throw new Error('Nejdříve načtěte nový kompletní audit.');
+      let job = lastJob || await json('/api/xlsx-export?audit_id=' + encodeURIComponent(currentAuditId), {method:'POST'});
       lastJob = job;
       const started = Date.now();
       while (job.status === 'running') {
@@ -127,5 +132,5 @@
   el('xlsxRetry').onclick = () => start({refresh:retryRefresh, resume:true});
   const download = el('completeAuditDownload');
   if (download) download.addEventListener('click', event => { event.preventDefault(); start(); });
-  window.DenniExport = {start};
+  window.DenniExport = {start, useAudit: id => { currentAuditId = id; lastJob = null; }};
 })();

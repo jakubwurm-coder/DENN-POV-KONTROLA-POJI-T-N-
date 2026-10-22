@@ -975,7 +975,8 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
             "DVOJÍ POJIŠTĚNÍ",
         }
     ]
-    summary["ok_total"] = int(summary.get("ok_total") or 0) + len(resolved_active_rows)
+    # Manual resolution is NOT evidence of valid insurance. It cannot turn an
+    # objectively uninsured vehicle into one marked as insured.
     summary["resolved_active"] = len(resolved_active_rows)
 
     summary["missing"] = sum(
@@ -1606,7 +1607,10 @@ def agent_audit_result():
         if str(pending.get("id") or "") != command_id:
             return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
         data["audit"] = audit
-        data["_audit_export_snapshot"] = dict(snapshot, audit=audit)
+        # Export and dashboard must apply the same persisted manual annotations.
+        # Keep raw insurance verdict in status_raw; resolved is a separate workflow field.
+        export_view = _public_state(dict(snapshot, annotations=data.get("annotations") or {}))
+        data["_audit_export_snapshot"] = dict(export_view, audit=audit)
         data["_audit_export"] = {"id": command_id, "status": "ready", "finished_at": _now(), "ready_epoch": __import__("time").time()}
         if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:
             data["_command"] = None

@@ -479,7 +479,7 @@
   </dialog>
 
   {% include '_xlsx_progress.html' %}
-  <script src="{{ url_for('static', filename='js/xlsx-export.js') }}?v=20261018"></script>
+  <script src="{{ url_for('static', filename='js/xlsx-export.js') }}?v=20261022audit"></script>
   <div id="toast" class="toast" hidden></div>
   <script src="{{ url_for('static', filename='js/app.js') }}?v=20261018xlsx"></script>
   <script>
@@ -498,6 +498,7 @@
       start.disabled = true;
       document.getElementById('completeAuditProgress').hidden = false;
       download.hidden = true;
+      if (window.DenniExport) window.DenniExport.useAudit(null);
       status.textContent = 'Zadávám kompletní audit kancelářskému agentovi…';
       try {
         const created = await readJSON('/api/audit-export', {method:'POST'});
@@ -505,8 +506,10 @@
         const started = Date.now();
         while (Date.now() - started < 30 * 60 * 1000) {
           const result = await readJSON('/api/audit-export');
+          if (result.id !== created.id) throw new Error('Byl spuštěn jiný audit. Starší výsledky nejsou dostupné.');
           if (result.status === 'ready') {
-            status.textContent = 'Audit je připraven. Stáhněte Excel včetně listu SQL audit.';
+            if (window.DenniExport) window.DenniExport.useAudit(created.id);
+            status.textContent = 'Nová kontrola dokončena. Stáhněte Excel do 60 sekund; poté načtěte další audit.';
             download.hidden = false;
             return;
           }

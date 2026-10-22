@@ -797,7 +797,12 @@ def _file_save(data: dict[str, Any]) -> None:
 
 
 def _load_state() -> dict[str, Any]:
-    data = _db_load() or _file_load() or _default_state()
+    # PostgreSQL is the sole authoritative state store. Never load stale disk data.
+    if not _DATABASE_URL:
+        raise PersistenceUnavailable("PostgreSQL není nakonfigurováno.")
+    data = _db_load()
+    if data is None:
+        raise PersistenceUnavailable("PostgreSQL není dostupné nebo neobsahuje hlavní stav. Starý soubor nelze použít.")
     base = _default_state()
     base.update(data)
     if not isinstance(base.get("sources"), dict): base["sources"] = _default_state()["sources"]
@@ -810,8 +815,9 @@ def _load_state() -> dict[str, Any]:
 
 
 def _save_state(data: dict[str, Any]) -> None:
+    # Failed writes must not be reported as successful or stored on ephemeral disk.
     if not _db_save(data):
-        _file_save(data)
+        raise PersistenceUnavailable("Uložení do PostgreSQL selhalo; žádná náhradní kopie nebyla použita.")
 
 
 def _result_key(row: dict[str, Any]) -> str:

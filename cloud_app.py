@@ -1596,12 +1596,16 @@ def agent_audit_result():
     payload = request.get_json(silent=True) or {}
     command_id = str(payload.get("id") or "")
     audit = payload.get("audit") if isinstance(payload.get("audit"), dict) else {}
+    snapshot = payload.get("snapshot") if isinstance(payload.get("snapshot"), dict) else {}
+    if not audit.get("sql") or not snapshot.get("finished_at") or snapshot.get("error") or not snapshot.get("results"):
+        return jsonify({"ok": False, "message": "Audit needs matching completed snapshot."}), 400
     with _lock:
         data = _load_state()
         pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
         if str(pending.get("id") or "") != command_id:
             return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
         data["audit"] = audit
+        data["_audit_export_snapshot"] = dict(snapshot, audit=audit)
         data["_audit_export"] = {"id": command_id, "status": "ready", "finished_at": _now()}
         if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:
             data["_command"] = None

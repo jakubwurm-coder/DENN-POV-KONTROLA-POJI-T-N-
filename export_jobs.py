@@ -75,9 +75,14 @@ def install_export_routes(app, load_snapshot, snapshot_lock):
                     return jsonify(ok=False, message="Právě se připravuje jiný Excel. Zkuste to za chvíli."), 409
             with snapshot_lock:
                 data = load_snapshot()
+            audit_status = data.get("_audit_export") or {}
             audit_snapshot = data.get("_audit_export_snapshot")
+            if isinstance(audit_status, dict) and audit_status.get("status") == "pending":
+                return jsonify(ok=False, message="Nový audit se dosud připravuje."), 409
             if isinstance(audit_snapshot, dict) and audit_snapshot.get("audit"):
                 data = audit_snapshot
+            elif isinstance(audit_status, dict) and audit_status.get("status") == "ready":
+                return jsonify(ok=False, message="Chybí odpovídající výsledky auditu. Načtěte kompletní audit znovu."), 409
             if not data.get("results") and not (data.get("audit") or {}).get("sql"):
                 return jsonify(ok=False, message="Přehled zatím není k dispozici."), 404
             job_id = uuid.uuid4().hex

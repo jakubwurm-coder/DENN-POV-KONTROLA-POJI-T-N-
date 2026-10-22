@@ -816,8 +816,9 @@ def export_audit(command: dict[str, Any]) -> None:
     local_app = _load_local_app()
     _reset_for_run(local_app)
     local_app._run_check_worker()
-    snapshot = _decorate_snapshot(local_app._snapshot())
-    audit = dict(snapshot.get("audit") or {})
+    complete_snapshot = local_app._snapshot()
+    audit = dict(complete_snapshot.get("audit") or {})
+    snapshot = _decorate_snapshot(complete_snapshot)
     if snapshot.get("error") or snapshot.get("running") or not snapshot.get("finished_at"):
         raise RuntimeError("Audit nemá úspěšně dokončenou kontrolu; export zastaven.")
     if not audit.get("sql") or not snapshot.get("results"):

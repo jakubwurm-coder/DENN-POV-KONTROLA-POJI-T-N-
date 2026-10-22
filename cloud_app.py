@@ -885,11 +885,12 @@ def _same_local_day(value: Any, day_iso: str) -> bool:
     return _date_from_display(value) == day_iso
 
 
-def _public_state(data: dict[str, Any]) -> dict[str, Any]:
+def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dict[str, Any]:
     public = dict(data)
     public.pop("_command", None)
     public.pop("annotations", None)
-    annotations = _annotations_load(data.get("annotations"))
+    annotations = (_annotations_load_strict(data.get("annotations")) if strict_annotations
+                   else _annotations_load(data.get("annotations")))
     rows = []
     for original in data.get("results") or []:
         row = dict(original)
@@ -1609,7 +1610,10 @@ def agent_audit_result():
         data["audit"] = audit
         # Export and dashboard must apply the same persisted manual annotations.
         # Keep raw insurance verdict in status_raw; resolved is a separate workflow field.
-        export_view = _public_state(dict(snapshot, annotations=data.get("annotations") or {}))
+        try:
+            export_view = _public_state(dict(snapshot, annotations=data.get("annotations") or {}), strict_annotations=True)
+        except PersistenceUnavailable:
+            return jsonify({"ok": False, "message": "Nelze ověřit uložené poznámky a stav Vyřešeno v PostgreSQL. Audit odmítnut."}), 503
         data["_audit_export_snapshot"] = dict(export_view, audit=audit)
         data["_audit_export"] = {"id": command_id, "status": "ready", "finished_at": _now(), "ready_epoch": __import__("time").time()}
         if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:

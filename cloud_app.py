@@ -1573,12 +1573,13 @@ def request_audit_export():
         data = _load_state()
         pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
         if pending.get("status") == "pending":
-            return jsonify({"ok": True, "status": "pending"})
+            return jsonify({"ok": True, "status": "pending", "id": pending.get("id")})
         command_id = uuid.uuid4().hex
+        data["_audit_export_snapshot"] = None
         data["_audit_export"] = {"id": command_id, "status": "pending", "requested_at": _now()}
         data["_command"] = {"id": command_id, "action": "export_audit", "requested_at": _now()}
         _save_state(data)
-    return jsonify({"ok": True, "status": "pending"})
+    return jsonify({"ok": True, "status": "pending", "id": command_id})
 
 
 @app.get("/api/audit-export")
@@ -1586,7 +1587,7 @@ def audit_export_status():
     with _lock:
         data = _load_state()
         pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
-    return jsonify({"ok": True, "status": pending.get("status") or "idle", "error": pending.get("error") or ""})
+    return jsonify({"ok": True, "id": pending.get("id"), "status": pending.get("status") or "idle", "error": pending.get("error") or ""})
 
 
 @app.post("/api/agent/audit-result")
@@ -1606,7 +1607,7 @@ def agent_audit_result():
             return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
         data["audit"] = audit
         data["_audit_export_snapshot"] = dict(snapshot, audit=audit)
-        data["_audit_export"] = {"id": command_id, "status": "ready", "finished_at": _now()}
+        data["_audit_export"] = {"id": command_id, "status": "ready", "finished_at": _now(), "ready_epoch": __import__("time").time()}
         if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:
             data["_command"] = None
         _save_state(data)

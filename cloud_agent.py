@@ -818,10 +818,15 @@ def export_audit(command: dict[str, Any]) -> None:
     local_app._run_check_worker()
     with local_app._lock:
         audit = dict(local_app._state.get("audit") or {})
+        snapshot = _decorate_snapshot(local_app._snapshot())
+    if snapshot.get("error") or snapshot.get("running") or not snapshot.get("finished_at"):
+        raise RuntimeError("Audit nemá úspěšně dokončenou kontrolu; export zastaven.")
+    if not audit.get("sql") or not snapshot.get("results"):
+        raise RuntimeError("Chybí kompletní audit SQL nebo výsledky stejného běhu.")
     response = requests.post(
         f"{CLOUD_URL}/api/agent/audit-result",
         headers=_headers(),
-        json={"id": command_id, "audit": audit},
+        json={"id": command_id, "audit": audit, "snapshot": snapshot},
         timeout=90,
     )
     response.raise_for_status()

@@ -77,6 +77,13 @@ def install_export_routes(app, load_snapshot, snapshot_lock):
                 data = load_snapshot()
             audit_status = data.get("_audit_export") or {}
             audit_snapshot = data.get("_audit_export_snapshot")
+            requested_audit_id = str(request.args.get("audit_id") or "")
+            if not requested_audit_id or requested_audit_id != str(audit_status.get("id") or ""):
+                return jsonify(ok=False, message="Audit už není aktuální. Načtěte nový kompletní audit."), 409
+            if audit_status.get("status") != "ready":
+                return jsonify(ok=False, message="Kontrola ještě není dokončená. Starší výsledek nelze stáhnout."), 409
+            if time.time() - float(audit_status.get("ready_epoch") or 0) > 60:
+                return jsonify(ok=False, message="Audit je starší než 60 sekund. Pro aktuální data načtěte audit znovu."), 409
             if isinstance(audit_status, dict) and audit_status.get("status") == "pending":
                 return jsonify(ok=False, message="Nový audit se dosud připravuje."), 409
             if isinstance(audit_snapshot, dict) and audit_snapshot.get("audit"):

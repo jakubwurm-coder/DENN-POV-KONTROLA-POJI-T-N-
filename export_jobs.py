@@ -96,6 +96,7 @@ def install_export_routes(app, load_snapshot, snapshot_lock):
             folder = ROOT / job_id
             folder.mkdir(mode=0o700)
             status = {"id": job_id, "owner": owner, "created": time.time(),
+                      "audit_id": requested_audit_id, "ready_epoch": audit_status["ready_epoch"],
                       "status": "running", "phase": "starting", "completed": 0, "total": None}
             atomic_json(folder / "status.json", status)
             try:
@@ -135,6 +136,11 @@ def install_export_routes(app, load_snapshot, snapshot_lock):
         folder, status = owned_job(job_id)
         if not status:
             return jsonify(ok=False, message="Export není dostupný."), 404
+        with snapshot_lock:
+            active = (load_snapshot().get("_audit_export") or {})
+        if (active.get("id") != status.get("audit_id") or active.get("status") != "ready"
+                or time.time() - float(status.get("ready_epoch") or 0) > 60):
+            return jsonify(ok=False, message="Audit již není aktuální. Spusťte novou kontrolu."), 409
         if status["status"] != "ready":
             return jsonify(public_status(status)), 409
         path = folder / "audit.xlsx"

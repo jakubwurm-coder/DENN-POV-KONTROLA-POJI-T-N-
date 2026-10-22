@@ -904,7 +904,7 @@ def _public_state(data: dict[str, Any]) -> dict[str, Any]:
             row["detail"] = row["note"]
         if row["workflow_status"]:
             row["original_status"] = row.get("status", "")
-            row["status"] = row["workflow_status"]
+            # Workflow is a separate field; never replace the insurance verdict.
         rows.append(row)
     public["results"] = rows
     summary = dict(data.get("summary") or {})

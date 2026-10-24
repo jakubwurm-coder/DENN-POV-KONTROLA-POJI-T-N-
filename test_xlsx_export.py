@@ -1,3 +1,4 @@
+import copy
 import io
 import json
 import os
@@ -57,11 +58,19 @@ class ExportApiTests(unittest.TestCase):
                 session['denni_pov_authenticated'] = True
 
     def get(self, path, client=None):
-        return (client or self.client).get(path, base_url='https://localhost')
+        with patch.object(cloud, '_load_state', return_value=getattr(self, 'export_state', {})):
+            return (client or self.client).get(path, base_url='https://localhost')
 
     def start(self, data=FIXTURE):
-        with patch.object(cloud, '_load_state', return_value=data), patch.object(cloud, '_annotations_load', return_value={}):
-            return self.client.post('/api/xlsx-export', base_url='https://localhost')
+        snapshot = copy.deepcopy(data)
+        if snapshot.get('audit'):
+            snapshot['audit']['schema_version'] = 2
+            snapshot['audit']['results'] = [dict(oid=r['oid'], vin=r.get('vin',''), status_raw='OK')
+                                            for r in snapshot['audit']['sql']]
+        self.export_state = {'_audit_export': {'id':'test-audit', 'status':'ready', 'ready_epoch':time.time()},
+                             '_audit_export_snapshot':snapshot}
+        with patch.object(cloud, '_load_state', return_value=self.export_state), patch.object(cloud, '_annotations_load', return_value={}):
+            return self.client.post('/api/xlsx-export?audit_id=test-audit', base_url='https://localhost')
 
     def wait(self, job_id):
         deadline = time.monotonic() + 15
@@ -93,7 +102,8 @@ class ExportApiTests(unittest.TestCase):
         self.assertEqual(response.headers['Cache-Control'], 'no-store')
         response.close()
         self.assertEqual(load_workbook(io.BytesIO(body))['SQL audit'].max_row, 4)
-        partial = self.client.get('/download/xlsx?job=' + job_id, base_url='https://localhost', headers={'Range': 'bytes=0-31'})
+        with patch.object(cloud, '_load_state', return_value=self.export_state):
+            partial = self.client.get('/download/xlsx?job=' + job_id, base_url='https://localhost', headers={'Range': 'bytes=0-31'})
         self.assertEqual(partial.status_code, 206)
         self.assertEqual(partial.get_data(), body[:32])
         partial.close()
@@ -108,7 +118,7 @@ class ExportApiTests(unittest.TestCase):
         self.assertEqual(self.get('/api/xlsx-export/not-a-job').status_code, 404)
 
     def test_empty_state(self):
-        self.assertEqual(self.start({}).status_code, 404)
+        self.assertEqual(self.start({}).status_code, 409)
 
     def test_duplicate_start_reuses_job_and_other_session_cannot_queue(self):
         with patch.object(export_jobs.subprocess, 'Popen') as popen:

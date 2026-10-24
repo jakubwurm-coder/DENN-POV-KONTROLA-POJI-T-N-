@@ -20,7 +20,7 @@ cases=[
 ("insured neither",v(),False,False,True,True,"CHYBÍ V UNIQA"),
 ("insured UNIQA",v(),True,False,True,True,"OK"),
 ("insured Allianz",v(),False,True,True,True,"OK"),
-("insured both",v(),True,True,True,True,"OK"),
+("insured both",v(),True,True,True,True,"DVOJÍ POJIŠTĚNÍ"),
 ("insured source down",v(),False,False,False,True,"NELZE OVĚŘIT"),
 ("deposit neither",v(poznamky="DEPOZIT"),False,False,True,True,"NEPOJIŠTĚNO, ALE DEPOZIT"),
 ("deposit UNIQA",v(poznamky="DEPOZIT"),True,False,True,True,"DEPOZIT, ALE POJIŠTĚNÉ"),

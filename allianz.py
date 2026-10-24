@@ -55,7 +55,6 @@ def load_allianz_vehicles() -> AllianzLoadResult:
             raise RuntimeError("Allianz CSV na GitHubu je prázdný.")
 
         vehicles: list[AllianzVehicle] = []
-        seen: set[str] = set()
 
         # Allianz data mají jediný autoritativní zdroj: GitHub.
         # CSV obsahuje identifikátor vozidla. Krátké historické VIN (např. A499)
@@ -75,10 +74,7 @@ def load_allianz_vehicles() -> AllianzLoadResult:
                 if not normalized:
                     continue
 
-                key = normalized
-                if key in seen:
-                    continue
-                seen.add(key)
+                # Export retains every provider row; comparison indexes select by VIN.
 
                 vin = normalized
                 spz = normalize_spz(raw)

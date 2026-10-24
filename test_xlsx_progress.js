@@ -31,6 +31,7 @@ function setup(responses, transfer = 'known') {
       }
     }};
   vm.createContext(context); vm.runInContext(source, context);
+  context.window.DenniExport.useAudit('audit');
   return {start:context.window.DenniExport.start,nodes,history,requests};
 }
 (async()=>{
@@ -55,7 +56,7 @@ function setup(responses, transfer = 'known') {
   assert.equal(test.requests.length,1, 'retry reuses completed job');
   test=setup([{http:401,message:'Přihlášení je vyžadováno.'}]); await test.start();
   assert(test.nodes.xlsxError.textContent.includes('Přihlášení vypršelo'));
-  test=setup([{status:'pending'}, {status:'ready'}, ready]); await test.start({refresh:true});
+  test=setup([{id:'audit',status:'pending'}, {id:'audit',status:'ready'}, ready]); await test.start({refresh:true});
   assert(test.history.some(x=>x[0]==='xlsxPrepareText' && /kancelářského agenta/.test(x[2])));
   assert.equal(test.requests[0][0],'/api/audit-export');
   console.log('5 UI scenarios passed: measured rows/bytes, unknown length, network retry, expired login, agent wait.');

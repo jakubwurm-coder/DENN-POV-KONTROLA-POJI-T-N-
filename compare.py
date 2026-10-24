@@ -4,7 +4,7 @@ from typing import Any
 
 from models import ComparisonResult, TirVehicle, UniqaVehicle
 from normalize import normalize_spz, normalize_vin
-from tirbazar import _is_effectively_sold, _is_sold_to_vans_renting
+from tirbazar import _is_effectively_sold, _is_sold_to_vans_renting, _requires_pov_check
 
 
 def _build_allianz_indexes(
@@ -77,6 +77,7 @@ def compare_vehicles(
     allianz_available: bool = False,
     allianz_error: str = "",
     known_tir_vins: set[str] | None = None,
+    complete: bool = False,
 ) -> list[ComparisonResult]:
 
     allianz = allianz or []
@@ -94,9 +95,13 @@ def compare_vehicles(
         if vin:
             tir_by_vin[vin] = vehicle
 
+    uniqa_policies: dict[str, set[str]] = {}
     for vehicle in uniqa:
 
         vin = normalize_vin(vehicle.vin)
+        policy = str(getattr(vehicle, "cps", "") or "").strip()
+        if vin and policy:
+            uniqa_policies.setdefault(vin, set()).add(policy)
 
         if vin:
             uniqa_by_vin[vin] = vehicle
@@ -111,6 +116,9 @@ def compare_vehicles(
         tir_spz = normalize_spz(vehicle.spz)
 
         if not vin:
+            if complete:
+                results.append(ComparisonResult(vehicle.oid, "", tir_spz, "", "NELZE OVĚŘIT",
+                    "Chybí VIN – pojištění nelze bezpečně přiřadit.", vehicle.datum_vykupu, vehicle.datum_prodeje))
             continue
 
         uniqa_vehicle = uniqa_by_vin.get(vin)
@@ -119,6 +127,33 @@ def compare_vehicles(
         # PRODANÉ respektujeme i prodej novější než poslední výkup; tím
         # odfiltrujeme staré prodané karty se zapomenutou poznámkou DEPOZIT.
         sold = _is_effectively_sold(vehicle)
+
+        # Souběh pojišťoven má přednost ve všech SQL stavech i mimo POV.
+        if uniqa_available and uniqa_vehicle and (
+                (allianz_available and vin in allianz_by_vin) or len(uniqa_policies.get(vin, set())) > 1):
+            results.append(ComparisonResult(vehicle.oid, vin, tir_spz,
+                normalize_spz(uniqa_vehicle.spz), "DVOJÍ POJIŠTĚNÍ",
+                ("VIN má více aktivních pojistek. " +
+                 ("UNIQA i ALLIANZ. " if allianz_available and vin in allianz_by_vin else "Různá ČPS UNIQA. ") +
+                 "SQL stav: " + str(vehicle.stav or "neuveden")),
+                vehicle.datum_vykupu, vehicle.datum_prodeje))
+            continue
+
+        if complete and not sold and not _requires_pov_check(vehicle):
+            if uniqa_available and uniqa_vehicle:
+                status = "NAVÍC V UNIQA"
+                detail = "Pojištění mimo běžná pravidla POV; ověřte SQL stav: " + str(vehicle.stav or "neuveden")
+            elif allianz_available and vin in allianz_by_vin:
+                status = "NAVÍC V ALLIANZ"
+                detail = "Pojištění mimo běžná pravidla POV; ověřte SQL stav: " + str(vehicle.stav or "neuveden")
+            elif not uniqa_available or not allianz_available:
+                status, detail = "NELZE OVĚŘIT", "Nedostupný zdroj pojištění; SQL stav: " + str(vehicle.stav or "neuveden")
+            else:
+                status, detail = "MIMO POV", "Bez aktivního pojištění; stav nevyžaduje POV podle stávajících pravidel."
+            results.append(ComparisonResult(vehicle.oid, vin, tir_spz,
+                normalize_spz(uniqa_vehicle.spz) if uniqa_vehicle else "", status, detail,
+                vehicle.datum_vykupu, vehicle.datum_prodeje))
+            continue
 
         # ====================================================
         # DEPOZIT
@@ -341,21 +376,15 @@ def compare_vehicles(
 
             # Oba zdroje byly dostupné a vozidlo nebylo nalezeno ani v jednom:
             # prodané vozidlo je tedy správně nepojištěné a nevytváří problém.
+            if complete:
+                results.append(ComparisonResult(vehicle.oid, vin, tir_spz, "",
+                    "PRODANÉ, NEPOJIŠTĚNÉ", "V pořádku – prodané vozidlo nemá aktivní pojištění.",
+                    vehicle.datum_vykupu, vehicle.datum_prodeje))
             continue
 
         # ====================================================
         # 1. UNIQA
         # ====================================================
-
-        if uniqa_available and uniqa_vehicle and allianz_available and vin in allianz_by_vin:
-            results.append(ComparisonResult(
-                oid=vehicle.oid, vin=vin, tir_spz=tir_spz,
-                uniqa_spz=normalize_spz(uniqa_vehicle.spz),
-                status="DVOJÍ POJIŠTĚNÍ",
-                detail="VIN je nalezen v UNIQA i ALLIANZ. Prověřte souběh pojištění.",
-                datum_vykupu=vehicle.datum_vykupu, datum_prodeje="",
-            ))
-            continue
 
         if uniqa_available and uniqa_vehicle:
 
@@ -579,11 +608,10 @@ def compare_vehicles(
                     uniqa_spz=normalize_spz(
                         uniqa_vehicle.spz
                     ),
-                    status="NAVÍC V UNIQA",
-                    detail=(
+                    status="DVOJÍ POJIŠTĚNÍ" if (allianz_available and vin in allianz_by_vin) or len(uniqa_policies.get(vin, set())) > 1 else "NAVÍC V UNIQA",
+                    detail=("VIN má více aktivních pojistek a není v SQL." if (allianz_available and vin in allianz_by_vin) or len(uniqa_policies.get(vin, set())) > 1 else
                         "VIN je mezi aktivními vozidly UNIQA, "
-                        "ale není mezi vozidly TIRBazar se stavem "
-                        "Vykoupené nebo Rezervované určenými k POV kontrole."
+                        "ale není v kompletní evidenci nesmazaných vozidel TIRBazar."
                     ),
                     datum_vykupu="",
                     datum_prodeje="",
@@ -593,7 +621,7 @@ def compare_vehicles(
     if allianz_available:
         tir_vins = known_tir_vins if known_tir_vins is not None else set(tir_by_vin.keys())
         for vin, insured in allianz_by_vin.items():
-            if vin not in tir_vins:
+            if vin not in tir_vins and not (uniqa_available and vin in uniqa_by_vin):
                 results.append(ComparisonResult(
                     oid=None, vin=vin, tir_spz="", uniqa_spz="",
                     status="NAVÍC V ALLIANZ",

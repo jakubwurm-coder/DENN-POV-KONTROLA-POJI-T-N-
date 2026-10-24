@@ -28,6 +28,7 @@ class UniqaLoadResult:
     duplicates: list[list[UniqaVehicle]] = field(default_factory=list)
     raw_count: int = 0
     direct_verified_count: int = 0
+    raw_vehicles: list[UniqaVehicle] = field(default_factory=list)
 
 
 def keychain_read(service: str) -> str:
@@ -446,6 +447,7 @@ def load_uniqa_vehicles(
             error="",
             duplicates=duplicates,
             raw_count=len(raw),
+            raw_vehicles=list(raw),
             direct_verified_count=len(direct_verified_vins),
         )
 

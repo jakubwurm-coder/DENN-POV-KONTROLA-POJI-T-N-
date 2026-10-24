@@ -22,7 +22,8 @@ AUDIT_SHEETS = [('SQL audit',
    ('uniqa', 'Uniqa'),
    ('allianz', 'Allianz'),
    ('vysledek', 'Výsledek'),
-   ('filtr', 'Důvod filtru')]),
+   ('filtr', 'Důvod filtru'), ('status_raw', 'Výsledek porovnání'),
+   ('detail', 'Detail porovnání'), ('zdroj_udaju', 'Zdroj údajů')]),
  ('Rozpad TIRBazar',
   'breakdown_rows',
   [('skupina', 'Skupina'), ('polozka', 'Kategorie / důvod'), ('pocet', 'Počet')]),
@@ -35,7 +36,7 @@ AUDIT_SHEETS = [('SQL audit',
    ('poj_do', 'Pojištění do')]),
  ('Allianz',
   'allianz_rows',
-  [('identifikator', 'VIN'),
+  [('identifikator', 'Identifikátor'), ('vin', 'VIN'), ('spz', 'SPZ'),
    ('pojistka', 'Pojistka'),
    ('poj_od', 'Pojištění od'),
    ('poj_do', 'Pojištění do')]),
@@ -69,7 +70,7 @@ def write_report(data, destination, progress=lambda *args: None):
     sources = {"sql_rows": audit.get("sql") or [], "uniqa_rows": audit.get("uniqa") or [],
                "allianz_rows": audit.get("allianz") or [], "breakdown_rows": breakdown_rows,
                "duplicate_rows": duplicate_rows}
-    rows = data.get("results") or []
+    rows = audit.get("results") if "results" in audit else data.get("results") or []
     total = len(rows) + sum(len(value) for value in sources.values())
     done = 0
     wb = Workbook(write_only=True)
@@ -93,7 +94,7 @@ def write_report(data, destination, progress=lambda *args: None):
     sheet = wb.create_sheet("Přehled pojištění")
     sheet.freeze_panes = "A11"
     sheet.sheet_view.showGridLines = False
-    for col, width in enumerate((28, 22, 14, 15, 15, 56, 38, 16), 1):
+    for col, width in enumerate((28, 22, 14, 15, 15, 56, 38, 16, 14, 24), 1):
         sheet.column_dimensions[get_column_letter(col)].width = width
     summary = data.get("summary") or {}
     append(sheet, ["DENNÍ POV | VANS CENTRE"], True)
@@ -104,15 +105,16 @@ def write_report(data, destination, progress=lambda *args: None):
         append(sheet, [label, summary.get(key, 0)])
     append(sheet, [])
     append(sheet, ["DETAILNÍ PŘEHLED VOZIDEL"], True)
-    append(sheet, ["Stav", "VIN", "SPZ", "Datum výkupu", "Datum prodeje", "Výsledek", "Poznámka", "Řešení"], True)
+    append(sheet, ["Stav", "VIN", "SPZ", "Datum výkupu", "Datum prodeje", "Výsledek", "Poznámka", "Řešení", "OID", "Zdroj údajů"], True)
     progress(done, total, "rows")
     for row in rows:
         append(sheet, [row.get("status") or row.get("status_raw"), row.get("vin"),
                        row.get("spz_tir") or row.get("spz_uniqa"), row.get("vykup"), row.get("prodej"),
-                       row.get("detail"), row.get("note"), row.get("workflow_status")])
+                       row.get("detail"), row.get("note"), row.get("workflow_status"), row.get("oid"),
+                       "SQL Vans Centre" if row.get("oid") is not None else row.get("technical_source") or "UNIQA / Allianz"])
         done += 1
         progress(done, total, "rows")
-    sheet.auto_filter.ref = f"A10:H{max(10, 10 + len(rows))}"
+    sheet.auto_filter.ref = f"A10:J{max(10, 10 + len(rows))}"
     append(sheet, [])
     append(sheet, ["AUDIT KONTROLY"], True)
     for label, key in (("SQL záznamů celkem", "sql_total"), ("Řádků v auditu OID", "physical_audit_rows"),

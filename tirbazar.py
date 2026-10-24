@@ -212,7 +212,7 @@ def _requires_pov_check(vehicle: TirVehicle) -> bool:
     # posledního výkupu a prodeje.
     # Prodej Vans Renting má trvalou výjimku: POV musí zůstat aktivní.
     if _is_effectively_sold(vehicle):
-        return _is_sold_to_vans_renting(vehicle) or _sold_within_last_seven_days(vehicle)
+        return True
 
     if state in {"VYKOUPENÉ", "VYKOUPENE"}:
         return True

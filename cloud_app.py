@@ -1631,8 +1631,13 @@ def agent_audit_result():
     command_id = str(payload.get("id") or "")
     audit = payload.get("audit") if isinstance(payload.get("audit"), dict) else {}
     snapshot = payload.get("snapshot") if isinstance(payload.get("snapshot"), dict) else {}
-    if not audit.get("sql") or not snapshot.get("finished_at") or snapshot.get("error") or not snapshot.get("results"):
+    if not audit.get("sql") or not snapshot.get("finished_at") or snapshot.get("error") or not isinstance(audit.get("results"), list):
         return jsonify({"ok": False, "message": "Audit needs matching completed snapshot."}), 400
+    from audit_validation import validate_complete_audit
+    try:
+        validate_complete_audit(audit)
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 409
     with _lock:
         data = _load_state()
         pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
@@ -1642,10 +1647,11 @@ def agent_audit_result():
         # Export and dashboard must apply the same persisted manual annotations.
         # Keep raw insurance verdict in status_raw; resolved is a separate workflow field.
         try:
-            export_view = _public_state(dict(snapshot, annotations=data.get("annotations") or {}), strict_annotations=True)
+            export_view = _public_state(dict(snapshot, results=audit.get("results") or snapshot.get("results") or [], annotations=data.get("annotations") or {}), strict_annotations=True)
         except PersistenceUnavailable:
             return jsonify({"ok": False, "message": "Nelze ověřit uložené poznámky a stav Vyřešeno v PostgreSQL. Audit odmítnut."}), 503
-        data["_audit_export_snapshot"] = dict(export_view, audit=audit)
+        export_audit = dict(audit, results=export_view["results"])
+        data["_audit_export_snapshot"] = dict(export_view, audit=export_audit)
         data["_audit_export"] = {"id": command_id, "status": "ready", "finished_at": _now(), "ready_epoch": __import__("time").time()}
         if isinstance(data.get("_command"), dict) and str(data["_command"].get("id") or "") == command_id:
             data["_command"] = None
@@ -1700,7 +1706,7 @@ def api_sync():
         data["last_successful_at"] = previous.get("last_successful_at") or (
             previous.get("finished_at") if not previous.get("error") else None
         )
-        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress", "agent", "sql_technical"):
+        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress", "agent", "sql_technical", "comparison_version"):
             if key in payload: data[key] = payload[key]
         agent = data.get("agent") if isinstance(data.get("agent"), dict) else {}
         if _normalize_agent_id(agent.get("id")) != _expected_agent_id():

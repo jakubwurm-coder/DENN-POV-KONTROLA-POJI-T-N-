@@ -266,7 +266,7 @@ def _audit_vehicle_row(vehicle, eligible: bool) -> dict[str, object]:
     expected = (
         "MÁ BÝT POJIŠTĚNO" if sold_to_vans
         else "NEMÁ BÝT POJIŠTĚNO" if sold or absent or deposit
-        else "MÁ BÝT POJIŠTĚNO" if eligible
+        else "MÁ BÝT POJIŠTĚNO" if _requires_pov_check(vehicle)
         else "MIMO POV"
     )
     decision, reason = _audit_decision(vehicle)
@@ -317,25 +317,8 @@ def _run_check_worker() -> None:
             if getattr(vehicle, "oid", None) not in sold_oids and not _is_deposit_vehicle(vehicle)
         ]
 
-        # Jediný zdroj pravdy: _requires_pov_check() už obsahuje i PRODANÉ.
-        # compare.py podle stavu/prodeje rozliší očekávání POJIŠTĚNO vs.
-        # NEPOJIŠTĚNO a případné pojištění prodaného vozidla nahlásí.
-        compare_vehicles_input = list(eligible_vehicles)
-
-        sold_vins = {vehicle.vin for vehicle in sold_vehicles if vehicle.vin}
-        ignored_vehicles = [
-            vehicle
-            for vehicle in vehicles
-            if not _requires_pov_check(vehicle)
-        ]
-
-        # Prodané VIN nesmíme odstranit z UNIQA vstupu: právě jejich případnou
-        # přítomnost v UNIQA/Allianz potřebujeme odhalit jako pojištění navíc.
-        ignored_vins = {
-            vehicle.vin
-            for vehicle in ignored_vehicles
-            if vehicle.vin and vehicle.vin not in sold_vins
-        }
+        # Úplné porovnání všech fyzických SQL karet před webovými filtry.
+        compare_vehicles_input = list(tirbazar.LAST_RAW_ROWS)
 
         active_count = len(control_vehicles)
         deposit_count = len(deposit_vehicles)
@@ -389,21 +372,16 @@ def _run_check_worker() -> None:
         else:
             _set_source("allianz", "error", "Načtení selhalo", allianz.error or "Allianz není dostupná")
 
-        uniqa_for_compare = [
-            vehicle
-            for vehicle in uniqa.vehicles
-            if getattr(vehicle, "vin", "") not in ignored_vins
-        ]
-
         results = compare_vehicles(
             tir=compare_vehicles_input,
-            uniqa=uniqa_for_compare,
+            uniqa=getattr(uniqa, "raw_vehicles", None) or uniqa.vehicles,
             uniqa_available=uniqa.available,
             uniqa_error=uniqa.error,
             allianz=allianz.vehicles,
             allianz_available=allianz.available,
             allianz_error=allianz.error,
             known_tir_vins={v.vin for v in vehicles if v.vin},
+            complete=True,
         )
 
         # Auditní data patří ke stejnému běhu jako výsledek. Díky tomu Excel
@@ -425,11 +403,11 @@ def _run_check_worker() -> None:
         sql_rows = []
         for vehicle in raw_vehicles:
             is_chosen = vehicle.oid in chosen_oids
-            eligible = is_chosen and _requires_pov_check(vehicle)
+            eligible = bool(vehicle.vin)
             row = _audit_vehicle_row(vehicle, eligible)
             vin = getattr(vehicle, "vin", "") or ""
             spz = getattr(vehicle, "spz", "") or ""
-            result = result_by_oid.get(getattr(vehicle, "oid", None)) if is_chosen else None
+            result = result_by_oid.get(getattr(vehicle, "oid", None))
             row["uniqa"] = "ANO" if vin and vin in uniqa_vins else "NE"
             row["allianz"] = "ANO" if (vin and vin in allianz_vins) or (spz and spz in allianz_spz) else "NE"
             row["kontrolovano"] = "ANO" if eligible else "NE"
@@ -439,12 +417,15 @@ def _run_check_worker() -> None:
                 row["vysledek"] = "NEOVĚŘENO – chybí VIN"
             elif not is_chosen:
                 row["zarazeni"] = "DUPLICITNÍ SQL KARTA"
-                row["duvod"] = f"Starší záznam VIN; do kontroly vybráno OID {chosen_by_vin.get(vin, '')}"
-                row["vysledek"] = "NEKONTROLOVÁNO SAMOSTATNĚ – shoda pojistky nenahrazuje vyhodnocení této karty"
+                row["duvod"] = f"Starší karta samostatně porovnána; na webu zobrazeno OID {chosen_by_vin.get(vin, '')}"
+                row["vysledek"] = _display_status(result) if result is not None else "NELZE OVĚŘIT"
             else:
                 row["vysledek"] = _display_status(result) if result is not None else (
                     "NEZAŘAZENO DO KONTROLY – " + str(row.get("duvod") or row.get("filtr") or "mimo pravidla")
                 )
+            row["zdroj_udaju"] = "SQL Vans Centre"
+            row["status_raw"] = getattr(result, "status", "NELZE OVĚŘIT")
+            row["detail"] = getattr(result, "detail", "")
             sql_rows.append(row)
         expected_rows = int(tirbazar.LAST_LOAD_STATS.get("sql_total") or 0)
         if not expected_rows or len(sql_rows) != expected_rows:
@@ -472,7 +453,7 @@ def _run_check_worker() -> None:
                 "deposit": len(deposit_vehicles),
                 "expected_insured": sum(1 for v in control_vehicles if " ".join(str(getattr(v, "stav", "") or "").strip().upper().split()) not in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}),
                 "expected_uninsured": sum(1 for v in control_vehicles if " ".join(str(getattr(v, "stav", "") or "").strip().upper().split()) in {"NEPŘÍTOMNÉ", "NEPRITOMNE"}) + len(deposit_vehicles),
-                "uniqa": len(uniqa.vehicles),
+                "uniqa": len(getattr(uniqa, "raw_vehicles", None) or uniqa.vehicles),
                 "allianz": len(allianz.vehicles),
             },
             "sql": sql_rows,
@@ -484,7 +465,7 @@ def _run_check_worker() -> None:
                     "poj_od": getattr(v, "poj_od", "") or "",
                     "poj_do": getattr(v, "poj_do", "") or "",
                 }
-                for v in uniqa.vehicles
+                for v in (getattr(uniqa, "raw_vehicles", None) or uniqa.vehicles)
             ],
             "allianz": [
                 {
@@ -516,6 +497,12 @@ def _run_check_worker() -> None:
                 result.znacka = getattr(source_vehicle, "znacka", "") or ""
                 result.model = getattr(source_vehicle, "model", "") or ""
 
+        # Export uchovává každý OID i neutrální výsledky. Web ukazuje aktuální kartu VIN.
+        audit["results"] = [_serialize_result(r) for r in results]
+        audit["schema_version"] = 2
+        results = [r for r in results if
+            (r.oid is None or (r.oid in chosen_oids and bool(r.vin)))
+            and r.status not in {"MIMO POV", "PRODANÉ, NEPOJIŠTĚNÉ"}]
         base = prepare_output()
 
         try:

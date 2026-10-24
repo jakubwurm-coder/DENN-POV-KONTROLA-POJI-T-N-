@@ -33,6 +33,7 @@ def project_status(state: dict[str, Any]) -> dict[str, Any]:
     # Do not recompute dashboard figures independently in either API.
     result = {
         "check_id": state.get("check_id"),
+        "comparison_version": state.get("comparison_version"),
         "generated_at": state.get("finished_at") or state.get("synced_at"),
         "running": bool(state.get("running")),
         "started_at": state.get("started_at"),

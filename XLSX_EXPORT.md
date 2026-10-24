@@ -41,3 +41,32 @@ nemění pravidla kontroly, přihlášení nebo zpracování Uniqa/Allianz.
 Původní testy `test_control_api` mají dvě selhání oprávnění MCP a
 `test_pov_decision_matrix` jedno selhání očekávání dvojího pojištění. Všechna tři
 byla reprodukována také na nezměněném commitu f6577ba; export je nemění.
+
+## Úplné porovnání SQL (verze 2, 24. 10. 2026)
+
+Každá fyzická nesmazaná SQL karta má samostatný výsledek porovnání.
+Zahrnuty jsou všechny stavy, historické prodeje bez časového omezení,
+starší OID stejného VIN a karty bez VIN (výsledek nelze ověřit).
+Na webu zůstává aktuální karta VIN; prodané bez pojištění a neutrální
+karty mimo pravidla POV se skrývají. Excel používá samostatný úplný
+seznam výsledků, nikoli webový seznam. Dvojí pojištění má přednost ve
+všech stavech; rozeznává se také více různých aktivních ČPS UNIQA.
+
+Export zachovává všechny načtené pojistné řádky UNIQA i Allianz.
+Allianz zdroj obsahuje pouze identifikátory: neznámá čísla smluv a data
+se nedoplňují odhadem. SQL audit uvádí zdroj SQL Vans Centre, OID,
+pojistný výsledek a detail. Obohacení technických údajů nadále používá
+stávající ověřenou integraci Datové kostky a prioritu úplného SQL indexu.
+
+Server před uložením a vytvořením XLSX ověří verzi schématu, shodu
+počtu řádků s SQL celkem, unikátnost OID a právě jeden výsledek pro
+každý OID. Starý či neúplný audit odmítne. Uložené poznámky a řešení
+se aplikují i na úplný export; pojistný výsledek zůstává samostatný.
+
+Ověření: `python -m unittest test_complete_audit test_xlsx_export
+ test_vehicle_technical test_agent_authorization test_agent_schedule
+ test_sync_resilience`, `python test_pov_decision_matrix.py` a tři
+JS testy průběhu XLSX, skupin případů a technických údajů.
+Celá historická sada má nadále dvě dřívější selhání v očekávání
+oprávnění MCP a jednu chybu health testu bez PostgreSQL. Odpovídající
+produkční health se ověřuje proti skutečnému úložišti samostatně.

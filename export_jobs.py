@@ -92,6 +92,11 @@ def install_export_routes(app, load_snapshot, snapshot_lock):
                 return jsonify(ok=False, message="Chybí odpovídající výsledky auditu. Načtěte kompletní audit znovu."), 409
             if not data.get("results") and not (data.get("audit") or {}).get("sql"):
                 return jsonify(ok=False, message="Přehled zatím není k dispozici."), 404
+            from audit_validation import validate_complete_audit
+            try:
+                validate_complete_audit(data.get("audit") or {})
+            except ValueError as exc:
+                return jsonify(ok=False, message=str(exc)), 409
             job_id = uuid.uuid4().hex
             folder = ROOT / job_id
             folder.mkdir(mode=0o700)

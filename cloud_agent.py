@@ -182,6 +182,7 @@ def _decorate_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     snapshot["progress"] = _progress_for(snapshot)
     snapshot["agent"] = {"id": AGENT_ID, "computer": platform.node(), "system": platform.system()}
     snapshot["check_id"] = _ACTIVE_CHECK_ID
+    snapshot["comparison_version"] = 2
     # Velký audit se při běžné synchronizaci na web neposílá.
     snapshot.pop("audit", None)
     return snapshot
@@ -821,7 +822,7 @@ def export_audit(command: dict[str, Any]) -> None:
     snapshot = _decorate_snapshot(complete_snapshot)
     if snapshot.get("error") or snapshot.get("running") or not snapshot.get("finished_at"):
         raise RuntimeError("Audit nemá úspěšně dokončenou kontrolu; export zastaven.")
-    if not audit.get("sql") or not snapshot.get("results"):
+    if not audit.get("sql") or not audit.get("results"):
         raise RuntimeError("Chybí kompletní audit SQL nebo výsledky stejného běhu.")
     response = requests.post(
         f"{CLOUD_URL}/api/agent/audit-result",

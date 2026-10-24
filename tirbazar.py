@@ -9,6 +9,7 @@ from pathlib import Path
 
 from config import Config
 from models import TirVehicle
+from vehicle_technical import technical_sql
 from normalize import normalize_spz, normalize_vin
 
 
@@ -621,6 +622,7 @@ GO
 -- náhodné a vedlo by k falešnému označení běžného prodeje jako Vans Renting.
 GO
 
+""" + technical_sql() + r"""
 SELECT '__FINISHED__';
 GO
 
@@ -692,6 +694,7 @@ def load_tirbazar_vehicles(
     raw_rows: list[TirVehicle] = []
     vehicle_meta: dict[int, tuple[str, str]] = {}
     sale_buyer_meta: dict[int, tuple[str, str]] = {}
+    technical_meta: dict[int, dict[str, str]] = {}
 
     for original in stdout.splitlines():
         line = original.strip()
@@ -719,6 +722,12 @@ def load_tirbazar_vehicles(
                 without_vin_sql = int(line[line.find("__WITHOUT_VIN__|"):].split("|", 1)[1].strip())
             except Exception:
                 pass
+
+        if "__TECHNICAL__|" in line:
+            parts = line[line.find("__TECHNICAL__|"):].split("|", 3)
+            if len(parts) == 4 and parts[1].strip().isdigit():
+                technical_meta.setdefault(int(parts[1]), {})[parts[2]] = parts[3].strip()
+            continue
 
         if "__VEHICLE_META__|" in line:
             value = line[line.find("__VEHICLE_META__|"):]
@@ -784,6 +793,7 @@ def load_tirbazar_vehicles(
         raise RuntimeError("Z TIRBazar nebyla načtena žádná vozidla.")
 
     for vehicle in raw_rows:
+        vehicle.technical = technical_meta.get(vehicle.oid, {})
         raw_brand, raw_model = vehicle_meta.get(vehicle.oid, ("", ""))
         vehicle.znacka = _clean_vehicle_brand(raw_brand)
         vehicle.model = _simple_vehicle_model(vehicle.znacka, raw_model)

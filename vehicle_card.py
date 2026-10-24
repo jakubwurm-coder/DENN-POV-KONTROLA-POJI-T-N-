@@ -12,6 +12,7 @@ import requests
 from flask import jsonify, render_template, request
 
 from rsv_owner import get_ownership
+from vehicle_technical import source_record
 
 KOSTKA_URL = "https://api.dataovozidlech.cz/api/vehicletechnicaldata/v2"
 EDALNICE_INDEX_URL = "https://edalnice.gov.cz/"
@@ -279,6 +280,29 @@ def _spz_from_denni_pov(vin: str) -> str:
     return ""
 
 
+
+def _card_technical_data(vin: str):
+    """Share the SQL-first policy with the dashboard without changing POV rules."""
+    online = os.getenv("ONLINE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+    if online:
+        import cloud_app
+        state = cloud_app._load_state()
+    else:
+        import local_app
+        state = local_app._snapshot()
+    sql = source_record(state, vin)
+    if sql:
+        return sql["data"], "SQL Vans Centre", sql.get("oid")
+    if sql is None and any(str(row.get("vin") or "").strip().upper() == vin for row in state.get("results") or []):
+        raise RuntimeError("Zdroj údajů se ověří při příští pravidelné kontrole SQL.")
+    if online:
+        saved = cloud_app._kostka_saved(vin)
+        if saved:
+            if saved[0]:
+                return saved[0], "Datová kostka", None
+            raise RuntimeError("Datová kostka k VIN nevrátila technické údaje.")
+    return _kostka_fetch(vin), "Datová kostka", None
+
 def install_vehicle_card(app) -> None:
     @app.get("/vehicle-card")
     def vehicle_card_page():
@@ -290,10 +314,12 @@ def install_vehicle_card(app) -> None:
         if not VIN_RE.fullmatch(vin):
             return jsonify({"ok": False, "message": "Zadejte platný 17místný VIN."}), 400
         try:
-            raw = _kostka_fetch(vin)
+            raw, source, oid = _card_technical_data(vin)
             vehicle = _technical_summary(raw, vin)
+            vehicle["data_source"] = source
+            vehicle["oid"] = oid
             spz = vehicle.get("spz", "")
-            spz_source = "Datová kostka"
+            spz_source = source
             if not spz or not SPZ_RE.fullmatch(spz):
                 spz = _spz_from_denni_pov(vin)
                 if spz:

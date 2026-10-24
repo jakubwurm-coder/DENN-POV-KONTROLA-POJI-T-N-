@@ -485,9 +485,17 @@ function kostkaDate(value){
 }
 function kostkaRows(data){
   const rows=[
-    ['Stav v registru',data.StatusNazev],
+    ['Stav vozidla',data.StatusNazev],
+    ['Registrační značka',data.RegistracniZnacka],
+    ['Země původu',data.ZemePuvodu],
     ['Tovární značka',data.TovarniZnacka],
     ['Obchodní označení',data.ObchodniOznaceni],
+    ['První registrace',kostkaDate(data.DatumPrvniRegistrace)],
+    ['Palivo',data.Palivo],
+    ['Objem motoru (cm³)',data.MotorZdvihObjem],
+    ['Výkon (kW)',data.MotorMaxVykon],
+    ['Barva',data.VozidloKaroserieBarva],
+    ['Kategorie',data.Kategorie],
     ['Technická prohlídka do',kostkaDate(data.PravidelnaTechnickaProhlidkaDo)]
   ];
   return rows.map(([label,value])=>`<dt>${esc(label)}</dt><dd>${esc(value||'—')}</dd>`).join('');
@@ -511,11 +519,11 @@ async function loadKostka(vin){
           .join(' ');
         const vehicleDetailValue=$('vehicleDetailValue');
         if(vehicleDetailValue&&vehicleName)vehicleDetailValue.textContent=vehicleName;
-        status.textContent='Datová kostka · uloženo '+new Date(result.fetched_at).toLocaleDateString('cs-CZ');
+        status.textContent='Zdroj: '+(result.source_label||'Datová kostka')+(result.oid!=null?' · OID '+result.oid:'')+(result.fetched_at?' · načteno '+(Number.isNaN(Date.parse(result.fetched_at))?result.fetched_at:new Date(result.fetched_at).toLocaleDateString('cs-CZ')):'');
         $('kostkaData').innerHTML=rows?`<dl class="detail-grid kostka-grid">${rows}</dl>`:'';
         return;
       }
-      status.textContent=result.message||'Technické údaje zatím nejsou dostupné.';
+      status.textContent=(result.source_label?'Zdroj: '+result.source_label+' · ':'')+(result.message||'Technické údaje zatím nejsou dostupné.');
       if(!result.pending)return;
       if(attempt<12)await new Promise(resolve=>setTimeout(resolve,10000));
     }

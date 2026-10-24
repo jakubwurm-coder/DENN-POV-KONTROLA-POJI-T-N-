@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from vehicle_technical import sql_record
+
 import os
 import threading
 from collections import Counter
@@ -96,8 +98,9 @@ def _format_date(value) -> str:
     return text
 
 
-def _serialize_result(result) -> dict[str, str]:
+def _serialize_result(result) -> dict[str, Any]:
     return {
+        "oid": getattr(result, "oid", None),
         "status_raw": getattr(result, "status", "") or "",
         "status": _display_status(result),
         "pojistovna": _insurance_company(result),
@@ -200,6 +203,7 @@ def _snapshot() -> dict[str, Any]:
             "summary": _summary(results, _state["active_count"]),
             "results": [_serialize_result(r) for r in visible_results],
             "audit": dict(_state.get("audit") or {}),
+            "sql_technical": _state.get("sql_technical"),
             "csv_available": bool(
                 _state["last_csv"]
                 and Path(_state["last_csv"]).exists()
@@ -526,6 +530,10 @@ def _run_check_worker() -> None:
             _state["results"] = results
             _state["last_csv"] = str(csv_path)
             _state["audit"] = audit
+            _state["sql_technical"] = {
+                "complete": True, "fetched_at": _now(),
+                "vehicles": {v.vin: sql_record(v) for v in vehicles if v.vin},
+            }
             _state["finished_at"] = _now()
             _state["error"] = None
     except Exception as exc:

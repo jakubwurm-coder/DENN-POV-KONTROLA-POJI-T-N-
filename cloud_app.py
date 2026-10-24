@@ -17,6 +17,7 @@ from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request, session, redirect, url_for
 import requests
+from vehicle_technical import source_record, kostka_candidates
 from pywebpush import webpush, WebPushException
 
 app = Flask(__name__)
@@ -123,9 +124,8 @@ def _kostka_update(vins: list[str]) -> None:
         _kostka_worker_lock.release()
 
 
-def _kostka_start(rows: list[dict[str, Any]]) -> None:
-    vins = [vin for row in rows if isinstance(row, dict)
-            if _KOSTKA_VIN.fullmatch(vin := re.sub(r"\s+", "", str(row.get("vin") or "")).upper())]
+def _kostka_start(state: dict[str, Any]) -> None:
+    vins = kostka_candidates(state)
     if vins and _DATABASE_URL and _kostka_keys():
         threading.Thread(target=_kostka_update, args=(vins,), daemon=True,
                          name="datova-kostka-refresh").start()
@@ -895,6 +895,7 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
     public = dict(data)
     public.pop("_command", None)
     public.pop("annotations", None)
+    public.pop("sql_technical", None)
     annotations = (_annotations_load_strict(data.get("annotations")) if strict_annotations
                    else _annotations_load(data.get("annotations")))
     rows = []
@@ -1258,23 +1259,37 @@ def api_vehicle_technical(vin: str):
         return jsonify({"ok": False, "message": "Neplatné VIN vozidla."}), 400
 
     with _lock:
-        results = _load_state().get("results") or []
+        state = _load_state()
+        results = state.get("results") or []
     if not any(re.sub(r"\s+", "", str(row.get("vin") or "")).upper() == vin
                for row in results if isinstance(row, dict)):
         return jsonify({"ok": False, "message": "Vozidlo není v aktuálním přehledu."}), 404
 
+    sql = source_record(state, vin)
+    if sql:
+        return jsonify({"ok": True, "vin": vin, "source": "sql",
+                        "source_label": "SQL Vans Centre", "oid": sql.get("oid"),
+                        "data": sql["data"],
+                        "fetched_at": (state.get("sql_technical") or {}).get("fetched_at") or state.get("finished_at")})
+    if sql is None:
+        return jsonify({"ok": True, "vin": vin, "source": "unknown",
+                        "message": "Zdroj údajů se ověří při příští pravidelné kontrole SQL."})
+
+    configured = bool(_kostka_keys() and _DATABASE_URL)
+    if configured:
+        _kostka_start(state)
+    source = {"source": "kostka", "source_label": "Datová kostka"}
     try:
         saved = _kostka_saved(vin)
     except Exception:
         return jsonify({"ok": False, "message": "Uložené technické údaje teď nejsou dostupné."}), 503
     if saved:
         if saved[0]:
-            return jsonify({"ok": True, "vin": vin, "data": saved[0], "fetched_at": saved[1]})
-        return jsonify({"ok": True, "vin": vin, "message": "Datová kostka k tomuto VIN nemá technické údaje."})
-    configured = bool(_kostka_keys() and _DATABASE_URL)
+            return jsonify({"ok": True, "vin": vin, "source": "kostka", "source_label": "Datová kostka", "data": saved[0], "fetched_at": saved[1]})
+        return jsonify({"ok": True, "vin": vin, **source, "message": "Datová kostka k tomuto VIN nemá technické údaje."})
     message = ("Technické údaje se načítají na pozadí." if configured else
                "API Datové kostky není na serveru nastavené.")
-    return jsonify({"ok": True, "vin": vin, "pending": configured, "message": message})
+    return jsonify({"ok": True, "vin": vin, **source, "pending": configured, "message": message})
 
 
 @app.get("/api/history")
@@ -1675,7 +1690,7 @@ def api_sync():
         data["last_successful_at"] = previous.get("last_successful_at") or (
             previous.get("finished_at") if not previous.get("error") else None
         )
-        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress", "agent"):
+        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress", "agent", "sql_technical"):
             if key in payload: data[key] = payload[key]
         agent = data.get("agent") if isinstance(data.get("agent"), dict) else {}
         if _normalize_agent_id(agent.get("id")) != _expected_agent_id():
@@ -1697,6 +1712,7 @@ def api_sync():
         # until a complete successful run replaces them.
         if failed_final and not data.get("results") and previous.get("results"):
             data["results"] = previous.get("results") or []
+            data["sql_technical"] = previous.get("sql_technical")
             data["summary"] = previous.get("summary") or {}
         elif final_run and not failed_final:
             data["last_successful_at"] = data.get("finished_at")
@@ -1733,7 +1749,7 @@ def api_sync():
         _save_state(data)
 
     if final_run and not data.get("error"):
-        _kostka_start(data.get("results") or [])
+        _kostka_start(data)
         try:
             push_result = _send_push_for_state(data, "denni-pov-check")
             alert_sent = push_result.get("sent", 0) > 0

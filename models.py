@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -17,6 +17,7 @@ class TirVehicle:
     model: str = ""
     kupujici_ico: str = ""
     kupujici_nazev: str = ""
+    technical: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

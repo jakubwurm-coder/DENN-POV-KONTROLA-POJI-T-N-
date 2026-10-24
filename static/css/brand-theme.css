@@ -176,3 +176,16 @@ body.vc-theme.check-running .overview-sticky{display:none}
   .vc-theme #progressPanel .check-live-badge::before,
   .vc-theme.check-running #progressPanel #progressBar::after{animation:none!important}
 }
+
+/* Acknowledged exceptions remain amber follow-ups, never green insurance OK. */
+.vc-theme .table-scroll tbody tr.resolved-unusual-row,
+.vc-theme .table-scroll tbody tr.resolved-unusual-row:nth-child(even){background:#45331bd9!important}
+.vc-theme .table-scroll tbody tr.resolved-unusual-row:hover{background:#58401ed9!important}
+.vc-theme .table-scroll tbody tr.resolved-unusual-row td{color:#f4d6a3;border-bottom-color:#e4912633}
+.vc-theme #overallCounts .older-issue-count strong,
+.vc-theme .view-switch .older-issue-count span{color:#ffc978!important}
+.vc-theme #overallCounts .current-issue-count strong,
+.vc-theme .view-switch .current-issue-count span{color:#ff9eab!important}
+.vc-theme .nav-followup .nav-count{background:#e49126!important;color:#201200!important}
+.vc-theme .summary-card.status-followup #overallStatusText{color:#ffc978!important}
+.vc-theme .active-filter strong{background:#ffffff12!important;color:#e0e9f3!important}

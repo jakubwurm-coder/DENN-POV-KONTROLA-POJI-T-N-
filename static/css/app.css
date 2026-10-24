@@ -3467,3 +3467,17 @@ input,textarea{cursor:text}
 .xlsx-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
 #xlsxError{color:#b91635;padding:12px;background:#fff0f3;border-radius:8px}
 .xlsx-dialog [hidden]{display:none!important}
+
+/* Current cases and acknowledged cases that still need follow-up. */
+.overview-sticky #overallCard .overall-counts .overall-count-link{pointer-events:auto;cursor:pointer}
+#overallCounts .current-issue-count strong,.view-switch .current-issue-count span{color:#dc3545!important}
+#overallCounts .older-issue-count strong,.view-switch .older-issue-count span{color:#b85d0a!important}
+.nav-followup .nav-count{background:#fff0d6!important;color:#a94f06!important}
+.nav-followup.active{box-shadow:inset 3px 0 #e49126}
+.table-scroll tbody tr.resolved-unusual-row,.table-scroll tbody tr.resolved-unusual-row:nth-child(even){background:#fff8eb}
+.table-scroll tbody tr.resolved-unusual-row:hover{background:#fff0d5}
+.table-scroll tbody tr.resolved-unusual-row td{color:#8c520d;border-bottom-color:#f1dfbe}
+.summary-card.status-followup .summary-icon{background:#fff0d6!important;color:#b85d0a!important}
+.summary-card.status-followup #overallStatusText{color:#a94f06!important}
+.view-switch{flex-wrap:wrap}
+@media(max-width:680px){.view-switch button{flex:1 1 auto}}

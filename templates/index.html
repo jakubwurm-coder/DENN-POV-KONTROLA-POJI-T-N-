@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07111f">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261018xlsx">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261018progress">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261024followup">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261024followup">
 </head>
 <body class="vc-theme">
   <div class="app-shell">
@@ -22,7 +22,8 @@
       </div>
 
       <nav class="nav" aria-label="Filtry vozidel">
-        <button class="nav-item active" type="button" data-filter="ATTENTION"><span class="nav-icon">!</span><span>Nutná kontrola</span><strong id="navExtraCount" class="nav-count">0</strong></button>
+        <button class="nav-item active" type="button" data-filter="ATTENTION"><span class="nav-icon">!</span><span>Aktuální k řešení</span><strong id="navExtraCount" class="nav-count">0</strong></button>
+        <button class="nav-item nav-followup" type="button" data-filter="RESOLVED"><span class="nav-icon">◷</span><span>Starší k dořešení</span><strong id="navOlderCount" class="nav-count">0</strong></button>
         <button id="navOverview" class="nav-item" type="button"><span class="nav-icon">▦</span><span>Celkový přehled</span></button>
 
         <div class="sidebar-lookup">
@@ -79,16 +80,13 @@
               <strong id="overallStatusText">Čeká na kontrolu</strong>
             </div>
             <div id="overallCounts" class="overall-counts" hidden>
-              <span class="overall-counts-label">AKTUÁLNÍ POČTY</span>
-              <div class="overall-count-item">
-                <span>Chybí pojištění</span>
-                <strong id="tipMissingOverall">0</strong>
-              </div>
-              <button class="overall-count-item overall-count-link" type="button" data-filter="UNWANTED_INSURANCE" title="Zobrazit vozidla s pojištěním navíc">
-                <span>Pojištění navíc</span>
-                <strong id="tipExtraOverall">0</strong>
-                <span class="overall-count-chevron" aria-hidden="true">›</span>
+              <button class="overall-count-item overall-count-link current-issue-count" type="button" data-filter="ATTENTION">
+                <span>Aktuální k řešení</span><strong id="currentOverallCount">0</strong><span aria-hidden="true">›</span>
               </button>
+              <button class="overall-count-item overall-count-link older-issue-count" type="button" data-filter="RESOLVED">
+                <span>Starší k dořešení</span><strong id="olderOverallCount">0</strong><span aria-hidden="true">›</span>
+              </button>
+              <span id="tipMissingOverall" hidden>0</span><span id="tipExtraOverall" hidden>0</span>
             </div>
             <div class="overall-run-slot">
               <button id="runBtn" class="run-check-cta" type="button">
@@ -162,9 +160,9 @@
 
           <div class="manual-quick-grid">
             <article><span>1</span><div><strong>Spusť kontrolu</strong><p>Systém načte TIRBazar a pojišťovnu. Výsledky zobrazí po dokončení kontroly.</p></div></article>
-            <article><span>2</span><div><strong>Otevři Nutnou kontrolu</strong><p>Červeně jsou chybějící nebo nadbytečné pojistky. VIN je hlavní identifikátor, SPZ pouze doplňkový.</p></div></article>
+            <article><span>2</span><div><strong>Otevři Aktuální k řešení</strong><p>Červeně jsou chybějící nebo nadbytečné pojistky. VIN je hlavní identifikátor, SPZ pouze doplňkový.</p></div></article>
             <article><span>3</span><div><strong>Prověř detail vozidla</strong><p>V detailu uvidíš původní výsledek, stav řešení a dostupné technické údaje.</p></div></article>
-            <article><span>4</span><div><strong>Označ Vyřešeno</strong><p>Vyřešený případ v přehledu zůstane, zezelená a přesune se z počtu „k řešení“ do „vyřešeno“. Zpět ho vrátíš volbou Původní status.</p></div></article>
+            <article><span>4</span><div><strong>Označ Vyřešeno</strong><p>Případ se přesune z červeného přehledu Aktuální k řešení do oranžového přehledu Starší k dořešení. Znamená to, že o něm víš a budeš jej dál řešit. Původní výsledek i poznámka zůstanou zachované. Zpět ho vrátíš volbou Původní status.</p></div></article>
             <article><span>✓</span><div><strong>Správné stavy</strong><p>Pojištění v pořádku, nepřítomné bez pojištění a skutečný depozit nevyžadují zásah.</p></div></article>
             <article><span>!</span><div><strong>Technická chyba není chybějící pojištění</strong><p>Při výpadku zdroje systém použije „Nelze ověřit“ a nevytvoří automaticky falešný závěr.</p></div></article>
           </div>
@@ -221,7 +219,8 @@
 
             <div class="manual-result-guide">
               <div><i class="logic-dot bad"></i><strong>Červená</strong><span>Chybí pojištění nebo je aktivní tam, kde být nemá.</span></div>
-              <div><i class="logic-dot ok"></i><strong>Zelená</strong><span>Správný stav nebo ručně označeno jako Vyřešeno.</span></div>
+              <div><i class="logic-dot ok"></i><strong>Zelená</strong><span>Skutečně správný výsledek kontroly pojištění.</span></div>
+              <div><i class="logic-dot warn"></i><strong>Oranžová</strong><span>Starší k dořešení: případ označený Vyřešeno, o kterém víte a chcete jej dále sledovat.</span></div>
               <div><i class="logic-dot warn"></i><strong>Nelze ověřit</strong><span>Zdroj nebyl dostupný; nejde automaticky o chybějící pojištění.</span></div>
             </div>
 
@@ -328,7 +327,7 @@
             <div>
               <span class="section-kicker">Rozcestník</span>
               <h2>Celkový přehled</h2>
-              <p style="margin:6px 0 0;color:#64748b;font-size:13px">Kompletní souhrn poslední kontroly včetně vyřešených případů.</p>
+              <p style="margin:6px 0 0;color:#64748b;font-size:13px">Kompletní souhrn poslední kontroly včetně starších případů k dořešení.</p>
             </div>
           </div>
 
@@ -353,22 +352,22 @@
               <button class="metric-card" type="button" data-filter="ABSENT_INSURED">
                 <span class="metric-label">Nepřítomné · pojištěno</span>
                 <strong id="cAbsentInsured">0</strong>
-                <small>z toho vyřešeno <b id="cAbsentResolved">0</b> · k řešení <b id="cAbsentOpen">0</b></small>
+                <small>starší k dořešení <b id="cAbsentResolved">0</b> · aktuální <b id="cAbsentOpen">0</b></small>
               </button>
               <button class="metric-card" type="button" data-filter="SOLD_UNIQA">
                 <span class="metric-label">Prodané, ale pojištěno</span>
                 <strong id="cSold">0</strong>
-                <small>z toho vyřešeno <b id="cSoldResolved">0</b> · k řešení <b id="cSoldOpen">0</b></small>
+                <small>starší k dořešení <b id="cSoldResolved">0</b> · aktuální <b id="cSoldOpen">0</b></small>
               </button>
               <button class="metric-card" type="button" data-filter="EXTRA_UNIQA">
                 <span class="metric-label">Ostatní pojištění navíc</span>
                 <strong id="cExtra">0</strong>
-                <small>z toho vyřešeno <b id="cExtraResolved">0</b> · k řešení <b id="cExtraOpen">0</b></small>
+                <small>starší k dořešení <b id="cExtraResolved">0</b> · aktuální <b id="cExtraOpen">0</b></small>
               </button>
               <button class="metric-card" type="button" data-filter="DEPOSIT_INSURED">
                 <span class="metric-label">Depozit · pojištěno</span>
                 <strong id="cDepositInsured">0</strong>
-                <small>z toho vyřešeno <b id="cDepositInsuredResolved">0</b> · k řešení <b id="cDepositInsuredOpen">0</b></small>
+                <small>starší k dořešení <b id="cDepositInsuredResolved">0</b> · aktuální <b id="cDepositInsuredOpen">0</b></small>
               </button>
             </div>
           </div>
@@ -448,14 +447,14 @@
 
         <section id="dataSection" class="data-section" hidden>
           <div class="data-toolbar">
-            <div class="view-switch" aria-label="Zobrazení vozidel"><button type="button" data-filter="ATTENTION" aria-pressed="true">Nutná kontrola <span id="attentionCount">—</span></button><button type="button" data-filter="OPEN" aria-pressed="false">Otevřené <span id="openCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
+            <div class="view-switch" aria-label="Zobrazení vozidel"><button class="current-issue-count" type="button" data-filter="ATTENTION" aria-pressed="true">Aktuální k řešení <span id="attentionCount">—</span></button><button class="older-issue-count" type="button" data-filter="RESOLVED" aria-pressed="false">Starší k dořešení <span id="olderCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
             <div class="data-tools">
               <div class="search-control"><span class="search-icon">⌕</span><input id="search" autocomplete="off" aria-label="Hledat vozidlo" placeholder="Hledat SPZ, VIN nebo vozidlo…"></div>
               <button id="clearBtn" class="btn btn-secondary btn-small" type="button" hidden>Zrušit hledání</button><a id="csvBtn" class="btn btn-secondary btn-small disabled" aria-disabled="true" href="/download/xlsx">↓ Stáhnout Excel</a>
             </div>
           </div>
           <div id="activeFilter" class="active-filter" hidden>Aktivní filtr: <strong id="activeFilterLabel"></strong><button id="clearFilterInline" type="button" aria-label="Zrušit filtr">×</button></div>
-          <p class="table-hint">Případy zůstávají viditelné i po vyřešení. Otevřené jsou nahoře a červeně, vyřešené pod nimi a zeleně. Vyřešeno: <strong id="resolvedExceptionCount">0</strong>.</p>
+          <p class="table-hint">Aktuální případy jsou červené. Označením Vyřešeno případ přesunete do oranžového přehledu Starší k dořešení. Původní výsledek i poznámka zůstávají zachované. Starší k dořešení: <strong id="resolvedExceptionCount">0</strong>.</p>
           <div class="table-card">
             <div class="table-scroll">
               <table>
@@ -481,7 +480,7 @@
   {% include '_xlsx_progress.html' %}
   <script src="{{ url_for('static', filename='js/xlsx-export.js') }}?v=20261022audit"></script>
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261018xlsx"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261024followup"></script>
   <script>
   (() => {
     const start = document.getElementById('completeAuditStart');

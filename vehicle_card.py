@@ -294,6 +294,10 @@ def _card_technical_data(vin: str):
     if sql:
         return sql["data"], "SQL Vans Centre", sql.get("oid")
     if sql is None and any(str(row.get("vin") or "").strip().upper() == vin for row in state.get("results") or []):
+        if online:
+            saved = cloud_app._kostka_saved(vin)
+            if saved and saved[0]:
+                return saved[0], "Datová kostka · dříve uložené údaje, SQL zatím neověřeno", None
         raise RuntimeError("Zdroj údajů se ověří při příští pravidelné kontrole SQL.")
     if online:
         saved = cloud_app._kostka_saved(vin)

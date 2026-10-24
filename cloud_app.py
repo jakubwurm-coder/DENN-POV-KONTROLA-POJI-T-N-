@@ -1272,6 +1272,16 @@ def api_vehicle_technical(vin: str):
                         "data": sql["data"],
                         "fetched_at": (state.get("sql_technical") or {}).get("fetched_at") or state.get("finished_at")})
     if sql is None:
+        # Keep previously obtained data visible during migration; do not issue
+        # new Kostka requests until SQL membership is known.
+        try:
+            legacy = _kostka_saved(vin)
+        except Exception:
+            legacy = None
+        if legacy and legacy[0]:
+            return jsonify({"ok": True, "vin": vin, "source": "kostka",
+                            "source_label": "Datová kostka · dříve uložené údaje, SQL zatím neověřeno",
+                            "sql_pending": True, "data": legacy[0], "fetched_at": legacy[1]})
         return jsonify({"ok": True, "vin": vin, "source": "unknown",
                         "message": "Zdroj údajů se ověří při příští pravidelné kontrole SQL."})
 

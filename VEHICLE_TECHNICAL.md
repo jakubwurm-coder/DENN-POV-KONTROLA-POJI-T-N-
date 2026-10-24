@@ -17,6 +17,8 @@ počty a rozhodování o správné pojistce se nemění.
 - U starých snapshotů lze zobrazit známé SQL základy. Pokud není přítomnost
   v SQL ověřena, zobrazí se čekání na následující pravidelnou kontrolu;
   samotné chybějící OID ve výsledku není důkaz nepřítomnosti v SQL.
+  Pokud už jsou data Kostky uložená, zůstanou viditelná s upozorněním,
+  že SQL zatím nebylo ověřeno; nové dotazy do Kostky se nespouští.
 - Dosavadní ruční vyhledání libovolného VIN na samostatné kartě zůstává
   zachováno. Pokud je VIN v SQL indexu, i toto vyhledání použije SQL.
 

@@ -58,10 +58,17 @@ class TechnicalTests(unittest.TestCase):
     def test_legacy_snapshot_does_not_assume_missing_sql(self):
         data = {'results': [{'vin': OTHER}]}
         self.assertEqual(kostka_candidates(data), [])
-        with patch.object(cloud_app, '_kostka_saved') as saved:
+        with patch.object(cloud_app, '_kostka_saved', return_value=None) as saved:
             response = self.get(data, OTHER)
         self.assertEqual(response.json['source'], 'unknown')
-        saved.assert_not_called()
+        saved.assert_called_once_with(OTHER)
+
+    def test_legacy_cache_visible_without_fetch(self):
+        with patch.object(cloud_app, '_kostka_saved', return_value=({'TovarniZnacka': 'Ford'}, '2026-10-01')), patch.object(cloud_app, '_kostka_start') as start:
+            response = self.get({'results': [{'vin': OTHER}]}, OTHER)
+        self.assertTrue(response.json['sql_pending'])
+        self.assertEqual(response.json['data']['TovarniZnacka'], 'Ford')
+        start.assert_not_called()
 
     def test_legacy_sql_basics_still_work(self):
         data = {'results': [{'vin': VIN, 'spz_tir': '1AA1111', 'znacka': 'Ford'}]}

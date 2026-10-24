@@ -896,6 +896,10 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
     public.pop("_command", None)
     public.pop("annotations", None)
     public.pop("sql_technical", None)
+    # Full OID audits belong only to the owner-bound export. Repeating megabytes
+    # of audit data in the dashboard's two-second polling stalls small instances.
+    public.pop("audit", None)
+    public.pop("_audit_export_snapshot", None)
     annotations = (_annotations_load_strict(data.get("annotations")) if strict_annotations
                    else _annotations_load(data.get("annotations")))
     rows = []
@@ -1643,7 +1647,7 @@ def agent_audit_result():
         pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
         if str(pending.get("id") or "") != command_id:
             return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
-        data["audit"] = audit
+        data["audit"] = {}  # The immutable export snapshot below owns the full audit.
         # Export and dashboard must apply the same persisted manual annotations.
         # Keep raw insurance verdict in status_raw; resolved is a separate workflow field.
         try:
@@ -1789,7 +1793,7 @@ def _build_xlsx_report(data: dict[str, Any]) -> bytes:
 
 
 from export_jobs import install_export_routes
-install_export_routes(app, lambda: _public_state(_load_state()), _lock)
+install_export_routes(app, lambda: _load_state(), _lock)
 
 
 def _build_csv_report(data: dict[str, Any]) -> str:

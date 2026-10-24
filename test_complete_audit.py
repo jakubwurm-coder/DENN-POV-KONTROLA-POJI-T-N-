@@ -117,3 +117,13 @@ class AuditApiTests(TestCase):
             rejected=cloud.app.test_client().post('/api/agent/audit-result',json={
                 'id':'audit','audit':audit,'snapshot':snapshot})
             self.assertEqual(rejected.status_code,409)
+
+    def test_dashboard_does_not_poll_full_export_payload(self):
+        import cloud_app as cloud
+        with patch.object(cloud,'_annotations_load',return_value={}):
+            public=cloud._public_state({'results':[], 'audit':{'sql':[{'oid':1}]},
+                '_audit_export_snapshot':{'audit':{'sql':[{'oid':1}]}},
+                '_audit_export':{'id':'ready','status':'ready'}})
+        self.assertNotIn('audit',public)
+        self.assertNotIn('_audit_export_snapshot',public)
+        self.assertEqual(public['_audit_export']['status'],'ready')

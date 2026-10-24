@@ -70,3 +70,9 @@ JS testy průběhu XLSX, skupin případů a technických údajů.
 Celá historická sada má nadále dvě dřívější selhání v očekávání
 oprávnění MCP a jednu chybu health testu bez PostgreSQL. Odpovídající
 produkční health se ověřuje proti skutečnému úložišti samostatně.
+
+Produkční zkouška odhalila, že úplný soubor může trvat přes 60 sekund.
+Čerstvost auditu se proto ověřuje při zahájení přípravy. Již přijatý
+neměnný export má pro svého přihlášeného vlastníka platnost jednu hodinu;
+další kontrola ani délka přípravy jej nezneplatní. Test skutečného
+stahování ověřuje i tento případ a přístup jiného vlastníka zůstává zakázán.

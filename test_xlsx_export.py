@@ -95,7 +95,15 @@ class ExportApiTests(unittest.TestCase):
         self.assertFalse((Path(self.temp.name) / job_id / 'snapshot.json').exists())
         self.assertEqual(self.get('/api/xlsx-export/' + job_id, self.other).status_code, 404)
         self.assertEqual(self.get('/download/xlsx?job=' + job_id, self.other).status_code, 404)
+        # Generation must not consume the download window; a later audit must
+        # not invalidate an already admitted, immutable, owner-bound workbook.
+        self.export_state['_audit_export'] = {'id':'later-audit','status':'pending'}
+        folder = Path(self.temp.name) / job_id
+        aged = export_jobs.read_status(folder)
+        aged['ready_epoch'] = time.time() - 180
+        export_jobs.atomic_json(folder/'status.json', aged)
         response = self.get('/download/xlsx?job=' + job_id)
+        self.assertEqual(response.status_code, 200)
         body = response.get_data()
         self.assertEqual(len(body), status['size'])
         self.assertEqual(int(response.headers['Content-Length']), len(body))

@@ -21,6 +21,7 @@ from vehicle_technical import source_record, kostka_candidates
 from pywebpush import webpush, WebPushException
 from vehicle_workflow import ALLOWED_STATUSES, FOLLOWUP_STATUSES, is_handled, is_manual_ok, is_followup
 from status_projection import ISSUE_STATUSES
+from web_accounts import authenticate, personal_accounts_enabled, personal_session_valid, session_fingerprint
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
@@ -1100,26 +1101,33 @@ def _authorized() -> bool:
 @app.route("/login", methods=["GET", "POST"])
 def login():
     # Opening the login page always requires an explicit form submission.
-    if request.method == "GET":
-        session.clear()
+    session.clear()
+    personal = personal_accounts_enabled()
     error = ""
     if request.method == "POST":
         user = str(request.form.get("username") or "")
         password = str(request.form.get("password") or "")
-        expected_user = os.getenv("DENNI_POV_WEB_USER", "vanscentre")
-        expected_password = os.getenv("DENNI_POV_WEB_PASSWORD", "")
-        valid = bool(app.secret_key and expected_password and
-                     hmac.compare_digest(user, expected_user) and
-                     hmac.compare_digest(password, expected_password))
+        if personal:
+            identity = authenticate(user, password) if app.secret_key else None
+            valid = bool(identity)
+            user = identity or ""
+        else:
+            expected_user = os.getenv("DENNI_POV_WEB_USER", "vanscentre")
+            expected_password = os.getenv("DENNI_POV_WEB_PASSWORD", "")
+            valid = bool(app.secret_key and expected_password and
+                         hmac.compare_digest(user, expected_user) and
+                         hmac.compare_digest(password, expected_password))
         if valid:
             session.clear()
             session.permanent = False
             session["denni_pov_authenticated"] = True
             session["denni_pov_username"] = user
+            if personal:
+                session["denni_pov_account_fingerprint"] = session_fingerprint(user)
             session["denni_pov_login_entry"] = True
             return redirect(url_for("index"))
         error = "Nesprávné jméno nebo heslo."
-    return Response(render_template("login.html", error=error), mimetype="text/html",
+    return Response(render_template("login.html", error=error, personal_accounts=personal), mimetype="text/html",
                     headers={"Cache-Control": "no-store"})
 
 
@@ -1149,6 +1157,8 @@ def _require_web_auth():
         if not session.pop("denni_pov_login_entry", False):
             session.clear()
             return redirect(url_for("login"))
+    if (personal_accounts_enabled() and not personal_session_valid(session)):
+        session.clear()
     if not app.secret_key or not session.get("denni_pov_authenticated"):
         if path.startswith(("/api/", "/download/")):
             return jsonify({"ok": False, "message": "Přihlášení je vyžadováno."}), 401

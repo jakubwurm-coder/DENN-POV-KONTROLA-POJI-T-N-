@@ -49,7 +49,9 @@ class WebLoginTests(unittest.TestCase):
         self.assertEqual(self.get('/').location, '/login')
 
     def test_health_and_bearer_agent_state_do_not_require_browser_login(self):
-        self.assertEqual(self.get('/health').status_code, 200)
+        with patch.object(module, '_load_state', return_value={}), \
+             patch.object(module, '_db_probe', return_value=(True, '')):
+            self.assertEqual(self.get('/health').status_code, 200)
         with patch.object(module, '_authorized', return_value=True), \
              patch.object(module, '_load_state', return_value={}), \
              patch.object(module, '_public_state', return_value={}):

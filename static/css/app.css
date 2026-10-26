@@ -3487,3 +3487,8 @@ input,textarea{cursor:text}
 .table-scroll tbody tr.manual-ok-row:hover{background:#def3e5}
 .table-scroll tbody tr.manual-ok-row td{border-bottom-color:#cce6d4;color:#24613b}
 .workflow-credit{margin-top:5px;color:#64748b;font-size:11px}
+.header-account{display:flex;flex-direction:column;align-items:flex-end;gap:5px;max-width:100%;font-size:11px}
+.header-account>span{font-size:9px;letter-spacing:.1em;color:#aebdd0}
+.header-account>strong{overflow-wrap:anywhere}
+.header-account form{margin:0}
+@media(max-width:760px){.header-account{align-items:flex-start}.top-actions-meta{flex-wrap:wrap}}

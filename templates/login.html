@@ -71,7 +71,7 @@ footer{width:min(100%,1480px);margin:0 auto;display:flex;justify-content:space-b
     <p class="desc">Pro pokračování se přihlaste ke svému účtu.</p>
     {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
     <form method="post" action="/login" autocomplete="on">
-      <div class="field"><label for="username">Uživatelské jméno</label><input id="username" name="username" autocomplete="username" required autofocus placeholder="Uživatelské jméno"></div>
+      <div class="field"><label for="username">{{ 'E-mail' if personal_accounts else 'Uživatelské jméno' }}</label><input id="username" name="username" type="{{ 'email' if personal_accounts else 'text' }}" autocomplete="username" required autofocus placeholder="{{ 'vas@email.cz' if personal_accounts else 'Uživatelské jméno' }}"></div>
       <div class="field"><label for="password">Heslo</label><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Heslo"></div>
       <button type="submit">Přihlásit se &nbsp;→</button>
     </form>

@@ -10,6 +10,16 @@ from status_projection import ISSUE_STATUSES, project_status
 from vehicle_workflow import FOLLOWUP, MANUAL_OK
 
 class ProjectionTests(unittest.TestCase):
+    def test_existing_legacy_manual_ok_is_preserved(self):
+        row={'vin':'LEGACY_OK','status_raw':'CHYBÍ V UNIQA','status':'CHYBÍ V UNIQA'}
+        with patch.object(c,'_annotations_load',return_value={'LEGACY_OK':{'workflow_status':'V POŘÁDKU'}}):
+            public=c._public_state({'results':[row]})
+        self.assertEqual(public['summary']['new_problems'],0)
+        self.assertEqual(public['summary']['manual_ok'],1)
+        self.assertEqual(project_status(public)['problems'],[])
+        self.assertEqual(public['results'][0]['workflow_status'],'V POŘÁDKU')
+        self.assertEqual(public['results'][0]['workflow_updated_by'],'')
+
     def test_all_issue_types(self):
         rows = [dict(vin=f'{i}-{st}', status_raw=raw, status=raw, workflow_status=st)
                 for i,raw in enumerate(ISSUE_STATUSES) for st in ('',FOLLOWUP,MANUAL_OK,'VYŘEŠENO')]

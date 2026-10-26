@@ -16,7 +16,7 @@ const redInsuranceStatuses=['NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE POJ
 function isRedInsuranceStatus(r){
   return redInsuranceStatuses.includes(String(r.status_raw||'').toUpperCase());
 }
-function isManualOk(r){return String(r.workflow_status||'').toUpperCase()==='RUČNĚ OK';}
+function isManualOk(r){return ['RUČNĚ OK','V POŘÁDKU'].includes(String(r.workflow_status||'').toUpperCase());}
 function isFollowup(r){return ['VYŘEŠENO','K DOŘEŠENÍ'].includes(String(r.workflow_status||'').toUpperCase());}
 function workflowLabel(r){return isManualOk(r)?'RUČNĚ OK':isFollowup(r)?'K DOŘEŠENÍ':needsAttention(r)?'Nové':'—';}
 function workflowTime(value){const date=new Date(value);return value&&!Number.isNaN(date.getTime())?date.toLocaleString('cs-CZ',{timeZone:'Europe/Prague'}):value;}
@@ -119,7 +119,7 @@ async function showManualHistory(){
       return;
     }
     body.innerHTML=items.map(x=>{
-      const status=['VYŘEŠENO','K DOŘEŠENÍ'].includes(x.new_workflow_status)?'K DOŘEŠENÍ':x.new_workflow_status||'Původní status';
+      const status=['VYŘEŠENO','K DOŘEŠENÍ'].includes(x.new_workflow_status)?'K DOŘEŠENÍ':['RUČNĚ OK','V POŘÁDKU'].includes(x.new_workflow_status)?'RUČNĚ OK':x.new_workflow_status||'Původní status';
       const note=(x.new_note||'') || ((x.old_note||'')?'Poznámka odstraněna':'—');
       return '<tr><td>'+esc(x.changed_at||'—')+'<span class="note-indicator">'+esc(x.changed_by||'Autor nezaznamenán')+'</span></td><td>'+esc(x.vin||x.vehicle_key||'—')+'</td><td>'+esc(x.spz||'—')+'</td><td>'+esc(visibleSystemText(x.original_status||'—'))+'</td><td><span class="status-badge '+(status==='RUČNĚ OK'?'badge-ok':'badge-warning')+'">'+esc(status)+'</span></td><td>'+esc(note)+'</td></tr>';
     }).join('');
@@ -545,7 +545,7 @@ function showDetail(r){
   const vehicle=(r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ')).trim()||'—';
   const spzValue=displaySpz(r)||'—';
   $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Ruční stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(workflowLabel(r))}</span>${original}</dd><dt>Automatický výsledek</dt><dd>${esc(r.status_raw||r.status||'—')}</dd>${r.open_problem_status?`<dt>Uchovaný nález</dt><dd>${esc(r.open_problem_status)}</dd>`:''}<dt>Vozidlo</dt><dd id="vehicleDetailValue">${esc(vehicle)}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ</dt><dd>${esc(spzValue)}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.original_detail||r.detail||'—'))}</dd></dl><section id="kostkaSection" class="kostka-section"><div class="kostka-heading"><div><h3>Technické údaje vozidla</h3><p id="kostkaStatus">Načítám uložené údaje…</p></div></div><div id="kostkaData"></div></section><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option><option value="K DOŘEŠENÍ">K DOŘEŠENÍ · převzato k řešení</option><option value="RUČNĚ OK">RUČNĚ OK · osobní potvrzení</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení pojištění zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
-  $('workflowStatus').value=isFollowup(r)?'K DOŘEŠENÍ':r.workflow_status||'';
+  $('workflowStatus').value=isFollowup(r)?'K DOŘEŠENÍ':isManualOk(r)?'RUČNĚ OK':r.workflow_status||'';
   $('saveMeta').addEventListener('click',()=>saveMeta(r));
   $('detailDialog').showModal();
   const vin=String(r.vin||'').replace(/\s/g,'').toUpperCase();

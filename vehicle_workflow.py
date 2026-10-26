@@ -6,7 +6,8 @@ Keep it readable without rewriting existing annotations or audit events.
 FOLLOWUP = "K DOŘEŠENÍ"
 MANUAL_OK = "RUČNĚ OK"
 FOLLOWUP_STATUSES = frozenset({FOLLOWUP, "VYŘEŠENO"})
-HANDLED_STATUSES = FOLLOWUP_STATUSES | {MANUAL_OK}
+MANUAL_OK_STATUSES = frozenset({MANUAL_OK, "V POŘÁDKU"})
+HANDLED_STATUSES = FOLLOWUP_STATUSES | MANUAL_OK_STATUSES
 ALLOWED_STATUSES = HANDLED_STATUSES | {""}
 
 
@@ -19,7 +20,7 @@ def is_handled(row):
 
 
 def is_manual_ok(row):
-    return workflow_status(row) == MANUAL_OK
+    return workflow_status(row) in MANUAL_OK_STATUSES
 
 
 def is_followup(row):

@@ -9,6 +9,7 @@ Ruční stav se ukládá samostatně pro VIN, případně původní klíč SPZ.
 | K DOŘEŠENÍ | oranžově | ne |
 | RUČNĚ OK | zeleně, včetně účtu a času potvrzení | ne |
 | VYŘEŠENO (historická hodnota) | oranžové K DOŘEŠENÍ | ne |
+| V POŘÁDKU (historická hodnota) | zelené RUČNĚ OK; neznámý původní autor | ne |
 
 Starší VYŘEŠENO se nepřepisuje hromadnou migrací a neznamená zelené potvrzení.
 U starých zásahů bez zaznamenané identity se zobrazuje „autor nezaznamenán“.

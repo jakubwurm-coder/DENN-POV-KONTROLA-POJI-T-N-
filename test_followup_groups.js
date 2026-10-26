@@ -55,3 +55,9 @@ assert.equal(run("activeFilter='ATTENTION';state.results.filter(matches).length"
 assert.equal(run("badgeClass(state.results.at(-1))"),'badge-missing');
 assert.equal(run("state.results.at(-1).status_raw"),'OK');
 console.log('Unacknowledged finding stays red while the current automatic verdict remains intact.');
+
+run("state.results.push({vin:'LEGACY_OK',status_raw:'CHYBÍ V UNIQA',workflow_status:'V POŘÁDKU'});");
+assert.equal(run('isManualOk(state.results.at(-1))'),true);
+assert.equal(run('needsAttention(state.results.at(-1))'),false);
+assert.equal(run('workflowLabel(state.results.at(-1))'),'RUČNĚ OK');
+assert.equal(run('badgeClass(state.results.at(-1))'),'badge-ok');

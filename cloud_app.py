@@ -716,7 +716,7 @@ def _annotation_save(vehicle_key: str, note: str, workflow_status: str,
                 old = cur.fetchone() or ("", "", "", "", "", "", "", "")
                 changed = old[0] != note or old[1] != workflow_status
                 stamp = _now_dt().isoformat(timespec="seconds")
-                status_changed = old[1] != workflow_status and not (old[1] in FOLLOWUP_STATUSES and workflow_status in FOLLOWUP_STATUSES)
+                status_changed = old[1] != workflow_status and not (old[1] in FOLLOWUP_STATUSES and workflow_status in FOLLOWUP_STATUSES) and not (is_manual_ok({"workflow_status": old[1]}) and is_manual_ok({"workflow_status": workflow_status}))
                 meta = {"note": note, "workflow_status": workflow_status,
                         "updated_at": stamp if changed else old[4],
                         "updated_by": actor if changed else old[5],

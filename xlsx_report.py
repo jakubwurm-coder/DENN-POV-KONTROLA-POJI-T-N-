@@ -94,7 +94,7 @@ def write_report(data, destination, progress=lambda *args: None):
     sheet = wb.create_sheet("Přehled pojištění")
     sheet.freeze_panes = "A11"
     sheet.sheet_view.showGridLines = False
-    for col, width in enumerate((28, 22, 14, 15, 15, 56, 38, 16, 14, 24), 1):
+    for col, width in enumerate((28, 22, 14, 15, 15, 56, 38, 16, 14, 24, 24, 28, 30), 1):
         sheet.column_dimensions[get_column_letter(col)].width = width
     summary = data.get("summary") or {}
     append(sheet, ["DENNÍ POV | VANS CENTRE"], True)
@@ -105,16 +105,17 @@ def write_report(data, destination, progress=lambda *args: None):
         append(sheet, [label, summary.get(key, 0)])
     append(sheet, [])
     append(sheet, ["DETAILNÍ PŘEHLED VOZIDEL"], True)
-    append(sheet, ["Stav", "VIN", "SPZ", "Datum výkupu", "Datum prodeje", "Výsledek", "Poznámka", "Řešení", "OID", "Zdroj údajů"], True)
+    append(sheet, ["Stav", "VIN", "SPZ", "Datum výkupu", "Datum prodeje", "Výsledek", "Poznámka", "Řešení", "OID", "Zdroj údajů", "Ruční stav – účet", "Ruční stav – čas", "Uchovaný automatický nález"], True)
     progress(done, total, "rows")
     for row in rows:
         append(sheet, [row.get("status") or row.get("status_raw"), row.get("vin"),
                        row.get("spz_tir") or row.get("spz_uniqa"), row.get("vykup"), row.get("prodej"),
                        row.get("detail"), row.get("note"), row.get("workflow_status"), row.get("oid"),
-                       "SQL Vans Centre" if row.get("oid") is not None else row.get("technical_source") or "UNIQA / Allianz"])
+                       "SQL Vans Centre" if row.get("oid") is not None else row.get("technical_source") or "UNIQA / Allianz",
+                       row.get("workflow_updated_by"), row.get("workflow_updated_at"), row.get("open_problem_status")])
         done += 1
         progress(done, total, "rows")
-    sheet.auto_filter.ref = f"A10:J{max(10, 10 + len(rows))}"
+    sheet.auto_filter.ref = f"A10:M{max(10, 10 + len(rows))}"
     append(sheet, [])
     append(sheet, ["AUDIT KONTROLY"], True)
     for label, key in (("SQL záznamů celkem", "sql_total"), ("Řádků v auditu OID", "physical_audit_rows"),

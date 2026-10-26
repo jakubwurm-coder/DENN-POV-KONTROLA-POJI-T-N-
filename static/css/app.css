@@ -3481,3 +3481,9 @@ input,textarea{cursor:text}
 .summary-card.status-followup #overallStatusText{color:#a94f06!important}
 .view-switch{flex-wrap:wrap}
 @media(max-width:680px){.view-switch button{flex:1 1 auto}}
+
+/* Manual approval never changes the automatic insurance verdict. */
+.table-scroll tbody tr.manual-ok-row,.table-scroll tbody tr.manual-ok-row:nth-child(even){background:#edf9f1}
+.table-scroll tbody tr.manual-ok-row:hover{background:#def3e5}
+.table-scroll tbody tr.manual-ok-row td{border-bottom-color:#cce6d4;color:#24613b}
+.workflow-credit{margin-top:5px;color:#64748b;font-size:11px}

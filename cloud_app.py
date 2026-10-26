@@ -19,6 +19,8 @@ from flask import Flask, Response, jsonify, render_template, request, session, r
 import requests
 from vehicle_technical import source_record, kostka_candidates
 from pywebpush import webpush, WebPushException
+from vehicle_workflow import ALLOWED_STATUSES, FOLLOWUP_STATUSES, is_handled, is_manual_ok, is_followup
+from status_projection import ISSUE_STATUSES
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
@@ -169,6 +171,7 @@ def _normalize_annotations(source: dict[str, Any] | None) -> dict[str, dict[str,
             "note": str((value or {}).get("note") or ""),
             "workflow_status": str((value or {}).get("workflow_status") or ""),
             "updated_at": str((value or {}).get("updated_at") or ""),
+            **{field: str(value.get(field) or "") for field in ("workflow_updated_at", "workflow_updated_by", "updated_by", "automatic_problem_status", "automatic_problem_at")},
         }
         for key, value in source.items()
         if isinstance(value, dict) and str(key or "").strip()
@@ -303,6 +306,10 @@ def _db_init_uncached(cur) -> None:
             changed_at_text TEXT NOT NULL DEFAULT ''
         )
     """)
+    # Additive migration: historical authors remain unknown, never fabricated.
+    for column in ("workflow_updated_at", "workflow_updated_by", "updated_by", "automatic_problem_status", "automatic_problem_at"):
+        cur.execute(f"ALTER TABLE denni_pov_annotations ADD COLUMN IF NOT EXISTS {column} TEXT NOT NULL DEFAULT ''")
+    cur.execute("ALTER TABLE denni_pov_annotation_history ADD COLUMN IF NOT EXISTS changed_by TEXT NOT NULL DEFAULT ''")
     cur.execute("CREATE INDEX IF NOT EXISTS denni_pov_annotation_history_key_idx ON denni_pov_annotation_history (vehicle_key, id DESC)")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS denni_pov_vehicle_technical (
@@ -631,7 +638,7 @@ def _annotations_load_strict(legacy: dict[str, Any] | None = None) -> dict[str, 
                     ))
 
                 cur.execute("""
-                    SELECT vehicle_key, note, workflow_status, updated_at
+                    SELECT vehicle_key, note, workflow_status, updated_at, workflow_updated_at, workflow_updated_by, updated_by, automatic_problem_status, automatic_problem_at
                     FROM denni_pov_annotations
                 """)
                 rows = cur.fetchall()
@@ -642,6 +649,11 @@ def _annotations_load_strict(legacy: dict[str, Any] | None = None) -> dict[str, 
                 "note": row[1] or "",
                 "workflow_status": row[2] or "",
                 "updated_at": row[3] or "",
+                "workflow_updated_at": row[4] or "",
+                "workflow_updated_by": row[5] or "",
+                "updated_by": row[6] or "",
+                "automatic_problem_status": row[7] or "",
+                "automatic_problem_at": row[8] or "",
             }
             for row in rows
         }
@@ -660,54 +672,84 @@ def _annotations_load(legacy: dict[str, Any] | None = None) -> dict[str, dict[st
         return _normalize_annotations(legacy)
 
 
-def _annotation_save(vehicle_key: str, note: str, workflow_status: str, snapshot: dict[str, Any] | None = None) -> None:
-    """Persist one vehicle annotation and an immutable audit record."""
+def _record_automatic_problems(rows: list[dict[str, Any]]) -> None:
+    """Keep unacknowledged findings through later checks; never touch manual fields."""
+    problems = {_result_key(row): str(row.get("status_raw") or "").upper()
+                for row in rows if str(row.get("status_raw") or "").upper() in ISSUE_STATUSES}
+    if not problems:
+        return
+    try:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                _db_init(cur)
+                for key, status in sorted(problems.items()):
+                    cur.execute("""
+                        INSERT INTO denni_pov_annotations
+                            (vehicle_key, updated_at, automatic_problem_status, automatic_problem_at)
+                        VALUES (%s, '', %s, %s)
+                        ON CONFLICT (vehicle_key) DO UPDATE SET
+                            automatic_problem_status = EXCLUDED.automatic_problem_status,
+                            automatic_problem_at = CASE WHEN denni_pov_annotations.automatic_problem_at = ''
+                                THEN EXCLUDED.automatic_problem_at ELSE denni_pov_annotations.automatic_problem_at END
+                    """, (key, status, _now_dt().isoformat(timespec="seconds")))
+            conn.commit()
+    except Exception as exc:
+        raise PersistenceUnavailable(_safe_db_error(exc)) from exc
+
+
+def _annotation_save(vehicle_key: str, note: str, workflow_status: str,
+                     snapshot: dict[str, Any] | None = None, actor: str = "") -> dict[str, str]:
+    """Atomically save the annotation and append an audit event under a per-key lock."""
+    if workflow_status not in ALLOWED_STATUSES or not actor:
+        raise ValueError("Stav vyžaduje platnou identitu autora.")
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     try:
         with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
+                # Also serializes concurrent first writes, before a row exists.
+                cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (vehicle_key,))
                 cur.execute(
-                    "SELECT note, workflow_status FROM denni_pov_annotations WHERE vehicle_key = %s",
+                    "SELECT note, workflow_status, workflow_updated_at, workflow_updated_by, updated_at, updated_by, automatic_problem_status, automatic_problem_at FROM denni_pov_annotations WHERE vehicle_key = %s",
                     (vehicle_key,),
                 )
-                old_row = cur.fetchone()
-                old_note = str(old_row[0] or "") if old_row else ""
-                old_status = str(old_row[1] or "") if old_row else ""
-
-                if not note and not workflow_status:
-                    cur.execute("DELETE FROM denni_pov_annotations WHERE vehicle_key = %s", (vehicle_key,))
-                else:
-                    cur.execute("""
-                        INSERT INTO denni_pov_annotations (vehicle_key, note, workflow_status, updated_at)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (vehicle_key)
-                        DO UPDATE SET
-                            note = EXCLUDED.note,
-                            workflow_status = EXCLUDED.workflow_status,
-                            updated_at = EXCLUDED.updated_at
-                    """, (vehicle_key, note, workflow_status, _now()))
-
-                if old_note != note or old_status != workflow_status:
+                old = cur.fetchone() or ("", "", "", "", "", "", "", "")
+                changed = old[0] != note or old[1] != workflow_status
+                stamp = _now_dt().isoformat(timespec="seconds")
+                status_changed = old[1] != workflow_status and not (old[1] in FOLLOWUP_STATUSES and workflow_status in FOLLOWUP_STATUSES)
+                meta = {"note": note, "workflow_status": workflow_status,
+                        "updated_at": stamp if changed else old[4],
+                        "updated_by": actor if changed else old[5],
+                        "workflow_updated_at": stamp if status_changed else old[2],
+                        "workflow_updated_by": actor if status_changed else old[3],
+                        "automatic_problem_status": old[6], "automatic_problem_at": old[7]}
+                # Keep an empty tombstone on reset so old cached annotations cannot
+                # resurrect a decision via the legacy ON CONFLICT DO NOTHING import.
+                cur.execute("""
+                    INSERT INTO denni_pov_annotations
+                        (vehicle_key, note, workflow_status, updated_at, updated_by, workflow_updated_at, workflow_updated_by)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (vehicle_key) DO UPDATE SET
+                        note = EXCLUDED.note, workflow_status = EXCLUDED.workflow_status,
+                        updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by,
+                        workflow_updated_at = EXCLUDED.workflow_updated_at,
+                        workflow_updated_by = EXCLUDED.workflow_updated_by
+                """, (vehicle_key, note, workflow_status, meta["updated_at"], meta["updated_by"],
+                      meta["workflow_updated_at"], meta["workflow_updated_by"]))
+                if changed:
                     cur.execute("""
                         INSERT INTO denni_pov_annotation_history
                             (vehicle_key, vin, spz, vehicle, original_status,
                              old_workflow_status, new_workflow_status,
-                             old_note, new_note, changed_at_text)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        vehicle_key,
-                        str(snapshot.get("vin") or ""),
-                        str(snapshot.get("spz_tir") or snapshot.get("spz_uniqa") or ""),
-                        str(snapshot.get("vozidlo") or ""),
-                        str(snapshot.get("status_raw") or snapshot.get("status") or ""),
-                        old_status,
-                        workflow_status,
-                        old_note,
-                        note,
-                        _now(),
-                    ))
+                             old_note, new_note, changed_at_text, changed_by)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (vehicle_key, str(snapshot.get("vin") or ""),
+                          str(snapshot.get("spz_tir") or snapshot.get("spz_uniqa") or ""),
+                          str(snapshot.get("vozidlo") or ""),
+                          str(snapshot.get("status_raw") or snapshot.get("status") or ""),
+                          old[1], workflow_status, old[0], note, stamp, actor))
                 conn.commit()
+                return meta
     except PersistenceUnavailable:
         raise
     except Exception as exc:
@@ -724,7 +766,7 @@ def _annotation_history_load(limit: int = 300) -> list[dict[str, Any]]:
                 cur.execute("""
                     SELECT vehicle_key, vin, spz, vehicle, original_status,
                            old_workflow_status, new_workflow_status,
-                           old_note, new_note, changed_at_text
+                           old_note, new_note, changed_at_text, changed_by
                     FROM denni_pov_annotation_history
                     ORDER BY id DESC
                     LIMIT %s
@@ -733,7 +775,7 @@ def _annotation_history_load(limit: int = 300) -> list[dict[str, Any]]:
 
                 # Current annotations are also included even if they predate the audit table.
                 cur.execute("""
-                    SELECT vehicle_key, note, workflow_status, updated_at
+                    SELECT vehicle_key, note, workflow_status, updated_at, workflow_updated_at, workflow_updated_by, updated_by, automatic_problem_status, automatic_problem_at
                     FROM denni_pov_annotations
                 """)
                 current_rows = cur.fetchall()
@@ -750,12 +792,13 @@ def _annotation_history_load(limit: int = 300) -> list[dict[str, Any]]:
             "old_note": row[7] or "",
             "new_note": row[8] or "",
             "changed_at": row[9] or "",
+            "changed_by": row[10] or "",
             "source": "history",
         } for row in rows]
 
         keys_in_history = {str(item.get("vehicle_key") or "") for item in history}
-        for vehicle_key, note, workflow_status, updated_at in current_rows:
-            if str(vehicle_key or "") not in keys_in_history:
+        for vehicle_key, note, workflow_status, updated_at, workflow_at, workflow_by, updated_by, problem_status, problem_at in current_rows:
+            if (note or workflow_status) and str(vehicle_key or "") not in keys_in_history:
                 history.append({
                     "vehicle_key": vehicle_key or "",
                     "vin": vehicle_key if not str(vehicle_key or "").startswith("SPZ:") else "",
@@ -767,9 +810,19 @@ def _annotation_history_load(limit: int = 300) -> list[dict[str, Any]]:
                     "old_note": "",
                     "new_note": note or "",
                     "changed_at": updated_at or "",
+                    "changed_by": updated_by or "",
                     "source": "current",
                 })
-        history.sort(key=lambda item: str(item.get("changed_at") or ""), reverse=True)
+        def history_time(item):
+            value = str(item.get("changed_at") or "")
+            try:
+                return datetime.fromisoformat(value).timestamp()
+            except ValueError:
+                try:
+                    return datetime.strptime(value, "%d.%m.%Y %H:%M:%S").replace(tzinfo=_PRAGUE_TZ).timestamp()
+                except ValueError:
+                    return 0
+        history.sort(key=history_time, reverse=True)
         return history[:max(1, min(limit, 1000))]
     except Exception as exc:
         print(f"Annotation history load failed: {exc}")
@@ -910,7 +963,9 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
         meta = annotations.get(_result_key(row), {})
         row["note"] = str(meta.get("note") or "")
         row["workflow_status"] = str(meta.get("workflow_status") or "")
-        row["workflow_updated_at"] = str(meta.get("updated_at") or "")
+        row["workflow_updated_at"] = str(meta.get("workflow_updated_at") or "")
+        row["workflow_updated_by"] = str(meta.get("workflow_updated_by") or "")
+        row["open_problem_status"] = str(meta.get("automatic_problem_status") or "")
         if row["note"]:
             row["original_detail"] = row.get("detail", "")
             row["detail"] = row["note"]
@@ -947,10 +1002,10 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
     summary["deposit"] = raw_counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0)
     summary["deposit_insured"] = raw_counts.get("DEPOZIT, ALE POJIŠTĚNÉ", 0)
     summary["spz_mismatch"] = raw_counts.get("SPZ NESOUHLASÍ", 0)
-    summary["double_insured"] = sum(1 for row in rows if str(row.get("status_raw") or "").upper() == "DVOJÍ POJIŠTĚNÍ" and str(row.get("workflow_status") or "").upper() != "VYŘEŠENO")
+    summary["double_insured"] = sum(1 for row in rows if str(row.get("status_raw") or "").upper() == "DVOJÍ POJIŠTĚNÍ" and not is_handled(row))
     summary["unverified"] = raw_counts.get("NELZE OVĚŘIT", 0)
 
-    resolved_statuses = {"VYŘEŠENO"}
+    resolved_statuses = ALLOWED_STATUSES - {""}
     issue_statuses = {
         "CHYBÍ V UNIQA",
         "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
@@ -963,22 +1018,12 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
         "NELZE OVĚŘIT",
     }
 
-    def _is_resolved_issue(row: dict[str, Any]) -> bool:
-        raw = str(row.get("status_raw") or "").upper()
-        workflow = str(row.get("workflow_status") or "").upper()
-        return workflow == "VYŘEŠENO"
-
     resolved_issue_rows = [
         row for row in rows
         if str(row.get("status_raw") or "").upper() in issue_statuses
-        and _is_resolved_issue(row)
+        and is_manual_ok(row)
     ]
-    # Do počtu "Pojištění v pořádku" patří jen vyřešené problémy vozidel,
-    # která jsou součástí aktivní kontroly. Záznamy "NAVÍC V UNIQA"
-    # a prodaná vozidla nejsou aktivní flotila a nesmí zvyšovat ok_total.
-    # Ručně vyřešený problém aktivního vozidla patří ve veřejném přehledu
-    # mezi "Pojištění v pořádku", aby se aktivní flotila rozpadla do
-    # vzájemně srozumitelných kategorií bez chybějících kusů.
+    # Manual approvals remain separate from objective insurance counts.
     resolved_active_rows = [
         row for row in resolved_issue_rows
         if str(row.get("status_raw") or "").upper() in {
@@ -999,7 +1044,7 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
     summary["absent_insured"] = sum(
         1 for row in rows
         if str(row.get("status_raw") or "").upper() == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ"
-        and str(row.get("workflow_status") or "").upper() != "VYŘEŠENO"
+        and not is_handled(row)
     )
     summary["sold_uniqa"] = sum(
         1 for row in rows
@@ -1011,7 +1056,9 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
         if str(row.get("status_raw") or "").upper() in {"NAVÍC V UNIQA", "NAVÍC V ALLIANZ"}
         and str(row.get("workflow_status") or "").upper() not in resolved_statuses
     )
-    summary["manual_ok"] = len(resolved_issue_rows)
+    summary["manual_ok"] = sum(is_manual_ok(row) for row in rows)
+    summary["followup"] = sum(is_followup(row) for row in rows)
+    summary["new_problems"] = sum(str(row.get("open_problem_status") or row.get("status_raw") or "").upper() in issue_statuses and not is_handled(row) for row in rows)
     public["summary"] = summary
     public["csv_available"] = bool(rows)
     return public
@@ -1068,6 +1115,7 @@ def login():
             session.clear()
             session.permanent = False
             session["denni_pov_authenticated"] = True
+            session["denni_pov_username"] = user
             session["denni_pov_login_entry"] = True
             return redirect(url_for("index"))
         error = "Nesprávné jméno nebo heslo."
@@ -1173,15 +1221,11 @@ def _send_push_for_state(data: dict[str, Any], tag: str = "denni-pov-check") -> 
     public = _public_state(data)
     summary = public.get("summary") or {}
     active = int(summary.get("active") or 0)
-    missing = int(summary.get("missing") or 0)
-    unwanted = (
-        int(summary.get("absent_insured") or 0)
-        + int(summary.get("sold_uniqa") or 0)
-        + int(summary.get("extra_uniqa") or 0)
-        + int(summary.get("double_insured") or 0)
-        + int(summary.get("deposit_insured") or 0)
-    )
-    other = int(summary.get("spz_mismatch") or 0) + int(summary.get("unverified") or 0)
+    open_rows = [row for row in public.get("results") or [] if not is_handled(row)]
+    counts = Counter(str(row.get("open_problem_status") or row.get("status_raw") or "").upper() for row in open_rows)
+    missing = counts["CHYBÍ V UNIQA"]
+    unwanted = sum(counts[raw] for raw in {"NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", "PRODANÉ, ALE POJIŠTĚNÉ", "NAVÍC V UNIQA", "NAVÍC V ALLIANZ", "DVOJÍ POJIŠTĚNÍ", "DEPOZIT, ALE POJIŠTĚNÉ"})
+    other = counts["SPZ NESOUHLASÍ"] + counts["NELZE OVĚŘIT"]
     problems = missing + unwanted + other
 
     # Uživatel chce upozornění pouze tehdy, když výsledek skutečně
@@ -1347,8 +1391,13 @@ def api_result_meta():
 
     note = str(payload.get("note") or "").strip()[:2000]
     workflow_status = str(payload.get("workflow_status") or "").strip().upper()
-    if workflow_status not in {"", "VYŘEŠENO"}:
+    if workflow_status not in ALLOWED_STATUSES:
         return jsonify({"ok": False, "persisted": False, "message": "Nepovolený status."}), 400
+
+    # Identity is trusted session data, never accepted from the request body.
+    actor = str(session.get("denni_pov_username") or "")
+    if not actor:
+        return jsonify({"ok": False, "persisted": False, "message": "Pro ruční změnu se znovu přihlaste."}), 401
 
     # PostgreSQL is authoritative. Never claim success if this write fails.
     with _lock:
@@ -1358,7 +1407,9 @@ def api_result_meta():
             {},
         )
     try:
-        _annotation_save(key, note, workflow_status, snapshot)
+        if not snapshot:
+            return jsonify({"ok": False, "persisted": False, "message": "Vozidlo není v aktuální kontrole."}), 404
+        meta = _annotation_save(key, note, workflow_status, snapshot, actor=actor)
     except PersistenceUnavailable as exc:
         print(f"Annotation durable save failed for {key}: {exc}")
         return jsonify({
@@ -1370,18 +1421,14 @@ def api_result_meta():
         }), 503
 
     # Keep an in-state copy only as a migration/cache aid. It is not the source of truth.
-    with _lock:
-        data = _load_state()
-        annotations = data.setdefault("annotations", {})
-        if note or workflow_status:
-            annotations[key] = {
-                "note": note,
-                "workflow_status": workflow_status,
-                "updated_at": _now(),
-            }
-        else:
-            annotations.pop(key, None)
-        _save_state(data)
+    try:
+        with _lock:
+            data = _load_state()
+            annotations = data.setdefault("annotations", {})
+            annotations[key] = meta
+            _save_state(data)
+    except PersistenceUnavailable as exc:
+        print(f"Annotation cache refresh failed after durable save: {exc}")
 
     return jsonify({
         "ok": True,
@@ -1653,7 +1700,7 @@ def agent_audit_result():
         try:
             export_view = _public_state(dict(snapshot, results=audit.get("results") or snapshot.get("results") or [], annotations=data.get("annotations") or {}), strict_annotations=True)
         except PersistenceUnavailable:
-            return jsonify({"ok": False, "message": "Nelze ověřit uložené poznámky a stav Vyřešeno v PostgreSQL. Audit odmítnut."}), 503
+            return jsonify({"ok": False, "message": "Nelze ověřit uložené poznámky a ruční stavy v PostgreSQL. Audit odmítnut."}), 503
         export_audit = dict(audit, results=export_view["results"])
         data["_audit_export_snapshot"] = dict(export_view, audit=export_audit)
         data["_audit_export"] = {"id": command_id, "status": "ready", "finished_at": _now(), "ready_epoch": __import__("time").time()}
@@ -1704,6 +1751,13 @@ def api_sync():
             return jsonify({"ok": False, "message": "Výsledek nepatří k právě spuštěné kontrole."}), 409
         if received_check_id and not pending_check_id:
             return jsonify({"ok": False, "message": "Neaktuální nebo dokončená kontrola."}), 409
+        payload_agent = payload.get("agent") if isinstance(payload.get("agent"), dict) else {}
+        if _normalize_agent_id(payload_agent.get("id")) != _expected_agent_id():
+            return jsonify({"ok": False, "message": "Neplatná identita agenta."}), 403
+        # Capture the previous completed findings before progress can empty rows.
+        # Successful current verdicts update the automated finding independently.
+        _record_automatic_problems(list(previous.get("results") or []) +
+                                   (list(payload.get("results") or []) if final_run and not payload.get("error") else []))
         annotations = _annotations_load(previous.get("annotations"))
         data = _default_state()
         data["annotations"] = annotations

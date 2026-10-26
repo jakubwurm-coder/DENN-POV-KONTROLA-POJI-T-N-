@@ -6,6 +6,7 @@ from flask import jsonify
 
 from shared_notes import install_cloud_annotations, install_local_annotations
 from vehicle_card import install_vehicle_card
+from vehicle_workflow import is_handled
 
 ONLINE_MODE = os.getenv("ONLINE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -56,15 +57,14 @@ def windows_status():
         "SPZ NESOUHLASÍ",
         "NELZE OVĚŘIT",
     }
-    resolved_statuses = {"VYŘEŠENO"}
 
     issues = []
     for row in rows:
         raw = str(row.get("status_raw") or "").strip().upper()
         workflow = str(row.get("workflow_status") or "").strip().upper()
-        if raw not in issue_raw_statuses:
+        if str(row.get("open_problem_status") or raw).upper() not in issue_raw_statuses:
             continue
-        resolved = workflow == "VYŘEŠENO"
+        resolved = is_handled(row)
         if resolved:
             continue
 

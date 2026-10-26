@@ -189,3 +189,7 @@ body.vc-theme.check-running .overview-sticky{display:none}
 .vc-theme .nav-followup .nav-count{background:#e49126!important;color:#201200!important}
 .vc-theme .summary-card.status-followup #overallStatusText{color:#ffc978!important}
 .vc-theme .active-filter strong{background:#ffffff12!important;color:#e0e9f3!important}
+
+.vc-theme .table-scroll tbody tr.manual-ok-row,.vc-theme .table-scroll tbody tr.manual-ok-row:nth-child(even){background:#153c2bd9!important}
+.vc-theme .table-scroll tbody tr.manual-ok-row:hover{background:#1d5038d9!important}
+.vc-theme .table-scroll tbody tr.manual-ok-row td{color:#b2ebc7;border-bottom-color:#83d5ad33}

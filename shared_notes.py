@@ -7,6 +7,7 @@ from typing import Any
 
 import requests
 from flask import jsonify, request
+from vehicle_workflow import ALLOWED_STATUSES, is_handled
 
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
 _CACHE_SECONDS = 10
@@ -48,6 +49,9 @@ def _load_shared_annotations(force: bool = False) -> dict[str, dict[str, str]]:
                     "note": str(value.get("note") or ""),
                     "workflow_status": str(value.get("workflow_status") or ""),
                     "updated_at": str(value.get("updated_at") or ""),
+                    "workflow_updated_at": str(value.get("workflow_updated_at") or ""),
+                    "workflow_updated_by": str(value.get("workflow_updated_by") or ""),
+                    "automatic_problem_status": str(value.get("automatic_problem_status") or ""),
                 }
         with _cache_lock:
             _cache_annotations = clean
@@ -96,7 +100,7 @@ def install_local_annotations(app) -> None:
 
         note = str(payload.get("note") or "").strip()[:2000]
         workflow_status = str(payload.get("workflow_status") or "").strip().upper()
-        if workflow_status not in {"", "VYŘEŠENO"}:
+        if workflow_status not in ALLOWED_STATUSES:
             return jsonify({"ok": False, "message": "Nepovolený status."}), 400
 
         try:
@@ -152,13 +156,15 @@ def install_local_annotations(app) -> None:
                 meta = annotations.get(_row_key(row), {})
                 row["note"] = str(meta.get("note") or "")
                 row["workflow_status"] = str(meta.get("workflow_status") or "")
-                row["workflow_updated_at"] = str(meta.get("updated_at") or "")
+                row["workflow_updated_at"] = str(meta.get("workflow_updated_at") or "")
+                row["workflow_updated_by"] = str(meta.get("workflow_updated_by") or "")
+                row["open_problem_status"] = str(meta.get("automatic_problem_status") or "")
                 if row["note"]:
                     row["original_detail"] = row.get("detail", "")
                     row["detail"] = row["note"]
                 if row["workflow_status"]:
                     row["original_status"] = row.get("status", "")
-                    row["status"] = row["workflow_status"]
+                    # Keep the automatic verdict intact; workflow is separate.
 
             summary = payload.get("summary")
             if isinstance(summary, dict):
@@ -167,7 +173,7 @@ def install_local_annotations(app) -> None:
                     for row in rows
                     if isinstance(row, dict)
                     and str(row.get("status_raw") or "").upper() == "NAVÍC V UNIQA"
-                    and str(row.get("workflow_status") or "").upper() != "VYŘEŠENO"
+                    and not is_handled(row)
                 )
             response.set_data(app.json.dumps(payload))
             response.content_type = "application/json"

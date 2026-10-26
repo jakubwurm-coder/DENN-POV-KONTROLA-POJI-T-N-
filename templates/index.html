@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07111f">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261024followup">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261024followup">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261025workflow">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261025workflow">
 </head>
 <body class="vc-theme">
   <div class="app-shell">
@@ -23,7 +23,8 @@
 
       <nav class="nav" aria-label="Filtry vozidel">
         <button class="nav-item active" type="button" data-filter="ATTENTION"><span class="nav-icon">!</span><span>Aktuální k řešení</span><strong id="navExtraCount" class="nav-count">0</strong></button>
-        <button class="nav-item nav-followup" type="button" data-filter="RESOLVED"><span class="nav-icon">◷</span><span>Starší k dořešení</span><strong id="navOlderCount" class="nav-count">0</strong></button>
+        <button class="nav-item" type="button" data-filter="MANUAL_OK"><span class="nav-icon">✓</span><span>Ručně OK</span><strong id="navManualOkCount" class="nav-count">0</strong></button>
+        <button class="nav-item nav-followup" type="button" data-filter="RESOLVED"><span class="nav-icon">◷</span><span>K dořešení</span><strong id="navOlderCount" class="nav-count">0</strong></button>
         <button id="navOverview" class="nav-item" type="button"><span class="nav-icon">▦</span><span>Celkový přehled</span></button>
 
         <div class="sidebar-lookup">
@@ -84,7 +85,7 @@
                 <span>Aktuální k řešení</span><strong id="currentOverallCount">0</strong><span aria-hidden="true">›</span>
               </button>
               <button class="overall-count-item overall-count-link older-issue-count" type="button" data-filter="RESOLVED">
-                <span>Starší k dořešení</span><strong id="olderOverallCount">0</strong><span aria-hidden="true">›</span>
+                <span>K dořešení</span><strong id="olderOverallCount">0</strong><span aria-hidden="true">›</span>
               </button>
               <span id="tipMissingOverall" hidden>0</span><span id="tipExtraOverall" hidden>0</span>
             </div>
@@ -162,7 +163,7 @@
             <article><span>1</span><div><strong>Spusť kontrolu</strong><p>Systém načte TIRBazar a pojišťovnu. Výsledky zobrazí po dokončení kontroly.</p></div></article>
             <article><span>2</span><div><strong>Otevři Aktuální k řešení</strong><p>Červeně jsou chybějící nebo nadbytečné pojistky. VIN je hlavní identifikátor, SPZ pouze doplňkový.</p></div></article>
             <article><span>3</span><div><strong>Prověř detail vozidla</strong><p>V detailu uvidíš původní výsledek, stav řešení a dostupné technické údaje.</p></div></article>
-            <article><span>4</span><div><strong>Označ Vyřešeno</strong><p>Případ se přesune z červeného přehledu Aktuální k řešení do oranžového přehledu Starší k dořešení. Znamená to, že o něm víš a budeš jej dál řešit. Původní výsledek i poznámka zůstanou zachované. Zpět ho vrátíš volbou Původní status.</p></div></article>
+            <article><span>4</span><div><strong>Vyber ruční stav</strong><p>K DOŘEŠENÍ přesune případ do oranžového přehledu. RUČNĚ OK jej označí zeleně jako tvé ruční potvrzení s účtem a časem. Původní výsledek i poznámka zůstanou zachované. Zpět ho vrátíš volbou Původní status.</p></div></article>
             <article><span>✓</span><div><strong>Správné stavy</strong><p>Pojištění v pořádku, nepřítomné bez pojištění a skutečný depozit nevyžadují zásah.</p></div></article>
             <article><span>!</span><div><strong>Technická chyba není chybějící pojištění</strong><p>Při výpadku zdroje systém použije „Nelze ověřit“ a nevytvoří automaticky falešný závěr.</p></div></article>
           </div>
@@ -219,8 +220,8 @@
 
             <div class="manual-result-guide">
               <div><i class="logic-dot bad"></i><strong>Červená</strong><span>Chybí pojištění nebo je aktivní tam, kde být nemá.</span></div>
-              <div><i class="logic-dot ok"></i><strong>Zelená</strong><span>Skutečně správný výsledek kontroly pojištění.</span></div>
-              <div><i class="logic-dot warn"></i><strong>Oranžová</strong><span>Starší k dořešení: případ označený Vyřešeno, o kterém víte a chcete jej dále sledovat.</span></div>
+              <div><i class="logic-dot ok"></i><strong>Zelená</strong><span>Správný automatický výsledek nebo výslovně označené RUČNĚ OK.</span></div>
+              <div><i class="logic-dot warn"></i><strong>Oranžová</strong><span>K dořešení: případ převzatý k řešení, o kterém víte a chcete jej dále sledovat.</span></div>
               <div><i class="logic-dot warn"></i><strong>Nelze ověřit</strong><span>Zdroj nebyl dostupný; nejde automaticky o chybějící pojištění.</span></div>
             </div>
 
@@ -280,7 +281,7 @@
               <summary><span><small>7 · RUČNÍ STAV ŘEŠENÍ</small><strong>Automatický výsledek a práce uživatele</strong></span><span class="how-details-plus">+</span></summary>
               <div class="how-details-body">
                 <div class="logic-row"><strong>Automatický výsledek</strong><span>Například „Chybí pojištění“ nebo „Nepřítomné, ale pojištěno“ zůstává zachován jako původní výsledek kontroly.</span></div>
-                <div class="logic-row"><strong>Stav řešení</strong><span>Uživatel může případ označit jako Kontrola, Řeší se nebo Vyřešeno.</span></div>
+                <div class="logic-row"><strong>Stav řešení</strong><span>Uživatel může zvolit oranžové K DOŘEŠENÍ, zelené RUČNĚ OK nebo návrat na původní stav. Účet a čas ručního rozhodnutí zůstávají uložené.</span></div>
                 <div class="logic-row"><strong>Interní poznámka</strong><span>K vozidlu lze uložit poznámku, například že bylo zadáno ukončení pojistky a čeká se na potvrzení.</span></div>
               </div>
             </details>
@@ -447,14 +448,14 @@
 
         <section id="dataSection" class="data-section" hidden>
           <div class="data-toolbar">
-            <div class="view-switch" aria-label="Zobrazení vozidel"><button class="current-issue-count" type="button" data-filter="ATTENTION" aria-pressed="true">Aktuální k řešení <span id="attentionCount">—</span></button><button class="older-issue-count" type="button" data-filter="RESOLVED" aria-pressed="false">Starší k dořešení <span id="olderCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
+            <div class="view-switch" aria-label="Zobrazení vozidel"><button class="current-issue-count" type="button" data-filter="ATTENTION" aria-pressed="true">Aktuální k řešení <span id="attentionCount">—</span></button><button class="older-issue-count" type="button" data-filter="RESOLVED" aria-pressed="false">K dořešení <span id="olderCount">—</span></button><button type="button" data-filter="VŠE" aria-pressed="false">Všechna vozidla <span id="allCount">—</span></button></div>
             <div class="data-tools">
               <div class="search-control"><span class="search-icon">⌕</span><input id="search" autocomplete="off" aria-label="Hledat vozidlo" placeholder="Hledat SPZ, VIN nebo vozidlo…"></div>
               <button id="clearBtn" class="btn btn-secondary btn-small" type="button" hidden>Zrušit hledání</button><a id="csvBtn" class="btn btn-secondary btn-small disabled" aria-disabled="true" href="/download/xlsx">↓ Stáhnout Excel</a>
             </div>
           </div>
           <div id="activeFilter" class="active-filter" hidden>Aktivní filtr: <strong id="activeFilterLabel"></strong><button id="clearFilterInline" type="button" aria-label="Zrušit filtr">×</button></div>
-          <p class="table-hint">Aktuální případy jsou červené. Označením Vyřešeno případ přesunete do oranžového přehledu Starší k dořešení. Původní výsledek i poznámka zůstávají zachované. Starší k dořešení: <strong id="resolvedExceptionCount">0</strong>.</p>
+          <p class="table-hint">Aktuální případy jsou červené. Volbou K DOŘEŠENÍ případ přesunete do oranžového přehledu. Volba RUČNĚ OK označí vaše potvrzení zeleně a uloží účet i čas. Původní výsledek i poznámka zůstávají zachované. K dořešení: <strong id="resolvedExceptionCount">0</strong>.</p>
           <div class="table-card">
             <div class="table-scroll">
               <table>
@@ -480,7 +481,7 @@
   {% include '_xlsx_progress.html' %}
   <script src="{{ url_for('static', filename='js/xlsx-export.js') }}?v=20261022audit"></script>
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261024followup"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261025workflow"></script>
   <script>
   (() => {
     const start = document.getElementById('completeAuditStart');

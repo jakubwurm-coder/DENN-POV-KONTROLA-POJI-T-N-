@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from vehicle_workflow import is_handled
+from status_projection import ISSUE_STATUSES
+
 import argparse
 import os
 import platform
@@ -233,13 +236,12 @@ def _send_result_email(snapshot: dict[str, Any]) -> bool:
     extra_uniqa = int(summary.get("extra_uniqa") or 0)
     spz_mismatch = int(summary.get("spz_mismatch") or 0)
     unverified = int(summary.get("unverified") or 0)
-    problem_statuses = {"CHYBÍ V UNIQA", "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", "PRODANÉ, ALE POJIŠTĚNÉ", "NAVÍC V UNIQA", "DEPOZIT, ALE POJIŠTĚNÉ", "SPZ NESOUHLASÍ", "NELZE OVĚŘIT"}
     problems = 0
     for row in email_snapshot.get("results") or []:
         raw = str(row.get("status_raw") or "").upper()
         workflow = str(row.get("workflow_status") or "").upper()
-        resolved = workflow == "VYŘEŠENO" if raw == "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ" else workflow in {"VYŘEŠENO", "V POŘÁDKU"}
-        problems += raw in problem_statuses and not resolved
+        resolved = is_handled(row)
+        problems += str(row.get("open_problem_status") or raw).upper() in ISSUE_STATUSES and not resolved
     if not problems:
         print("Kontrola bez otevřených případů – e-mail se neodesílá.")
         return False
@@ -258,14 +260,12 @@ def _send_result_email(snapshot: dict[str, Any]) -> bool:
         f"Pojištění navíc: {absent_insured + sold_uniqa + extra_uniqa}",
         "",
     ]
-    if missing > 0:
-        lines.append("Vozidla s chybějícím pojištěním:")
-        for row in email_snapshot.get("results") or []:
-            status_raw = str(row.get("status_raw") or "").upper()
-            status = str(row.get("status") or "").upper()
-            if status_raw == "CHYBÍ V UNIQA" or status == "CHYBÍ POJIŠTĚNÍ":
-                lines.append(f"VIN: {row.get('vin') or '-'} | SPZ: {row.get('spz_tir') or '-'} | {row.get('detail') or ''}")
-        lines.append("")
+    lines.append("Nové případy k ručnímu rozhodnutí:")
+    for row in email_snapshot.get("results") or []:
+        finding = str(row.get("open_problem_status") or row.get("status_raw") or "").upper()
+        if finding in ISSUE_STATUSES and not is_handled(row):
+            lines.append(f"VIN: {row.get('vin') or '-'} | SPZ: {row.get('spz_tir') or row.get('spz_uniqa') or '-'} | Nález: {finding} | Aktuální automatický výsledek: {row.get('status_raw') or '-'}")
+    lines.append("")
     lines.append(f"Web: {CLOUD_URL}")
 
     msg = EmailMessage()

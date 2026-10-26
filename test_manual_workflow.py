@@ -60,10 +60,11 @@ class DatabaseTests(unittest.TestCase):
             conn.execute(f'DROP SCHEMA {cls.schema} CASCADE')
     def row(self,key):return dict(vin=key,status_raw='CHYBÍ V UNIQA',status='Chybí pojištění',detail='automatic finding')
     def test_migration_is_additive_idempotent(self):
+        c._annotations_load_strict({'LEGACY_MIGRATION':{'workflow_status':'VYŘEŠENO','note':'old note'}})
         with self.connect() as conn:
             c._db_init_uncached(conn.cursor())
             c._db_init_uncached(conn.cursor())
-        legacy=c._annotations_load_strict()['LEGACY']
+        legacy=c._annotations_load_strict()['LEGACY_MIGRATION']
         self.assertEqual(legacy['workflow_status'],'VYŘEŠENO')
         self.assertEqual(legacy['note'],'old note')
         self.assertEqual(legacy['workflow_updated_by'],'')
@@ -121,21 +122,84 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(meta['workflow_updated_by'],'')
         self.assertEqual(meta['workflow_updated_at'],'')
         self.assertEqual(meta['updated_by'],'alice')
-    def test_unacknowledged_finding_stays_red_after_automatic_ok(self):
-        row=self.row('LATCH')
-        c._record_automatic_problems([row])
-        automatic_ok=dict(row,status_raw='OK',status='OK')
-        public=c._public_state({'results':[automatic_ok]})
-        self.assertEqual(public['results'][0]['status_raw'],'OK')
-        self.assertEqual(public['results'][0]['open_problem_status'],'CHYBÍ V UNIQA')
+    def test_all_historical_issues_disappear_when_current_verdict_is_ok(self):
+        for i,old_status in enumerate(ISSUE_STATUSES):
+            key='RESOLVED'+str(i)
+            with self.connect() as conn:
+                conn.execute("INSERT INTO denni_pov_annotations (vehicle_key,note,workflow_status,updated_at,automatic_problem_status) VALUES (%s,'keep note','','old',%s)",(key,old_status))
+            row=dict(self.row(key),status_raw='OK',status='OK',open_problem_status=old_status)
+            public=c._public_state({'results':[row]})
+            self.assertEqual(public['results'][0]['status_raw'],'OK')
+            self.assertEqual(public['results'][0]['open_problem_status'],'')
+            self.assertEqual(public['results'][0]['note'],'keep note')
+            self.assertEqual(public['summary']['new_problems'],0)
+            self.assertEqual(project_status(public)['problems'],[])
+            # Reading the current verdict does not destroy stored historical data.
+            self.assertEqual(c._annotations_load_strict()[key]['automatic_problem_status'],old_status)
+
+    def test_changed_problem_does_not_inherit_old_manual_approval(self):
+        row=self.row('CHANGED')
+        c._annotation_save('CHANGED','keep note',MANUAL_OK,row,'alice')
+        current=dict(row,status_raw='DVOJÍ POJIŠTĚNÍ')
+        public=c._public_state({'results':[current]})
+        self.assertEqual(public['results'][0]['workflow_status'],'')
         self.assertEqual(public['summary']['new_problems'],1)
-        self.assertEqual(len(project_status(public)['problems']),1)
-        c._annotation_save('LATCH','',FOLLOWUP,automatic_ok,'alice')
-        self.assertEqual(c._public_state({'results':[automatic_ok]})['summary']['new_problems'],0)
-        c._annotation_save('LATCH','',MANUAL_OK,automatic_ok,'alice')
-        public=c._public_state({'results':[automatic_ok]})
+        c._reconcile_current_workflow([current])
+        meta=c._annotations_load_strict()['CHANGED']
+        self.assertEqual(meta['workflow_status'],'')
+        self.assertEqual(meta['note'],'keep note')
+
+    def test_successful_check_archives_handling_of_resolved_or_absent_issues(self):
+        old_rows=[self.row('INSURED_NOW'),dict(self.row('ONLY_ALLIANZ'),status_raw='DVOJÍ POJIŠTĚNÍ'),dict(self.row('EXTRA_REMOVED'),status_raw='NAVÍC V UNIQA')]
+        for row in old_rows:
+            c._annotation_save(row['vin'],'keep note',FOLLOWUP,row,'alice')
+        c._run_history_save({'results':old_rows,'finished_at':'26.10.2026 22:00:00'})
+        current=[dict(old_rows[0],status='OK',status_raw='OK',pojistovna='UNIQA'),dict(old_rows[1],status='OK',status_raw='OK',pojistovna='ALLIANZ')]
+        c._reconcile_current_workflow(current)
+        public=c._public_state({'results':current})
         self.assertEqual(public['summary']['new_problems'],0)
-        self.assertEqual(public['results'][0]['status_raw'],'OK')
+        self.assertEqual(public['summary']['followup'],0)
+        for old in old_rows:
+            meta=c._annotations_load_strict()[old['vin']]
+            self.assertEqual(meta['workflow_status'],'')
+            self.assertEqual(meta['note'],'keep note')
+            events=[e for e in c._annotation_history_load() if e['vehicle_key']==old['vin']]
+            self.assertTrue(any(e['changed_by']=='alice' for e in events))
+            self.assertTrue(any(e['changed_by'].startswith('SYSTÉM') and e['new_workflow_status']=='' for e in events))
+        with self.connect() as conn:
+            stored=conn.execute("SELECT results FROM denni_pov_run_history ORDER BY id DESC LIMIT 1").fetchone()[0]
+        self.assertEqual(stored,old_rows)
+        # The same problem appearing later is a new, unhandled case.
+        reappeared=c._public_state({'results':[old_rows[2]]})
+        self.assertEqual(reappeared['summary']['new_problems'],1)
+        self.assertEqual(reappeared['results'][0]['workflow_status'],'')
+
+    def test_legacy_approval_cannot_revive_after_previously_resolved_episode(self):
+        row=self.row('LEGACY_EPISODE')
+        c._annotation_save(row['vin'],'keep note',MANUAL_OK,row,'alice')
+        healthy=dict(row,status_raw='OK',status='OK')
+        previous=c._default_state();previous.update(results=[healthy],summary={'active':1},finished_at='26.10.2026 22:00:00')
+        c._run_history_save(previous)
+        payload=dict(results=[row],summary={'active':1},sources={'tirbazar':{'state':'ok'}},agent={'id':'VCSERVER'},running=False,finished_at='26.10.2026 22:30:00')
+        captured={}
+        with patch.object(c,'_authorized',return_value=True),patch.object(c,'_load_state',return_value=previous),patch.object(c,'_save_state',side_effect=lambda value:captured.update(value)),patch.object(c,'_kostka_start'),patch.object(c,'_send_push_for_state',return_value={'sent':0}):
+            response=c.app.test_client().post('/api/sync',json=payload)
+        self.assertEqual(response.status_code,200,response.json)
+        public=c._public_state(captured)
+        self.assertEqual(public['results'][0]['workflow_status'],'')
+        self.assertEqual(public['summary']['new_problems'],1)
+        self.assertEqual(c._annotations_load_strict()[row['vin']]['note'],'keep note')
+
+    def test_failed_check_does_not_archive_existing_workflow(self):
+        row=self.row('FAILED_CHECK')
+        c._annotation_save(row['vin'],'keep note',FOLLOWUP,row,'alice')
+        state=c._default_state();state.update(results=[row],summary={'active':1})
+        payload=dict(results=[],summary={},sources={},agent={'id':'VCSERVER'},running=False,error='SQL unavailable')
+        with patch.object(c,'_authorized',return_value=True),patch.object(c,'_load_state',return_value=state),patch.object(c,'_save_state'):
+            response=c.app.test_client().post('/api/sync',json=payload)
+        self.assertEqual(response.status_code,200,response.json)
+        self.assertEqual(c._annotations_load_strict()[row['vin']]['workflow_status'],FOLLOWUP)
+
     def test_handled_problems_do_not_send_push(self):
         rows=[dict(self.row('PUSH1'),workflow_status=FOLLOWUP),dict(self.row('PUSH2'),workflow_status=MANUAL_OK)]
         with patch.object(c,'_public_state',return_value={'results':rows,'summary':{}}),patch.object(c,'_db_connect') as db:
@@ -146,7 +210,7 @@ class DatabaseTests(unittest.TestCase):
         meta=c._annotation_save('SYNC','retained',FOLLOWUP,row,'alice')
         state=c._default_state()
         state.update(results=[row], summary={'active':1}, finished_at='25.10.2026 10:00:00')
-        payload=dict(results=[dict(row,status_raw='SPZ NESOUHLASÍ')],summary={'active':1},
+        payload=dict(results=[dict(row)],summary={'active':1},
                      sources={'tirbazar':{'state':'ok'}},agent={'id':'VCSERVER'},running=False,
                      finished_at='25.10.2026 12:00:00',annotations={'SYNC':{'workflow_status':''}})
         with patch.object(c,'_authorized',return_value=True),patch.object(c,'_load_state',side_effect=lambda:copy.deepcopy(state)),patch.object(c,'_save_state',side_effect=lambda value:state.update(value)),patch.object(c,'_kostka_start'),patch.object(c,'_send_push_for_state',return_value={'sent':0}):
@@ -156,15 +220,15 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(public['results'][0]['workflow_status'],FOLLOWUP)
         self.assertEqual(public['results'][0]['workflow_updated_by'],'alice')
         self.assertEqual(public['results'][0]['workflow_updated_at'],meta['workflow_updated_at'])
-        self.assertEqual(public['results'][0]['status_raw'],'SPZ NESOUHLASÍ')
+        self.assertEqual(public['results'][0]['status_raw'],'CHYBÍ V UNIQA')
     def test_next_check_and_restart_keep_manual_state(self):
         row=self.row('NEXTCHECK')
         meta=c._annotation_save('NEXTCHECK','checked',MANUAL_OK,row,'alice')
         # Projection over entirely new automatic rows after a process restart.
         with patch.object(c,'_db_schema_ready',False):
-            public=c._public_state({'results':[dict(row,status_raw='DVOJÍ POJIŠTĚNÍ',status='DVOJÍ POJIŠTĚNÍ')]})
+            public=c._public_state({'results':[dict(row)]})
         result=public['results'][0]
-        self.assertEqual(result['status_raw'],'DVOJÍ POJIŠTĚNÍ')
+        self.assertEqual(result['status_raw'],'CHYBÍ V UNIQA')
         self.assertEqual(result['workflow_status'],MANUAL_OK)
         self.assertEqual(result['workflow_updated_by'],'alice')
         self.assertEqual(result['workflow_updated_at'],meta['workflow_updated_at'])

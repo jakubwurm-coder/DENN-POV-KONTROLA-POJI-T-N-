@@ -19,7 +19,7 @@ from flask import Flask, Response, jsonify, render_template, request, session, r
 import requests
 from vehicle_technical import source_record, kostka_candidates
 from pywebpush import webpush, WebPushException
-from vehicle_workflow import ALLOWED_STATUSES, FOLLOWUP_STATUSES, is_handled, is_manual_ok, is_followup
+from vehicle_workflow import ALLOWED_STATUSES, FOLLOWUP_STATUSES, is_handled, is_manual_ok, is_followup, current_workflow_status
 from status_projection import ISSUE_STATUSES
 from web_accounts import authenticate, personal_accounts_enabled, personal_session_valid, session_fingerprint
 
@@ -673,29 +673,49 @@ def _annotations_load(legacy: dict[str, Any] | None = None) -> dict[str, dict[st
         return _normalize_annotations(legacy)
 
 
-def _record_automatic_problems(rows: list[dict[str, Any]]) -> None:
-    """Keep unacknowledged findings through later checks; never touch manual fields."""
-    problems = {_result_key(row): str(row.get("status_raw") or "").upper()
-                for row in rows if str(row.get("status_raw") or "").upper() in ISSUE_STATUSES}
-    if not problems:
-        return
+def _reconcile_current_workflow(rows: list[dict[str, Any]]) -> None:
+    """Close obsolete handling after a complete successful check, preserving audit."""
+    current = {_result_key(row): row for row in rows}
+    actor = "SYSTÉM – automatická kontrola"
     try:
         with _db_connect() as conn:
             with conn.cursor() as cur:
                 _db_init(cur)
-                for key, status in sorted(problems.items()):
+                cur.execute("SELECT vehicle_key FROM denni_pov_annotations WHERE workflow_status <> '' ORDER BY vehicle_key")
+                keys = [row[0] for row in cur.fetchall()]
+                for key in keys:
+                    cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,))
+                    cur.execute("SELECT note, workflow_status, automatic_problem_status FROM denni_pov_annotations WHERE vehicle_key = %s", (key,))
+                    saved = cur.fetchone()
+                    if not saved or not saved[1]:
+                        continue
+                    row = current.get(key, {})
+                    meta = {"workflow_status": saved[1], "automatic_problem_status": saved[2]}
+                    raw = str(row.get("status_raw") or row.get("status") or "").upper()
+                    if current_workflow_status(row, meta):
+                        # Bind legacy decisions to this issue without inventing an author.
+                        cur.execute("UPDATE denni_pov_annotations SET automatic_problem_status = %s WHERE vehicle_key = %s", (raw, key))
+                        continue
+                    stamp = _now_dt().isoformat(timespec="seconds")
                     cur.execute("""
-                        INSERT INTO denni_pov_annotations
-                            (vehicle_key, updated_at, automatic_problem_status, automatic_problem_at)
-                        VALUES (%s, '', %s, %s)
-                        ON CONFLICT (vehicle_key) DO UPDATE SET
-                            automatic_problem_status = EXCLUDED.automatic_problem_status,
-                            automatic_problem_at = CASE WHEN denni_pov_annotations.automatic_problem_at = ''
-                                THEN EXCLUDED.automatic_problem_at ELSE denni_pov_annotations.automatic_problem_at END
-                    """, (key, status, _now_dt().isoformat(timespec="seconds")))
+                        UPDATE denni_pov_annotations SET workflow_status = '',
+                            automatic_problem_status = '', automatic_problem_at = '',
+                            updated_at = %s, updated_by = %s WHERE vehicle_key = %s
+                    """, (stamp, actor, key))
+                    cur.execute("""
+                        INSERT INTO denni_pov_annotation_history
+                            (vehicle_key, vin, spz, vehicle, original_status,
+                             old_workflow_status, new_workflow_status,
+                             old_note, new_note, changed_at_text, changed_by)
+                        VALUES (%s, %s, %s, %s, %s, %s, '', %s, %s, %s, %s)
+                    """, (key, str(row.get("vin") or (key if not key.startswith("SPZ:") else "")),
+                          str(row.get("spz_tir") or row.get("spz_uniqa") or ""),
+                          str(row.get("vozidlo") or ""), raw or "MIMO AKTUÁLNÍ VÝSLEDKY",
+                          saved[1], saved[0], saved[0], stamp, actor))
             conn.commit()
     except Exception as exc:
         raise PersistenceUnavailable(_safe_db_error(exc)) from exc
+
 
 
 def _annotation_save(vehicle_key: str, note: str, workflow_status: str,
@@ -723,20 +743,23 @@ def _annotation_save(vehicle_key: str, note: str, workflow_status: str,
                         "updated_by": actor if changed else old[5],
                         "workflow_updated_at": stamp if status_changed else old[2],
                         "workflow_updated_by": actor if status_changed else old[3],
-                        "automatic_problem_status": old[6], "automatic_problem_at": old[7]}
+                        "automatic_problem_status": str(snapshot.get("status_raw") or "").upper(),
+                        "automatic_problem_at": stamp if status_changed else old[7]}
                 # Keep an empty tombstone on reset so old cached annotations cannot
                 # resurrect a decision via the legacy ON CONFLICT DO NOTHING import.
                 cur.execute("""
                     INSERT INTO denni_pov_annotations
-                        (vehicle_key, note, workflow_status, updated_at, updated_by, workflow_updated_at, workflow_updated_by)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        (vehicle_key, note, workflow_status, updated_at, updated_by, workflow_updated_at, workflow_updated_by, automatic_problem_status, automatic_problem_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (vehicle_key) DO UPDATE SET
                         note = EXCLUDED.note, workflow_status = EXCLUDED.workflow_status,
                         updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by,
                         workflow_updated_at = EXCLUDED.workflow_updated_at,
-                        workflow_updated_by = EXCLUDED.workflow_updated_by
+                        workflow_updated_by = EXCLUDED.workflow_updated_by,
+                        automatic_problem_status = EXCLUDED.automatic_problem_status,
+                        automatic_problem_at = EXCLUDED.automatic_problem_at
                 """, (vehicle_key, note, workflow_status, meta["updated_at"], meta["updated_by"],
-                      meta["workflow_updated_at"], meta["workflow_updated_by"]))
+                      meta["workflow_updated_at"], meta["workflow_updated_by"], meta["automatic_problem_status"], meta["automatic_problem_at"]))
                 if changed:
                     cur.execute("""
                         INSERT INTO denni_pov_annotation_history
@@ -963,10 +986,11 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
             row["detail"] = "Vykoupené, nepřítomné, ale pojištěné – správný stav je NEPOJIŠTĚNO."
         meta = annotations.get(_result_key(row), {})
         row["note"] = str(meta.get("note") or "")
-        row["workflow_status"] = str(meta.get("workflow_status") or "")
-        row["workflow_updated_at"] = str(meta.get("workflow_updated_at") or "")
-        row["workflow_updated_by"] = str(meta.get("workflow_updated_by") or "")
-        row["open_problem_status"] = str(meta.get("automatic_problem_status") or "")
+        row["workflow_status"] = current_workflow_status(row, meta)
+        row["workflow_updated_at"] = str(meta.get("workflow_updated_at") or "") if row["workflow_status"] else ""
+        row["workflow_updated_by"] = str(meta.get("workflow_updated_by") or "") if row["workflow_status"] else ""
+        # Backwards-compatible field; historical findings never override current data.
+        row["open_problem_status"] = ""
         if row["note"]:
             row["original_detail"] = row.get("detail", "")
             row["detail"] = row["note"]
@@ -1059,7 +1083,7 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
     )
     summary["manual_ok"] = sum(is_manual_ok(row) for row in rows)
     summary["followup"] = sum(is_followup(row) for row in rows)
-    summary["new_problems"] = sum(str(row.get("open_problem_status") or row.get("status_raw") or "").upper() in issue_statuses and not is_handled(row) for row in rows)
+    summary["new_problems"] = sum(str(row.get("status_raw") or "").upper() in issue_statuses and not is_handled(row) for row in rows)
     public["summary"] = summary
     public["csv_available"] = bool(rows)
     return public
@@ -1232,7 +1256,7 @@ def _send_push_for_state(data: dict[str, Any], tag: str = "denni-pov-check") -> 
     summary = public.get("summary") or {}
     active = int(summary.get("active") or 0)
     open_rows = [row for row in public.get("results") or [] if not is_handled(row)]
-    counts = Counter(str(row.get("open_problem_status") or row.get("status_raw") or "").upper() for row in open_rows)
+    counts = Counter(str(row.get("status_raw") or "").upper() for row in open_rows)
     missing = counts["CHYBÍ V UNIQA"]
     unwanted = sum(counts[raw] for raw in {"NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", "PRODANÉ, ALE POJIŠTĚNÉ", "NAVÍC V UNIQA", "NAVÍC V ALLIANZ", "DVOJÍ POJIŠTĚNÍ", "DEPOZIT, ALE POJIŠTĚNÉ"})
     other = counts["SPZ NESOUHLASÍ"] + counts["NELZE OVĚŘIT"]
@@ -1764,10 +1788,14 @@ def api_sync():
         payload_agent = payload.get("agent") if isinstance(payload.get("agent"), dict) else {}
         if _normalize_agent_id(payload_agent.get("id")) != _expected_agent_id():
             return jsonify({"ok": False, "message": "Neplatná identita agenta."}), 403
-        # Capture the previous completed findings before progress can empty rows.
-        # Successful current verdicts update the automated finding independently.
-        _record_automatic_problems(list(previous.get("results") or []) +
-                                   (list(payload.get("results") or []) if final_run and not payload.get("error") else []))
+        comparison_base = _run_history_last_successful() if final_run and not payload.get("error") else None
+        if final_run and not payload.get("error"):
+            # Finish a legacy decision already resolved in the previous successful
+            # snapshot before considering a possible recurrence of the same issue.
+            last_successful_at = previous.get("last_successful_at") or previous.get("finished_at")
+            if comparison_base and comparison_base.get("finished_at") == last_successful_at:
+                _reconcile_current_workflow(comparison_base.get("results") or [])
+            _reconcile_current_workflow(payload.get("results") or [])
         annotations = _annotations_load(previous.get("annotations"))
         data = _default_state()
         data["annotations"] = annotations
@@ -1804,7 +1832,6 @@ def api_sync():
         # Srovnáváme výhradně s posledním dokončeným snapshotem, ne s průběžným
         # stavem /api/sync. Průběžná synchronizace totiž může results dočasně
         # vyprázdnit a dříve pak vozidlo vypadalo jako nově nalezené bez vysvětlení.
-        comparison_base = _run_history_last_successful() if final_run and not failed_final else None
         if failed_final:
             data["changes"] = previous.get("changes") or _default_state()["changes"]
         elif final_run and comparison_base and comparison_base.get("results"):

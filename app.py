@@ -62,7 +62,7 @@ def windows_status():
     for row in rows:
         raw = str(row.get("status_raw") or "").strip().upper()
         workflow = str(row.get("workflow_status") or "").strip().upper()
-        if str(row.get("open_problem_status") or raw).upper() not in issue_raw_statuses:
+        if raw not in issue_raw_statuses:
             continue
         resolved = is_handled(row)
         if resolved:

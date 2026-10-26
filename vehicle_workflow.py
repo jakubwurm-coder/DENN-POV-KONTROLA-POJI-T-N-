@@ -25,3 +25,21 @@ def is_manual_ok(row):
 
 def is_followup(row):
     return workflow_status(row) in FOLLOWUP_STATUSES
+
+
+ISSUE_STATUSES = frozenset({
+    "CHYBÍ V UNIQA", "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
+    "PRODANÉ, ALE POJIŠTĚNÉ", "DEPOZIT, ALE POJIŠTĚNÉ",
+    "NAVÍC V UNIQA", "NAVÍC V ALLIANZ", "DVOJÍ POJIŠTĚNÍ",
+    "SPZ NESOUHLASÍ", "NELZE OVĚŘIT",
+})
+
+
+def current_workflow_status(row, annotation=None):
+    """Manual handling applies only to the currently observed problem."""
+    annotation = row if annotation is None else annotation
+    raw = str(row.get("status_raw") or row.get("status") or "").strip().upper()
+    previous = str(annotation.get("automatic_problem_status") or "").strip().upper()
+    if raw not in ISSUE_STATUSES or (previous in ISSUE_STATUSES and previous != raw):
+        return ""
+    return workflow_status(annotation)

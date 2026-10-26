@@ -7,7 +7,7 @@ from typing import Any
 
 import requests
 from flask import jsonify, request
-from vehicle_workflow import ALLOWED_STATUSES, is_handled
+from vehicle_workflow import ALLOWED_STATUSES, is_handled, current_workflow_status
 
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
 _CACHE_SECONDS = 10
@@ -155,10 +155,10 @@ def install_local_annotations(app) -> None:
                     continue
                 meta = annotations.get(_row_key(row), {})
                 row["note"] = str(meta.get("note") or "")
-                row["workflow_status"] = str(meta.get("workflow_status") or "")
-                row["workflow_updated_at"] = str(meta.get("workflow_updated_at") or "")
-                row["workflow_updated_by"] = str(meta.get("workflow_updated_by") or "")
-                row["open_problem_status"] = str(meta.get("automatic_problem_status") or "")
+                row["workflow_status"] = current_workflow_status(row, meta)
+                row["workflow_updated_at"] = str(meta.get("workflow_updated_at") or "") if row["workflow_status"] else ""
+                row["workflow_updated_by"] = str(meta.get("workflow_updated_by") or "") if row["workflow_status"] else ""
+                row["open_problem_status"] = ""
                 if row["note"]:
                     row["original_detail"] = row.get("detail", "")
                     row["detail"] = row["note"]

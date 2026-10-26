@@ -5,7 +5,7 @@ Ruční stav se ukládá samostatně pro VIN, případně původní klíč SPZ.
 
 | Ruční stav | Zobrazení | Nové červené problémy |
 | --- | --- | --- |
-| prázdný | Uchovaný automatický problém červeně | ano |
+| prázdný | Aktuální automatický problém červeně | ano, jen pokud stále trvá |
 | K DOŘEŠENÍ | oranžově | ne |
 | RUČNĚ OK | zeleně, včetně účtu a času potvrzení | ne |
 | VYŘEŠENO (historická hodnota) | oranžové K DOŘEŠENÍ | ne |
@@ -22,23 +22,26 @@ U starých zásahů bez zaznamenané identity se zobrazuje „autor nezaznamená
   Úprava poznámky nepřepisuje autora ani čas potvrzení.
 - Autor pochází z ověřené přihlašovací session; parametr autora v JSON se ignoruje.
   Starší session bez identity musí provést nové přihlášení.
-- Aplikace má jeden konfigurovaný přihlašovací účet. Ten identifikuje účet,
-  nikoli konkrétního člověka mezi lidmi sdílejícími stejné přihlašovací údaje.
-  Pro rozlišení osob je potřeba zavést osobní účty.
+- Osobní účty a jejich identita jsou popsány v `PERSONAL_ACCOUNTS.md`.
 - Historie obsahuje starý a nový stav, poznámky, aktuální automatický výsledek,
   autora a čas. Zápis anotace a historie je jedna transakce. Souběžné první
   zápisy pro stejný klíč serializuje databázový zámek.
 - Prázdná anotace po návratu na původní stav zůstává uložená, aby import staré
   mezipaměti neobnovil zrušené ruční rozhodnutí.
-- `automatic_problem_status` a `automatic_problem_at` uchovávají automatický nález
-  napříč kontrolami. Synchronizace je aktualizuje odděleně od ručního stavu.
-  U vozidla v aktuálních výsledcích trvá červený případ do ručního rozhodnutí,
-  i když aktuální automatický výsledek už je OK. Oba údaje jsou viditelné v detailu.
-- Ruční rozhodnutí přetrvá nový běh, restart i změnu automatického výsledku.
-  Pokud vozidlo z aktuálního seznamu zmizí, uložené rozhodnutí a historie zůstanou
-  zachované a po návratu stejného identifikátoru se znovu použijí.
+- Od 26. 10. 2026 aktuální přehled vždy určuje poslední automatický výsledek.
+  Historický problém nikdy nezmění aktuální OK na červený případ. Dřívější nálezy
+  zůstávají v historii běhů; v aktuálním přehledu ani Excelu se neopakují.
+- Ruční rozhodnutí přetrvá další kontrolu pouze u stejného trvajícího problému.
+  Po jeho odstranění, změně typu problému nebo zmizení vozidla z úplných výsledků
+  se stav automaticky uzavře se systémovým záznamem v auditu. Poznámka zůstává.
+  Pokud se problém vrátí, je nový a nepřevezme dřívější ruční schválení.
+- Automatické uzavření se provádí výhradně po úspěšné dokončené kontrole.
+  Průběžné a chybové synchronizace žádné ruční rozhodnutí neuzavírají.
+- Historické sloupce `automatic_problem_status` a `automatic_problem_at` se nemažou.
+  První z nich slouží jako vazba ručního rozhodnutí k příslušnému typu problému;
+  není zdrojem aktuálního verdiktu ani důvodem k zobrazení červeného případu.
 - Přehledy, API, Windows indikace a upozornění rozlišují obě ruční rozhodnutí.
-  Excel obsahuje oddělený ruční stav, účet, čas i uchovaný automatický nález.
+  Excel obsahuje aktuální automatický výsledek a oddělený platný ruční stav, účet a čas.
 - Objektivní počet skutečně pojištěných vozidel se ručním OK nezvyšuje.
 
 ## Migrace a nasazení
@@ -80,7 +83,7 @@ node test_xlsx_progress.js
 Testy pokrývají migraci, historická data, všechny problémové výsledky, změny stavů,
 autora ze session, odmítnutí podvržené identity, chybu persistence, rollback při
 chybě historie, souběžné zápisy, restart, skutečnou synchronizaci nového běhu,
-uchování červeného nálezu po automatickém OK a potlačení upozornění u převzatých
+odstranění starého nálezu po aktuálním OK a automatické uzavření ručního řešení a potlačení upozornění u převzatých
 či potvrzených případů.
 
 V širší původní sadě byly stejné tři chyby i na nezměněném commitu `ebe15d8`:

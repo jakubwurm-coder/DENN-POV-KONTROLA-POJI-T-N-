@@ -242,7 +242,7 @@ def _send_result_email(snapshot: dict[str, Any]) -> bool:
         raw = str(row.get("status_raw") or "").upper()
         workflow = str(row.get("workflow_status") or "").upper()
         resolved = is_handled(row)
-        problems += str(row.get("open_problem_status") or raw).upper() in ISSUE_STATUSES and not resolved
+        problems += raw in ISSUE_STATUSES and not resolved
     if not problems:
         print("Kontrola bez otevřených případů – e-mail se neodesílá.")
         return False
@@ -263,7 +263,7 @@ def _send_result_email(snapshot: dict[str, Any]) -> bool:
     ]
     lines.append("Nové případy k ručnímu rozhodnutí:")
     for row in email_snapshot.get("results") or []:
-        finding = str(row.get("open_problem_status") or row.get("status_raw") or "").upper()
+        finding = str(row.get("status_raw") or "").upper()
         if finding in ISSUE_STATUSES and not is_handled(row):
             lines.append(f"VIN: {row.get('vin') or '-'} | SPZ: {row.get('spz_tir') or row.get('spz_uniqa') or '-'} | Nález: {finding} | Aktuální automatický výsledek: {row.get('status_raw') or '-'}")
     lines.append("")

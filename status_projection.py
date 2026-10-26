@@ -3,14 +3,8 @@
 The cloud application's public_state is the single source of truth for counts.
 """
 from typing import Any
-from vehicle_workflow import is_handled
+from vehicle_workflow import is_handled, ISSUE_STATUSES
 
-ISSUE_STATUSES = frozenset({
-    "CHYBÍ V UNIQA", "NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ",
-    "PRODANÉ, ALE POJIŠTĚNÉ", "DEPOZIT, ALE POJIŠTĚNÉ",
-    "NAVÍC V UNIQA", "NAVÍC V ALLIANZ", "DVOJÍ POJIŠTĚNÍ",
-    "SPZ NESOUHLASÍ", "NELZE OVĚŘIT",
-})
 
 
 def project_status(state: dict[str, Any]) -> dict[str, Any]:
@@ -19,7 +13,7 @@ def project_status(state: dict[str, Any]) -> dict[str, Any]:
     for row in state.get("results") or []:
         raw = str(row.get("status_raw") or row.get("status") or "").upper()
         workflow = str(row.get("workflow_status") or "").upper()
-        if str(row.get("open_problem_status") or raw).upper() not in ISSUE_STATUSES or is_handled(row):
+        if raw not in ISSUE_STATUSES or is_handled(row):
             continue
         problems.append({
             "vin": str(row.get("vin") or ""),
@@ -27,7 +21,7 @@ def project_status(state: dict[str, Any]) -> dict[str, Any]:
             "vozidlo": str(row.get("vozidlo") or ""),
             "status": str(row.get("status") or raw),
             "status_raw": raw,
-            "open_problem_status": str(row.get("open_problem_status") or ""),
+            "open_problem_status": "",
             "workflow_status": str(row.get("workflow_status") or ""),
             "note": str(row.get("note") or ""),
             "detail": str(row.get("detail") or ""),

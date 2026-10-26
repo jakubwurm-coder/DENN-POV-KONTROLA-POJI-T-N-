@@ -10,6 +10,22 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: povtest
+          POSTGRES_PASSWORD: ci-only-test-password
+          POSTGRES_DB: pov_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U povtest -d pov_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POV_TEST_DATABASE_URL: postgresql://povtest:ci-only-test-password@localhost:5432/pov_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,7 +38,7 @@ jobs:
       - name: Run POV decision matrix
         run: python test_pov_decision_matrix.py
       - name: Complete audit, export, SQL source and agent regression tests
-        run: python -m unittest test_complete_audit test_xlsx_export test_vehicle_technical test_agent_authorization test_agent_schedule test_sync_resilience test_portable_agent_startup test_personal_accounts test_web_login
+        run: python -m unittest test_complete_audit test_xlsx_export test_vehicle_technical test_agent_authorization test_agent_schedule test_sync_resilience test_portable_agent_startup test_personal_accounts test_web_login test_manual_workflow
       - name: Browser behavior regression tests
         run: |
           node test_xlsx_progress.js

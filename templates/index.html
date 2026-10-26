@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07111f">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261026activity">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261026activity">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261026current">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261026current">
 </head>
 <body class="vc-theme">
   <div class="app-shell">
@@ -439,7 +439,7 @@
           <div class="data-toolbar">
             <div>
               <span class="section-kicker">Historie zásahů</span>
-              <h2>Ruční změny statusů a poznámek</h2>
+              <h2>Historie řešení a poznámek</h2>
               <p style="margin:6px 0 0;color:#64748b;font-size:13px">Zůstávají zde i vozidla, která už nejsou v aktuální kontrole.</p>
             </div>
           </div>
@@ -450,7 +450,7 @@
                 <tbody id="manualHistoryRows"><tr class="empty-row"><td colspan="6" class="empty">Načítám historii…</td></tr></tbody>
               </table>
             </div>
-            <div class="table-footer"><span>Trvalá historie ručních zásahů</span><strong id="manualHistoryFooter">Záznamů: 0</strong></div>
+            <div class="table-footer"><span>Historie ručních a automatických změn</span><strong id="manualHistoryFooter">Záznamů: 0</strong></div>
           </div>
         </section>
 
@@ -463,7 +463,7 @@
             </div>
           </div>
           <div id="activeFilter" class="active-filter" hidden>Aktivní filtr: <strong id="activeFilterLabel"></strong><button id="clearFilterInline" type="button" aria-label="Zrušit filtr">×</button></div>
-          <p class="table-hint">Aktuální případy jsou červené. Volbou K DOŘEŠENÍ případ přesunete do oranžového přehledu. Volba RUČNĚ OK označí vaše potvrzení zeleně a uloží účet i čas. Původní výsledek i poznámka zůstávají zachované. K dořešení: <strong id="resolvedExceptionCount">0</strong>.</p>
+          <p class="table-hint">Aktuální problémy poslední kontroly jsou červené. Po odstranění příčiny při další úspěšné kontrole automaticky zmizí. Volbou K DOŘEŠENÍ případ přesunete do oranžového přehledu. Volba RUČNĚ OK označí vaše potvrzení zeleně a uloží účet i čas. Původní výsledek i poznámka zůstávají zachované. K dořešení: <strong id="resolvedExceptionCount">0</strong>.</p>
           <div class="table-card">
             <div class="table-scroll">
               <table>
@@ -489,7 +489,7 @@
   {% include '_xlsx_progress.html' %}
   <script src="{{ url_for('static', filename='js/xlsx-export.js') }}?v=20261022audit"></script>
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261026activity"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261026current"></script>
   <script>
   (() => {
     const start = document.getElementById('completeAuditStart');

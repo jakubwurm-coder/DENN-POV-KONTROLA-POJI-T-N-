@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07111f">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261026current">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261026current">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261026coverage">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261026coverage">
 </head>
 <body class="vc-theme">
   <div class="app-shell">
@@ -257,15 +257,10 @@
             <details class="how-details">
               <summary><span><small>4 · VÝZNAM VÝSLEDKŮ</small><strong>Jak číst jednotlivé stavy</strong></span><span class="how-details-plus">+</span></summary>
               <div class="how-details-body status-legend">
-                <div class="logic-row"><strong><i class="logic-dot ok"></i>Pojištění v pořádku</strong><span>Vozidlo má být pojištěné a aktivní pojištění bylo nalezeno v Uniqa nebo Allianz.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot bad"></i>Chybí pojištění</strong><span>Vozidlo má být pojištěné, ale nebylo nalezeno ani v Uniqa, ani Allianz a nemá depozit.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot bad"></i>Nepřítomné, ale pojištěno</strong><span>Vozidlo má být nepojištěné, přesto bylo nalezeno aktivní pojištění.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot ok"></i>Nepřítomné, ale nepojištěno</strong><span>Správný stav pro nepřítomné vykoupené vozidlo.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot bad"></i>Prodané, ale pojištěno</strong><span>V TIRBazar je evidovaný prodej, ale pojištění zůstalo aktivní.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot deposit"></i>Depozit</strong><span>Vozidlo není pojištěné a poznámka v TIRBazar obsahuje DEPOZIT. Nejde o chybu.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot warn"></i>SPZ nesouhlasí</strong><span>Pojištění bylo nalezeno podle VIN, ale SPZ v evidencích se liší. VIN má přednost.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot warn"></i>Nelze ověřit</strong><span>Některý zdroj nebyl dostupný. Systém proto vozidlo automaticky neoznačí jako nepojištěné.</span></div>
-                <div class="logic-row"><strong><i class="logic-dot bad"></i>Pojištění navíc</strong><span>Aktivní pojistka existuje u vozidla, které podle interní evidence nemá být v aktuální pojištěné skupině.</span></div>
+                <div class="logic-row"><strong>Pojištěno</strong><span>Pojištění nalezeno v poslední kontrole. Datum výkupu ani stav vozidla nemění zařazení.</span></div>
+                <div class="logic-row"><strong>Nepojištěno</strong><span>V poslední kontrole nebylo nalezeno pojištění. Pokud má být vozidlo pojištěné, zůstává červené upozornění.</span></div>
+                <div class="logic-row"><strong>Nelze ověřit</strong><span>Nedostupný zdroj nebo neúplné údaje. Takové vozidlo není automaticky považováno za nepojištěné.</span></div>
+                <div class="logic-row"><strong>Upozornění</strong><span>Důvod kontroly je uveden vedle stavu pojištění a v detailu: například chybějící pojistka, souběh pojistek nebo pojištění prodaného vozidla. Ruční řešení se zobrazuje zvlášť.</span></div>
               </div>
             </details>
 
@@ -288,7 +283,7 @@
             <details class="how-details">
               <summary><span><small>7 · RUČNÍ STAV ŘEŠENÍ</small><strong>Automatický výsledek a práce uživatele</strong></span><span class="how-details-plus">+</span></summary>
               <div class="how-details-body">
-                <div class="logic-row"><strong>Automatický výsledek</strong><span>Například „Chybí pojištění“ nebo „Nepřítomné, ale pojištěno“ zůstává zachován jako původní výsledek kontroly.</span></div>
+                <div class="logic-row"><strong>Automatický výsledek</strong><span>Hlavní stav je Pojištěno / Nepojištěno. Důvod upozornění a původní výsledek kontroly zůstávají v detailu a historii.</span></div>
                 <div class="logic-row"><strong>Stav řešení</strong><span>Uživatel může zvolit oranžové K DOŘEŠENÍ, zelené RUČNĚ OK nebo návrat na původní stav. Účet a čas ručního rozhodnutí zůstávají uložené.</span></div>
                 <div class="logic-row"><strong>Interní poznámka</strong><span>K vozidlu lze uložit poznámku, například že bylo zadáno ukončení pojistky a čeká se na potvrzení.</span></div>
               </div>
@@ -344,68 +339,15 @@
             <div><strong style="font-size:16px;color:#12314e">Kompletní audit vozidel TIRBazar</strong><p style="margin:7px 0 0;color:#5c7188;font-size:13px;max-width:680px">Export zahrnutých a vyřazených vozidel, důvodů rozhodnutí, výsledků pojištění, přehledu Uniqa a Allianz a duplicit. Počet fyzických SQL záznamů se může lišit od počtu unikátních VIN.</p><progress id="completeAuditProgress" max="100" aria-label="Načítání kompletního auditu" hidden style="width:100%;margin-top:12px"></progress><p id="completeAuditStatus" role="status" aria-live="polite" style="margin:8px 0 0;color:#355f83;font-size:13px">Připraveno k načtení auditu.</p></div>
             <div style="display:flex;flex-wrap:wrap;gap:8px"><button id="completeAuditStart" type="button" class="btn btn-secondary">Načíst kompletní audit</button><a id="completeAuditDownload" class="btn btn-secondary" href="/download/xlsx" hidden>Stáhnout audit XLSX</a></div>
           </div>
-          <div class="overview-group overview-group-attention">
+          <div class="overview-group">
             <div class="overview-group-head">
-              <div>
-                <span class="overview-group-kicker">VYŽADUJE POZORNOST</span>
-                <h3>Nutná kontrola</h3>
-              </div>
-              <span class="overview-group-badge danger">Ke kontrole</span>
+              <div><span class="overview-group-kicker">POSLEDNÍ KONTROLA</span><h3>Stav pojištění</h3></div>
             </div>
+            <p>Rozdělení podle nalezeného pojištění. Stav vozidla a datum výkupu nemění tuto kategorii. Upozornění a ruční řešení zůstávají viditelné v seznamu vozidel.</p>
             <div class="metric-grid metric-grid-group">
-              <button class="metric-card" type="button" data-filter="MISSING">
-                <span class="metric-label">Chybí pojištění</span>
-                <strong id="cMissing">0</strong>
-                <small>vozidla aktuálně bez nalezeného pojištění · kliknutím zobrazit</small>
-              </button>
-              <button class="metric-card" type="button" data-filter="ABSENT_INSURED">
-                <span class="metric-label">Nepřítomné · pojištěno</span>
-                <strong id="cAbsentInsured">0</strong>
-                <small>starší k dořešení <b id="cAbsentResolved">0</b> · aktuální <b id="cAbsentOpen">0</b></small>
-              </button>
-              <button class="metric-card" type="button" data-filter="SOLD_UNIQA">
-                <span class="metric-label">Prodané, ale pojištěno</span>
-                <strong id="cSold">0</strong>
-                <small>starší k dořešení <b id="cSoldResolved">0</b> · aktuální <b id="cSoldOpen">0</b></small>
-              </button>
-              <button class="metric-card" type="button" data-filter="EXTRA_UNIQA">
-                <span class="metric-label">Ostatní pojištění navíc</span>
-                <strong id="cExtra">0</strong>
-                <small>starší k dořešení <b id="cExtraResolved">0</b> · aktuální <b id="cExtraOpen">0</b></small>
-              </button>
-              <button class="metric-card" type="button" data-filter="DEPOSIT_INSURED">
-                <span class="metric-label">Depozit · pojištěno</span>
-                <strong id="cDepositInsured">0</strong>
-                <small>starší k dořešení <b id="cDepositInsuredResolved">0</b> · aktuální <b id="cDepositInsuredOpen">0</b></small>
-              </button>
-            </div>
-          </div>
-
-          <div class="overview-group overview-group-ok">
-            <div class="overview-group-head">
-              <div>
-                <span class="overview-group-kicker">SPRÁVNÝ STAV</span>
-                <h3>V pořádku</h3>
-              </div>
-              <span class="overview-group-badge success">Bez zásahu</span>
-            </div>
-            <div class="metric-grid metric-grid-group">
-              <button class="metric-card metric-success" type="button" data-filter="OK_TOTAL">
-                <span class="metric-label"><i class="metric-dot green"></i> Pojištění v pořádku</span>
-                <strong id="cOkUniqa">0</strong>
-                <small>ověřená vozidla bez problému</small>
-              </button>
-              <span id="cOkAllianz" hidden>0</span>
-              <button class="metric-card metric-success" type="button" data-filter="ABSENT_UNINSURED">
-                <span class="metric-label">Nepřítomné · nepojištěno</span>
-                <strong id="cAbsentUninsured">0</strong>
-                <small>správný stav bez pojištění</small>
-              </button>
-              <button class="metric-card metric-success" type="button" data-filter="DEPOSIT">
-                <span class="metric-label">Depozit</span>
-                <strong id="cDeposit">0</strong>
-                <small>vozidla vyřazená z POV kontroly</small>
-              </button>
+              <button class="metric-card" type="button" data-filter="INSURED"><span class="metric-label">Pojištěno</span><strong id="coverageINSURED">0</strong><small>Pojištění nalezeno v poslední kontrole</small></button>
+              <button class="metric-card" type="button" data-filter="UNINSURED"><span class="metric-label">Nepojištěno</span><strong id="coverageUNINSURED">0</strong><small>Pojištění nenalezeno v poslední kontrole</small></button>
+              <button class="metric-card" type="button" data-filter="UNKNOWN"><span class="metric-label">Nelze ověřit</span><strong id="coverageUNKNOWN">0</strong><small>Nedostupný zdroj nebo neúplné údaje</small></button>
             </div>
           </div>
 
@@ -489,7 +431,7 @@
   {% include '_xlsx_progress.html' %}
   <script src="{{ url_for('static', filename='js/xlsx-export.js') }}?v=20261022audit"></script>
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261026current"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261026coverage"></script>
   <script>
   (() => {
     const start = document.getElementById('completeAuditStart');

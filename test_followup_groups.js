@@ -17,7 +17,7 @@ assert.equal(run("activeFilter='RESOLVED';state.results.filter(matches).length")
 assert.equal(run("activeFilter='VŠE';state.results.filter(matches).length"),total*2+1);
 assert.equal(run("activeFilter='OK_TOTAL';state.results.filter(matches).map(r=>r.vin).join(',')"),'GOOD');
 assert.equal(run('badgeClass(state.results[1])'),'badge-warning');
-assert.equal(run('resultLabel(state.results[1])'),'Chybí pojištění');
+assert.equal(run('resultLabel(state.results[1])'),'Nepojištěno');
 assert.equal(run('JSON.stringify(state.results)'),before,'filtering must preserve verdicts and notes');
 run("state.results[0].workflow_status='VYŘEŠENO';");
 assert.equal(run("activeFilter='ATTENTION';state.results.filter(matches).length"),total-1);
@@ -61,3 +61,12 @@ assert.equal(run('isManualOk(state.results.at(-1))'),true);
 assert.equal(run('needsAttention(state.results.at(-1))'),false);
 assert.equal(run('workflowLabel(state.results.at(-1))'),'RUČNĚ OK');
 assert.equal(run('badgeClass(state.results.at(-1))'),'badge-ok');
+
+// Coverage groups must not depend on purchase dates or manual decisions.
+run("state.results=[{status_raw:'NAVÍC V UNIQA',vykup:'',workflow_status:'K DOŘEŠENÍ'},{status_raw:'NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ',vykup:'30.01.2025'},{status_raw:'NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ'},{status_raw:'CHYBÍ V UNIQA',workflow_status:'RUČNĚ OK'},{status_raw:'NELZE OVĚŘIT'},{status_raw:'MIMO POV'}]");
+assert.equal(run("activeFilter='INSURED';state.results.filter(matches).length"),2);
+assert.equal(run("activeFilter='UNINSURED';state.results.filter(matches).length"),3);
+assert.equal(run("activeFilter='UNKNOWN';state.results.filter(matches).length"),1);
+assert.equal(run('resultLabel(state.results[0])'),run('resultLabel(state.results[1])'));
+assert.equal(run('resultLabel(state.results[3])'),'Nepojištěno');
+assert.equal(run("insuranceState({status_raw:'UNRECOGNIZED'})"),'UNKNOWN');

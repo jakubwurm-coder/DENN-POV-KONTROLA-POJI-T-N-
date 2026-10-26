@@ -141,14 +141,25 @@ function isResolvedUnusual(r){
   return isFollowup(r);
 }
 function resultLabel(r){
-  return ({'OK':'Pojištění v pořádku','CHYBÍ V UNIQA':'Chybí pojištění','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ':'Nepřítomné · pojištěno','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ':'Nepřítomné · nepojištěno','PRODANÉ, ALE POJIŠTĚNÉ':'Prodané · pojištěno','NAVÍC V UNIQA':'Pojištění navíc','NAVÍC V ALLIANZ':'Pojištění navíc','NEPOJIŠTĚNO, ALE DEPOZIT':'Depozit','DEPOZIT, ALE POJIŠTĚNÉ':'Depozit · pojištěno','SPZ NESOUHLASÍ':'SPZ nesouhlasí','DVOJÍ POJIŠTĚNÍ':'Dvojí pojištění','NELZE OVĚŘIT':'Nelze ověřit'}[r.status_raw]||r.original_status||r.status_raw||r.status||'—');
+  return insuranceState(r)==='INSURED'?'Pojištěno':insuranceState(r)==='UNINSURED'?'Nepojištěno':'Nelze ověřit';
 }
+// Coverage is independent of purchase dates, vehicle state and manual approval.
+function insuranceState(r){
+  const raw=String(r.status_raw||'').toUpperCase();
+  if(['OK','SPZ NESOUHLASÍ','DVOJÍ POJIŠTĚNÍ',...redInsuranceStatuses].includes(raw))return 'INSURED';
+  if(['CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ','NEPOJIŠTĚNO, ALE DEPOZIT','PRODANÉ, NEPOJIŠTĚNÉ','MIMO POV'].includes(raw))return 'UNINSURED';
+  return 'UNKNOWN';
+}
+filterNames.INSURED='Pojištěno';
+filterNames.UNINSURED='Nepojištěno';
+filterNames.UNKNOWN='Nelze ověřit';
 filterNames.ATTENTION='Aktuální k řešení';
 filterNames.OPEN='Aktuální k řešení';
 filterNames.RESOLVED='K dořešení';
 filterNames.MANUAL_OK='Ručně OK';
 function matches(r){
   if(activeFilter==='VŠE')return true;
+  if(['INSURED','UNINSURED','UNKNOWN'].includes(activeFilter))return insuranceState(r)===activeFilter;
   if(activeFilter==='ATTENTION')return needsAttention(r);
   if(activeFilter==='OPEN')return needsAttention(r);
   if(activeFilter==='RESOLVED')return isFollowup(r);
@@ -223,7 +234,7 @@ function renderRows(){
     const workflow=workflowLabel(r);
     const workflowClass=isManualOk(r)?'badge-ok':isFollowup(r)?'badge-warning':needsAttention(r)?'badge-missing':'badge-neutral';
     const rowClass=needsAttention(r)?'problem-row':isFollowup(r)?'resolved-unusual-row':isManualOk(r)?'manual-ok-row':'';
-    return `<tr class="${rowClass}" data-index="${index}"><td><button class="vehicle-open" type="button" data-index="${index}" aria-label="Otevřít vozidlo ${esc(displaySpz(r)||r.vin)}">${esc(displaySpz(r)||'Bez SPZ')}</button>${vehicle?`<span class="vehicle-name">${esc(vehicle)}</span>`:''}<span class="vehicle-vin">${esc(r.vin||'—')}</span></td><td><span class="status-badge ${badge}">${esc(resultLabel(r))}</span>${r.pojistovna?'<span class="note-indicator">Pojišťovna: '+esc(r.pojistovna)+'</span>':''}</td><td><span class="status-badge ${workflowClass}">${esc(workflow)}</span>${r.workflow_status?'<span class="note-indicator">'+esc(workflowCredit(r))+'</span>':''}${r.note?'<span class="note-indicator">Poznámka v detailu</span>':''}</td></tr>`;
+    return `<tr class="${rowClass}" data-index="${index}"><td><button class="vehicle-open" type="button" data-index="${index}" aria-label="Otevřít vozidlo ${esc(displaySpz(r)||r.vin)}">${esc(displaySpz(r)||'Bez SPZ')}</button>${vehicle?`<span class="vehicle-name">${esc(vehicle)}</span>`:''}<span class="vehicle-vin">${esc(r.vin||'—')}</span></td><td><span class="status-badge ${badge}">${esc(resultLabel(r))}</span>${isUnusual(r)?'<span class="note-indicator">'+esc(r.original_detail||r.detail||'Výsledek vyžaduje kontrolu')+'</span>':''}${r.pojistovna?'<span class="note-indicator">Pojišťovna: '+esc(r.pojistovna)+'</span>':''}</td><td><span class="status-badge ${workflowClass}">${esc(workflow)}</span>${r.workflow_status?'<span class="note-indicator">'+esc(workflowCredit(r))+'</span>':''}${r.note?'<span class="note-indicator">Poznámka v detailu</span>':''}</td></tr>`;
   }).join('');
   document.querySelectorAll('.vehicle-open').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();showDetail(state.results[Number(button.dataset.index)]);}));
   document.querySelectorAll('#rows tr[data-index]').forEach(tr=>tr.addEventListener('click',()=>showDetail(state.results[Number(tr.dataset.index)])));
@@ -360,6 +371,9 @@ function render(){
   const suppressFinalResults=waitingFreshPage||state.running||visualCompletionPending;
   const setText=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
   const shown=(value)=>suppressFinalResults?0:(Number(value)||0);
+  for(const category of ['INSURED','UNINSURED','UNKNOWN']){
+    setText('coverage'+category,shown((state.results||[]).filter(r=>insuranceState(r)===category).length));
+  }
   setText('navManualOkCount',shown((state.results||[]).filter(isManualOk).length));
   document.body.classList.toggle('check-running',!!state.running);
   // Po novém otevření stránky zobrazíme jen hlavní kartu se spuštěním kontroly.
@@ -562,7 +576,7 @@ function showDetail(r){
   const original=`<div class="workflow-credit">${esc(workflowCredit(r))}</div>`;
   const vehicle=(r.vozidlo||[r.znacka,r.model].filter(Boolean).join(' ')).trim()||'—';
   const spzValue=displaySpz(r)||'—';
-  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Ruční stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(workflowLabel(r))}</span>${original}</dd><dt>Automatický výsledek</dt><dd>${esc(r.status_raw||r.status||'—')}</dd><dt>Pojišťovna</dt><dd>${esc(r.pojistovna||'—')}</dd><dt>Vozidlo</dt><dd id="vehicleDetailValue">${esc(vehicle)}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ</dt><dd>${esc(spzValue)}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.original_detail||r.detail||'—'))}</dd></dl><section id="kostkaSection" class="kostka-section"><div class="kostka-heading"><div><h3>Technické údaje vozidla</h3><p id="kostkaStatus">Načítám uložené údaje…</p></div></div><div id="kostkaData"></div></section><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option><option value="K DOŘEŠENÍ">K DOŘEŠENÍ · převzato k řešení</option><option value="RUČNĚ OK">RUČNĚ OK · osobní potvrzení</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení pojištění zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
+  $('detailBody').innerHTML=`<dl class="detail-grid"><dt>Ruční stav</dt><dd><span class="status-badge ${badgeClass(r)}">${esc(workflowLabel(r))}</span>${original}</dd><dt>Automatický výsledek</dt><dd>${esc(resultLabel(r))}</dd><dt>Pojišťovna</dt><dd>${esc(r.pojistovna||'—')}</dd><dt>Vozidlo</dt><dd id="vehicleDetailValue">${esc(vehicle)}</dd><dt>VIN</dt><dd>${esc(r.vin||'—')}</dd><dt>SPZ</dt><dd>${esc(spzValue)}</dd><dt>Datum výkupu</dt><dd>${esc(r.vykup||'—')}</dd><dt>Datum prodeje</dt><dd>${esc(r.prodej||'—')}</dd><dt>Výsledek</dt><dd>${esc(visibleSystemText(r.original_detail||r.detail||'—'))}</dd></dl><section id="kostkaSection" class="kostka-section"><div class="kostka-heading"><div><h3>Technické údaje vozidla</h3><p id="kostkaStatus">Načítám uložené údaje…</p></div></div><div id="kostkaData"></div></section><div style="padding:0 22px 22px;border-top:1px solid #eef2f7"><h3 style="margin:16px 0 10px;font-size:14px">Interní poznámka a stav řešení</h3><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">STATUS</label><select id="workflowStatus" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px"><option value="">Původní status</option><option value="K DOŘEŠENÍ">K DOŘEŠENÍ · převzato k řešení</option><option value="RUČNĚ OK">RUČNĚ OK · osobní potvrzení</option></select><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px">POZNÁMKA</label><textarea id="vehicleNote" rows="4" maxlength="2000" placeholder="Např. zrušení pojištění zadáno 14.9., čekáme na potvrzení…" style="width:100%;resize:vertical;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit">${esc(r.note||'')}</textarea><div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveMeta" class="btn btn-primary" type="button">Uložit</button></div></div>`;
   $('workflowStatus').value=isFollowup(r)?'K DOŘEŠENÍ':isManualOk(r)?'RUČNĚ OK':r.workflow_status||'';
   $('saveMeta').addEventListener('click',()=>saveMeta(r));
   $('detailDialog').showModal();

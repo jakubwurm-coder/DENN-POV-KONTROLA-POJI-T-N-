@@ -193,3 +193,39 @@ body.vc-theme.check-running .overview-sticky{display:none}
 .vc-theme .table-scroll tbody tr.manual-ok-row,.vc-theme .table-scroll tbody tr.manual-ok-row:nth-child(even){background:#153c2bd9!important}
 .vc-theme .table-scroll tbody tr.manual-ok-row:hover{background:#1d5038d9!important}
 .vc-theme .table-scroll tbody tr.manual-ok-row td{color:#b2ebc7;border-bottom-color:#83d5ad33}
+
+/* Continuous activity is independent of the measured completion percentage. */
+#progressPanel .check-working{display:none}
+#progressPanel[data-status="running"] .check-working{display:flex;align-items:center;gap:9px;margin-top:10px;color:#f4a6b0;font-size:11px;font-weight:650}
+.working-dots{display:inline-flex;align-items:center;gap:4px;height:12px}
+.working-dots i{display:block;width:5px;height:5px;border-radius:50%;background:currentColor;animation:povWorkingDot 1.2s ease-in-out infinite}
+.working-dots i:nth-child(2){animation-delay:.15s}
+.working-dots i:nth-child(3){animation-delay:.3s}
+.vc-theme #progressPanel[data-status="running"] .connection-visual::after{content:"";position:absolute;inset:-7px;border:3px solid transparent;border-top-color:#ff6579;border-right-color:#ff657944;border-radius:50%;animation:povActivityOrbit 1s linear infinite;pointer-events:none}
+.vc-theme #progressPanel[data-status="running"] .check-stage.active{box-shadow:0 0 0 1px #e14a5930,inset 0 0 22px #e14a5910}
+.vc-theme #progressPanel[data-status="running"] .check-stage.active .check-step-icon{position:relative}
+.vc-theme #progressPanel[data-status="running"] .check-stage.active .check-step-icon::after{content:"";position:absolute;inset:-5px;border:2px solid transparent;border-top-color:#ffc0cb;border-right-color:#ffc0cb55;border-radius:50%;animation:povActivityOrbit 1s linear infinite}
+.vc-theme #progressPanel[data-status="running"] #progressBar{position:relative;overflow:hidden}
+.vc-theme #progressPanel[data-status="running"] #progressBar::before{content:"";position:absolute;inset:0 -28px;background:repeating-linear-gradient(115deg,transparent 0 10px,#ffffff35 10px 20px);background-size:28px 28px;animation:povActivityStripes .8s linear infinite}
+#progressPanel:not([data-status="running"]) #progressBar::after{content:none;animation:none}
+@keyframes povActivityOrbit{to{transform:rotate(360deg)}}
+@keyframes povActivityStripes{to{transform:translateX(28px)}}
+@keyframes povWorkingDot{0%,70%,100%{transform:translateY(0);opacity:.4}35%{transform:translateY(-4px);opacity:1}}
+.progress-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.progress-motion-toggle{background:transparent;color:#b6c9de;border:1px solid #ffffff25;border-radius:6px;padding:5px 8px;font:inherit;font-size:10px;cursor:pointer}
+.progress-motion-toggle:hover,.progress-motion-toggle:focus-visible{color:#fff;border-color:#ff6579}
+@media(prefers-reduced-motion:reduce){
+  #progressPanel .working-dots i,
+  .vc-theme #progressPanel[data-status="running"] .connection-visual::after,
+  .vc-theme #progressPanel[data-status="running"] .check-stage.active .check-step-icon::after,
+  .vc-theme #progressPanel[data-status="running"] #progressBar::before{animation:none!important}
+}
+/* A user's explicit opt-in applies to this panel only, including when the
+   operating system otherwise requests reduced motion. */
+.vc-theme #progressPanel[data-status="running"][data-motion="on"] .connection-visual::after,
+.vc-theme #progressPanel[data-status="running"][data-motion="on"] .check-stage.active .check-step-icon::after{animation:povActivityOrbit 1s linear infinite!important}
+.vc-theme #progressPanel[data-status="running"][data-motion="on"] #progressBar::before{animation:povActivityStripes .8s linear infinite!important}
+.vc-theme #progressPanel[data-status="running"][data-motion="on"] .working-dots i{animation:povWorkingDot 1.2s ease-in-out infinite!important}
+.vc-theme #progressPanel[data-status="running"][data-motion="on"] .working-dots i:nth-child(2){animation-delay:.15s!important}
+.vc-theme #progressPanel[data-status="running"][data-motion="on"] .working-dots i:nth-child(3){animation-delay:.3s!important}
+#progressPanel[data-motion="off"] *,#progressPanel[data-motion="off"] *::before,#progressPanel[data-motion="off"] *::after{animation:none!important}

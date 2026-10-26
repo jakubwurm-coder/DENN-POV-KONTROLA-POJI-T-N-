@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07111f">
   <title>Denní POV · Vans Centre</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261025workflow">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261025workflow">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20261026activity">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-theme.css') }}?v=20261026activity">
 </head>
 <body class="vc-theme">
   <div class="app-shell">
@@ -111,7 +111,7 @@
         </section>
 
         <section id="progressPanel" class="connection-check-panel" aria-label="Průběh kontroly pojištění" hidden>
-          <div class="status-topline"><span>DENNÍ POV / STAV KONTROLY</span><span id="checkLiveBadge" class="check-live-badge">PROBÍHÁ</span></div>
+          <div class="status-topline"><span>DENNÍ POV / STAV KONTROLY</span><div class="progress-controls"><button id="progressMotionToggle" class="progress-motion-toggle" type="button" aria-pressed="false" hidden>Zapnout animaci</button><span id="checkLiveBadge" class="check-live-badge">PROBÍHÁ</span></div></div>
           <div class="connection-check-main">
             <div id="connectionVisual" class="connection-visual idle" aria-hidden="true">
               <div class="connection-ring"></div>
@@ -123,6 +123,7 @@
                 <strong id="progressHeadline">Kontrola připojení</strong>
               </div>
               <span id="progressPhase" role="status" aria-live="polite">Připraveno ke spuštění kontroly.</span>
+              <div class="check-working" aria-hidden="true"><span class="working-dots"><i></i><i></i><i></i></span><span>Aplikace pracuje</span></div>
             </div>
             <div class="progress-number">
               <strong id="progressPercent">0 %</strong>
@@ -488,7 +489,7 @@
   {% include '_xlsx_progress.html' %}
   <script src="{{ url_for('static', filename='js/xlsx-export.js') }}?v=20261022audit"></script>
   <div id="toast" class="toast" hidden></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261025workflow"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261026activity"></script>
   <script>
   (() => {
     const start = document.getElementById('completeAuditStart');

@@ -259,13 +259,31 @@ let connectionVisualPercent=0;
 
 let checkActivity=[];
 let checkActivityKey='';
+let progressMotionOverride=null;
+function progressMotionEnabled(){
+  if(typeof progressMotionOverride==='boolean')return progressMotionOverride;
+  try{const stored=localStorage.getItem('povProgressMotion');if(stored==='on'||stored==='off')return stored==='on';}catch(e){}
+  // The user explicitly enabled activity animation for this panel. Other UI
+  // animations retain the system preference; this panel can be opted out below.
+  return true;
+}
+function toggleProgressMotion(){
+  progressMotionOverride=!progressMotionEnabled();
+  try{localStorage.setItem('povProgressMotion',progressMotionOverride?'on':'off');}catch(e){}
+  renderProgress();
+}
 function renderProgress(){
   const running=!!state.running;
   const failed=!!state.error;
   const completed=!running&&!failed&&sessionCheckStarted&&!!state.finished_at;
   const panel=$('progressPanel');
   panel.hidden=!running&&!failed&&!completed;
-  panel.dataset.status=failed?'error':completed?'done':'running';
+  panel.dataset.status=failed?'error':completed?'done':running?'running':'idle';
+  panel.setAttribute('aria-busy',String(running&&!failed));
+  const motion=progressMotionEnabled();
+  panel.dataset.motion=motion?'on':'off';
+  const motionToggle=$('progressMotionToggle');
+  if(motionToggle){motionToggle.hidden=!running||failed;motionToggle.textContent=motion?'Vypnout animaci':'Zapnout animaci';motionToggle.setAttribute('aria-pressed',String(motion));}
   const percent=completed?100:Math.max(0,Math.min(100,Number((state.progress||{}).percent)||0));
   connectionVisualPercent=running?percent:100;
   $('progressPercent').textContent=failed?'!':Math.round(percent)+' %';
@@ -278,7 +296,7 @@ function renderProgress(){
   panel.querySelector('[role="progressbar"]').setAttribute('aria-valuenow',String(percent));
   const visual=$('connectionVisual');
   visual.style.setProperty('--connection-progress',String(percent));
-  visual.className='connection-visual '+(failed?'error':completed?'done':'running');
+  visual.className='connection-visual '+(failed?'error':completed?'done':running?'running':'idle');
   $('connectionVisualIcon').textContent=failed?'!':completed?'✓':'↻';
   const stageIndex=percent<=8?0:percent<=15?1:percent<=82?2:3;
   [...$('checkStages').children].forEach((step,index)=>{
@@ -576,6 +594,7 @@ let lastToast='';function toast(msg,error=false){if(!msg||msg===lastToast)return
 
 
 $('runBtn').addEventListener('click',run);
+if($('progressMotionToggle'))$('progressMotionToggle').addEventListener('click',toggleProgressMotion);
 $('search').addEventListener('input',renderRows);$('clearBtn').addEventListener('click',()=>{$('search').value='';renderRows();});$('clearFilterInline').addEventListener('click',clearFilter);$('navOverview').addEventListener('click',showBreakdown);$('navHowItWorks').addEventListener('click',showHowItWorks);document.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.filter)));$('closeDialog').addEventListener('click',()=>$('detailDialog').close());$('detailDialog').addEventListener('click',e=>{if(e.target===$('detailDialog'))$('detailDialog').close();});
 $('csvBtn').addEventListener('click', event=>{
   event.preventDefault();

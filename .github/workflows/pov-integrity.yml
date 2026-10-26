@@ -28,3 +28,4 @@ jobs:
           node test_xlsx_progress.js
           node test_followup_groups.js
           node test_vehicle_technical.js
+          node test_check_activity.js

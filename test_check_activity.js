@@ -1,0 +1,44 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+function element(){return {hidden:false,dataset:{},style:{setProperty(){}},attributes:{},children:[],setAttribute(name,value){this.attributes[name]=value;},querySelector(selector){return (this.parts??={})[selector]??=((element()));}};}
+const nodes=new Map();
+const document={getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);}};
+document.getElementById('checkStages').children=Array.from({length:4},element);
+const context=vm.createContext({document});
+const source=fs.readFileSync(__dirname+'/static/js/app.js','utf8');
+vm.runInContext(source.slice(0,source.indexOf("$('runBtn').addEventListener")),context);
+function run(code){return vm.runInContext(code,context);}
+run("sessionCheckStarted=true;state={running:true,progress:{percent:15,phase:'Načítám vozidla'},sources:{}};renderProgress();");
+assert.equal(nodes.get('progressPanel').dataset.status,'running');
+assert.equal(nodes.get('progressPanel').attributes['aria-busy'],'true');
+assert.equal(nodes.get('connectionVisual').className,'connection-visual running');
+assert.equal(nodes.get('checkStages').children[1].className,'check-stage active');
+run('renderProgress();');
+assert.equal(nodes.get('progressBar').style.width,'15%','continuous activity must not invent completion progress');
+run("state={running:false,finished_at:'26.10.2026 21:29:00',progress:{percent:100},sources:{}};renderProgress();");
+assert.equal(nodes.get('progressPanel').dataset.status,'done');
+assert.equal(nodes.get('progressPanel').attributes['aria-busy'],'false');
+assert.equal(nodes.get('connectionVisual').className,'connection-visual done');
+assert.ok(nodes.get('checkStages').children.every(node=>node.className==='check-stage done'));
+run("state={running:false,error:'Zdroj není dostupný',progress:{percent:15},sources:{}};renderProgress();");
+assert.equal(nodes.get('progressPanel').dataset.status,'error');
+assert.equal(nodes.get('progressPanel').attributes['aria-busy'],'false');
+assert.equal(nodes.get('connectionVisual').className,'connection-visual error');
+run("sessionCheckStarted=false;state={running:false,progress:{},sources:{}};renderProgress();");
+assert.equal(nodes.get('progressPanel').dataset.status,'idle');
+assert.equal(nodes.get('progressPanel').hidden,true);
+assert.equal(nodes.get('connectionVisual').className,'connection-visual idle');
+console.log('Check activity: ongoing work at a fixed percentage, active stage, completion, error and idle passed.');
+// The explicit panel preference works with reduced motion; opt-out is local.
+context.matchMedia=()=>({matches:true});
+run("progressMotionOverride=null;state={running:true,progress:{percent:15},sources:{}};renderProgress();");
+assert.equal(nodes.get('progressPanel').dataset.motion,'on');
+assert.equal(nodes.get('progressMotionToggle').textContent,'Vypnout animaci');
+run('toggleProgressMotion();');
+assert.equal(nodes.get('progressPanel').dataset.motion,'off');
+assert.equal(nodes.get('progressMotionToggle').attributes['aria-pressed'],'false');
+assert.equal(nodes.get('progressBar').style.width,'15%');
+run('toggleProgressMotion();');
+assert.equal(nodes.get('progressPanel').dataset.motion,'on');
+console.log('Motion preference: explicit panel-only animation, opt-out and opt-in passed.');

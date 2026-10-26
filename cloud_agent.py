@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from vehicle_workflow import is_handled
-from status_projection import ISSUE_STATUSES
-
 import argparse
 import os
 import platform
@@ -21,6 +18,10 @@ BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+# The Windows embedded runtime starts with an isolated module search path.
+# Resolve application modules only after adding the service's own directory.
+from vehicle_workflow import is_handled
+from status_projection import ISSUE_STATUSES
 import requests
 
 

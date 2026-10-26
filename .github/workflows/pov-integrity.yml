@@ -22,7 +22,7 @@ jobs:
       - name: Run POV decision matrix
         run: python test_pov_decision_matrix.py
       - name: Complete audit, export, SQL source and agent regression tests
-        run: python -m unittest test_complete_audit test_xlsx_export test_vehicle_technical test_agent_authorization test_agent_schedule test_sync_resilience
+        run: python -m unittest test_complete_audit test_xlsx_export test_vehicle_technical test_agent_authorization test_agent_schedule test_sync_resilience test_portable_agent_startup
       - name: Browser behavior regression tests
         run: |
           node test_xlsx_progress.js

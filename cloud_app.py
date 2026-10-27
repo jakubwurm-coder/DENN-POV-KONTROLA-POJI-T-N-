@@ -18,7 +18,6 @@ from typing import Any
 from flask import Flask, Response, jsonify, render_template, request, session, redirect, url_for
 import requests
 from vehicle_technical import source_record, kostka_candidates
-from pywebpush import webpush, WebPushException
 from vehicle_workflow import ALLOWED_STATUSES, FOLLOWUP_STATUSES, is_handled, is_manual_ok, is_followup, current_workflow_status
 from status_projection import ISSUE_STATUSES
 from web_accounts import authenticate, personal_accounts_enabled, personal_session_valid, session_fingerprint
@@ -1164,7 +1163,7 @@ def logout():
 @app.before_request
 def _require_web_auth():
     path = request.path
-    if path in {"/health", "/api/push/send-scheduled", "/login", "/dmsdata", "/dmsdata/"} or path.startswith("/static/"):
+    if path in {"/health", "/login", "/dmsdata", "/dmsdata/"} or path.startswith("/static/"):
         return None
     if path.startswith("/api/agent/") or path == "/api/sync":
         return None  # Existing agent bearer + identity authorization.
@@ -1218,112 +1217,6 @@ def service_worker():
     response.headers["Service-Worker-Allowed"] = "/"
     response.headers["Cache-Control"] = "no-cache"
     return response
-
-
-@app.get("/api/push/public-key")
-def api_push_public_key():
-    key = os.getenv("VAPID_PUBLIC_KEY", "").strip()
-    return jsonify({"ok": bool(key), "public_key": key})
-
-
-@app.post("/api/push/subscribe")
-def api_push_subscribe():
-    payload = request.get_json(silent=True) or {}
-    subscription = payload.get("subscription") or {}
-    endpoint = str(subscription.get("endpoint") or "").strip()
-    keys = subscription.get("keys") or {}
-    if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
-        return jsonify({"ok": False, "message": "Neplatné přihlášení k notifikacím."}), 400
-    try:
-        with _db_connect() as conn:
-            with conn.cursor() as cur:
-                _db_init(cur)
-                cur.execute("""
-                    INSERT INTO denni_pov_push_subscriptions(endpoint, subscription, updated_at)
-                    VALUES (%s, %s::jsonb, NOW())
-                    ON CONFLICT(endpoint) DO UPDATE SET subscription=EXCLUDED.subscription, updated_at=NOW()
-                """, (endpoint, json.dumps(subscription)))
-                conn.commit()
-        return jsonify({"ok": True})
-    except Exception as exc:
-        print(f"Push subscribe failed: {exc}")
-        return jsonify({"ok": False, "message": "Notifikaci se nepodařilo uložit."}), 503
-
-
-def _send_push_for_state(data: dict[str, Any], tag: str = "denni-pov-check") -> dict[str, int]:
-    """Send the current check result to every registered browser."""
-    public = _public_state(data)
-    summary = public.get("summary") or {}
-    active = int(summary.get("active") or 0)
-    open_rows = [row for row in public.get("results") or [] if not is_handled(row)]
-    counts = Counter(str(row.get("status_raw") or "").upper() for row in open_rows)
-    missing = counts["CHYBÍ V UNIQA"]
-    unwanted = sum(counts[raw] for raw in {"NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ", "PRODANÉ, ALE POJIŠTĚNÉ", "NAVÍC V UNIQA", "NAVÍC V ALLIANZ", "DVOJÍ POJIŠTĚNÍ", "DEPOZIT, ALE POJIŠTĚNÉ"})
-    other = counts["SPZ NESOUHLASÍ"] + counts["NELZE OVĚŘIT"]
-    problems = missing + unwanted + other
-
-    # Uživatel chce upozornění pouze tehdy, když výsledek skutečně
-    # vyžaduje kontrolu. Bez problému neposíláme žádnou push notifikaci.
-    if problems <= 0:
-        return {"sent": 0, "subscriptions": 0}
-
-    body = f"Aktivní vozidla: {active} · chybí pojištění: {missing} · pojištění navíc: {unwanted}"
-    if other:
-        body += f" · ostatní ke kontrole: {other}"
-    payload = json.dumps({
-        "title": "DENNÍ POV · Kontrola dokončena",
-        "body": body,
-        "url": "/",
-        "tag": tag,
-    }, ensure_ascii=False)
-
-    with _db_connect() as conn:
-        with conn.cursor() as cur:
-            _db_init(cur)
-            cur.execute("SELECT endpoint, subscription FROM denni_pov_push_subscriptions")
-            subscriptions = cur.fetchall()
-            conn.commit()
-
-    sent = 0
-    expired = []
-    for endpoint, subscription in subscriptions:
-        try:
-            webpush(
-                subscription_info=subscription,
-                data=payload,
-                vapid_private_key=os.getenv("VAPID_PRIVATE_KEY", "").strip(),
-                vapid_claims={"sub": os.getenv("VAPID_SUBJECT", "mailto:jakubwurm@gmail.com").strip()},
-                ttl=3600,
-            )
-            sent += 1
-        except WebPushException as exc:
-            status = getattr(getattr(exc, "response", None), "status_code", None)
-            if status in (404, 410):
-                expired.append(endpoint)
-            else:
-                print(f"Web Push failed ({status or 'unknown'}): {exc}")
-    if expired:
-        with _db_connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM denni_pov_push_subscriptions WHERE endpoint = ANY(%s)", (expired,))
-                conn.commit()
-    return {"sent": sent, "subscriptions": len(subscriptions)}
-
-
-@app.post("/api/push/send-scheduled")
-def api_push_send_scheduled():
-    expected = os.getenv("PUSH_CRON_SECRET", "").strip()
-    supplied = request.headers.get("X-Push-Secret", "").strip()
-    if not expected or not hmac.compare_digest(expected, supplied):
-        return jsonify({"ok": False, "message": "Unauthorized"}), 401
-    try:
-        with _lock:
-            data = _load_state()
-        result = _send_push_for_state(data, "denni-pov-scheduled")
-        return jsonify({"ok": True, **result})
-    except Exception as exc:
-        print(f"Scheduled push failed: {exc}")
-        return jsonify({"ok": False, "message": str(exc)}), 500
 
 
 @app.get("/api/state")
@@ -1861,11 +1754,6 @@ def api_sync():
 
     if final_run and not data.get("error"):
         _kostka_start(data)
-        try:
-            push_result = _send_push_for_state(data, "denni-pov-check")
-            alert_sent = push_result.get("sent", 0) > 0
-        except Exception as exc:
-            print(f"Push after completed check failed: {exc}")
 
     return jsonify({"ok": True, "message": "Data byla synchronizována na Render.", "alert_sent": alert_sent})
 

@@ -1210,15 +1210,6 @@ def index():
     return render_template("index.html")
 
 
-@app.get("/sw.js")
-def service_worker():
-    body = (Path(app.static_folder) / "sw.js").read_text(encoding="utf-8")
-    response = Response(body, mimetype="application/javascript")
-    response.headers["Service-Worker-Allowed"] = "/"
-    response.headers["Cache-Control"] = "no-cache"
-    return response
-
-
 @app.get("/api/state")
 def api_state():
     with _lock:

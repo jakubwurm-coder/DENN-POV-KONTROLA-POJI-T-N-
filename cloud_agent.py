@@ -364,7 +364,9 @@ def _lookup_vehicle_in_full_tirbazar(query: str, query_type: str) -> dict[str, A
 
     # Hledání je přímo v dbo.Vozidlo. Není zde GCRecord IS NULL ani žádný
     # filtr stavu, země, výkupu/prodeje nebo pravidel kontroly pojištění.
-    if query_type == "vin":
+    if query_type == 'oid':
+        where_sql = 'v.OID = ' + str(int(needle))
+    elif query_type == "vin":
         where_sql = (
             "UPPER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(ISNULL(v.VIN, ''))), "
             "' ', ''), '-', ''), '.', '')) = '" + needle + "'"
@@ -828,7 +830,7 @@ def _error_snapshot(exc: Exception) -> dict[str, Any]:
     }
 
 
-def run_and_sync(reason: str, command_id: str = "") -> None:
+def run_and_sync(reason: str, command_id: str = "", notify: bool = True) -> None:
     global _ACTIVE_CHECK_ID, _ACTIVE_RUN_ID, _MESSAGE_SEQ
     _ACTIVE_RUN_ID = uuid.uuid4().hex
     _MESSAGE_SEQ = 0
@@ -844,7 +846,7 @@ def run_and_sync(reason: str, command_id: str = "") -> None:
         print("Kontrola dokončena. Ukládám výsledky na web...")
     push_snapshot(snapshot)
     print("Online web byl aktualizován:", CLOUD_URL)
-    if not snapshot.get("error"):
+    if notify and not snapshot.get("error"):
         _send_result_email(snapshot)
 
 
@@ -971,7 +973,7 @@ def main() -> int:
                 elif action == "sample_tirbazar":
                     sample_tirbazar(command or {})
                 else:
-                    run_and_sync("požadavek z online webu", command_id=command_id)
+                    run_and_sync("požadavek z online webu", command_id=command_id, notify=not command.get('audit_no_notifications'))
             elif datetime.now(PRAGUE_TZ) >= next_auto:
                 run_and_sync(f"automatická kontrola {next_auto:%H:%M} Europe/Prague")
                 next_auto = _next_scheduled_run(datetime.now(PRAGUE_TZ))

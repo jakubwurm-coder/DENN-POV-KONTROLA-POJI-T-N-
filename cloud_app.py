@@ -1414,7 +1414,8 @@ def api_vehicle_lookup():
     if not query:
         return jsonify({"ok": False, "message": "Zadejte VIN nebo SPZ."}), 400
     is_vin = bool(re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", query))
-    if not is_vin and not re.fullmatch(r"[A-Z0-9]{4,10}", query):
+    is_oid = bool(re.fullmatch(r"[0-9]{1,10}", query))
+    if not is_vin and not is_oid and not re.fullmatch(r"[A-Z0-9]{4,10}", query):
         return jsonify({"ok": False, "message": "Zadejte platný VIN nebo SPZ."}), 400
     with _lock, _state_transaction():
         data = _load_state()
@@ -1425,7 +1426,7 @@ def api_vehicle_lookup():
             return jsonify({"ok": False, "status": "busy", "message": "Agent právě zpracovává jiný požadavek. Zkuste to za chvíli."}), 409
         command_id = uuid.uuid4().hex
         data["_vehicle_lookup"] = {"id": command_id, "query": query, "status": "pending", "found": False, "vehicle": None, "error": ""}
-        data["_command"] = {"id": command_id, "action": "lookup_vehicle", "query": query, "query_type": "vin" if is_vin else "spz", "requested_at": _now()}
+        data["_command"] = {"id": command_id, "action": "lookup_vehicle", "query": query, "query_type": "vin" if is_vin else "oid" if is_oid else "spz", "requested_at": _now()}
         _save_state(data)
     return jsonify({"ok": True, "id": command_id, "query": query, "status": "pending", "message": "Požadavek byl odeslán do TIRBazar."}), 202
 
@@ -1458,7 +1459,8 @@ def api_run():
         data["finished_at"] = None
         data["error"] = None
         data["progress"] = {"percent": 3, "phase": "Čekám na kancelářský agent", "eta_seconds": 90}
-        data["_command"] = {"id": command_id, "action": "run_check", "requested_at": _now()}
+        data["_command"] = {"id": command_id, "action": "run_check", "requested_at": _now(),
+                            "audit_no_notifications": bool((request.get_json(silent=True) or {}).get('audit_no_notifications'))}
         data["sources"] = {
             "tirbazar": {"state": "loading", "status": "Čekám na kancelářský agent…", "detail": "TIRBazar SQL je dostupný pouze z interní sítě"},
             "uniqa": {"state": "idle", "status": "Čekám…", "detail": "AIV / Denní POV / Aktivní"},

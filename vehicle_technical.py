@@ -7,10 +7,10 @@ import re
 SQL_FIELDS = {
     "Palivo": (("PalivoNazev", "Palivo"), False),
     "MotorZdvihObjem": (("ZdvihovyObjem", "ObjemMotoru", "MotorZdvihObjem"), True),
-    "MotorMaxVykon": (("VykonMotoru", "Vykon", "MotorMaxVykon"), True),
+    "MotorMaxVykon": (("VykonKw", "VykonMotoru", "Vykon", "MotorMaxVykon"), True),
     "VozidloKaroserieBarva": (("BarvaNazev", "Barva"), False),
     "DatumPrvniRegistrace": (("DatumPrvniRegistrace", "PrvniRegistrace"), True),
-    "PravidelnaTechnickaProhlidkaDo": (("STKDo", "PlatnostSTK"), True),
+    "PravidelnaTechnickaProhlidkaDo": (("DatumPlatnostiSTK", "STKDo", "PlatnostSTK"), True),
     "Kategorie": (("KategorieNazev", "Kategorie"), False),
 }
 

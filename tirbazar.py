@@ -420,6 +420,8 @@ ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozid
 
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'ObchodniOznaceni' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
     SET @modelExpr = N'CONVERT(NVARCHAR(300), v.ObchodniOznaceni)';
+ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Typ' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
+    SET @modelExpr = N'CONVERT(NVARCHAR(300), v.Typ)';
 ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Model' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
     SET @modelExpr = N'CONVERT(NVARCHAR(300), v.Model)';
 ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'ModelVozidla' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
@@ -430,6 +432,26 @@ ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozid
     SET @modelExpr = N'CONVERT(NVARCHAR(300), v.NazevVozidla)';
 ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Vozidlo') AND name = 'Nazev' AND TYPE_NAME(system_type_id) IN ('varchar','nvarchar','char','nchar'))
     SET @modelExpr = N'CONVERT(NVARCHAR(300), v.Nazev)';
+
+-- Verified TIRBazar dictionaries: the model code is scoped to its brand.
+IF COL_LENGTH('dbo.Vozidlo','ZnackaKod') IS NOT NULL
+ AND COL_LENGTH('dbo.Vozidlo','ZnackaKod2') IS NOT NULL
+ AND COL_LENGTH('dbo.CL_Znacka','KodZnacky') IS NOT NULL
+ AND COL_LENGTH('dbo.CL_Znacka','PopisZnacky') IS NOT NULL
+ SET @brandExpr = N'COALESCE(NULLIF(LTRIM(RTRIM(' + @brandExpr + N')), ''''),
+ (SELECT TOP 1 LTRIM(RTRIM(z.PopisZnacky)) FROM dbo.CL_Znacka z
+ WHERE z.KodZnacky COLLATE DATABASE_DEFAULT = COALESCE(NULLIF(v.ZnackaKod COLLATE DATABASE_DEFAULT, ''''), v.ZnackaKod2 COLLATE DATABASE_DEFAULT)
+ ORDER BY z.PopisZnacky))';
+IF COL_LENGTH('dbo.Vozidlo','ModelKod') IS NOT NULL
+ AND COL_LENGTH('dbo.Vozidlo','ZnackaKod') IS NOT NULL
+ AND COL_LENGTH('dbo.Vozidlo','ZnackaKod2') IS NOT NULL
+ AND COL_LENGTH('dbo.CL_Model','KodModelu') IS NOT NULL
+ AND COL_LENGTH('dbo.CL_Model','KodZnacky') IS NOT NULL
+ AND COL_LENGTH('dbo.CL_Model','PopisModelu') IS NOT NULL
+ SET @modelExpr = N'COALESCE((SELECT TOP 1 NULLIF(LTRIM(RTRIM(m.PopisModelu)), '''') FROM dbo.CL_Model m
+ WHERE m.KodModelu COLLATE DATABASE_DEFAULT = v.ModelKod COLLATE DATABASE_DEFAULT
+ AND m.KodZnacky COLLATE DATABASE_DEFAULT = COALESCE(NULLIF(v.ZnackaKod COLLATE DATABASE_DEFAULT, ''''), v.ZnackaKod2 COLLATE DATABASE_DEFAULT)
+ ORDER BY m.PopisModelu), NULLIF(LTRIM(RTRIM(' + @modelExpr + N')), ''''))';
 
 DECLARE @metaSql NVARCHAR(MAX) = N'
 SELECT

@@ -7,7 +7,7 @@ import unittest
 import uuid
 from unittest.mock import patch
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from assistant_api import install_assistant_api
 from mcp_api import install_mcp_api
 
@@ -32,6 +32,7 @@ class ControlApiTests(unittest.TestCase):
             '_save_state': self.save, '_run_is_stale': lambda s: s.get('stale', False),
             '_state_transaction': __import__('contextlib').nullcontext,
             '_now': lambda: '03.10.2026 20:00:00', 'uuid': uuid, 'jsonify': jsonify,
+            'request': request,
         }
         exec(compile(ast.Module(body=[fn], type_ignores=[]), 'cloud_app.py', 'exec'), namespace)
         handler = namespace['api_run']

@@ -24,6 +24,23 @@ def install(app, cloud):
 
     cloud._latest_source_snapshot = latest_source
 
+    @app.route('/api/admin/sql-diagnostics', methods=['GET', 'POST'])
+    def sql_diagnostics():
+        if not allowed():
+            return jsonify(ok=False), 403
+        with cloud._lock, cloud._state_transaction():
+            state=cloud._load_state()
+            if __import__('flask').request.method == 'GET':
+                return jsonify(state.get('_sql_sample') or {})
+            if state.get('_command') or state.get('running'):
+                return jsonify(ok=False, message='Agent právě pracuje.'), 409
+            import uuid
+            command_id=uuid.uuid4().hex
+            state['_sql_sample']={'id':command_id,'status':'pending'}
+            state['_command']={'id':command_id,'action':'run_check','sql_only':True,'requested_at':cloud._now()}
+            cloud._save_state(state)
+        return jsonify(ok=True,id=command_id,status='pending'),202
+
     @app.get('/api/admin/audit-snapshot')
     def audit_snapshot():
         if not allowed():

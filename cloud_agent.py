@@ -585,6 +585,20 @@ def lookup_vehicle(command: dict[str, Any]) -> None:
 def sample_tirbazar(command: dict[str, Any]) -> None:
     """Read-only diagnostika: 10 skutečných karet + všechna dbo.Vozidlo pole obsahující 'Stav'."""
     command_id = str(command.get("id") or "").strip()
+    if command.get('sql_only'):
+        _auto_update_from_github()
+        _load_local_app()
+        import tirbazar
+        from config import load_config
+        payload={'id':command_id,'rows':[],'error':''}
+        try:
+            vehicles,_=tirbazar.load_tirbazar_vehicles(load_config())
+            payload.update(sql_diagnostics=dict(tirbazar.LAST_SQL_DIAGNOSTICS),
+                           sql_counts=dict(tirbazar.LAST_LOAD_STATS))
+        except Exception as exc:
+            payload['error']=str(exc)
+        requests.post(f'{CLOUD_URL}/api/agent/sql-sample-result',headers=_headers(),json=payload,timeout=45).raise_for_status()
+        return
     payload: dict[str, Any] = {"id": command_id, "rows": [], "state_columns": [], "state_values": [], "error": ""}
     try:
         if not command_id:
@@ -946,7 +960,9 @@ def main() -> int:
             if command_id and command_id != last_command_id:
                 last_command_id = command_id
                 action = str((command or {}).get("action") or "run_check")
-                if action == "service_diagnostics":
+                if command.get('sql_only'):
+                    sample_tirbazar(command)
+                elif action == "service_diagnostics":
                     send_service_diagnostics(command or {})
                 elif action == "lookup_vehicle":
                     lookup_vehicle(command or {})

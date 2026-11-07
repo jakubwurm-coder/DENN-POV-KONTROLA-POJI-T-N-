@@ -1542,6 +1542,8 @@ def agent_sql_sample_result():
             "rows": payload.get("rows") if isinstance(payload.get("rows"), list) else [],
             "state_columns": payload.get("state_columns") if isinstance(payload.get("state_columns"), list) else [],
             "state_values": payload.get("state_values") if isinstance(payload.get("state_values"), list) else [],
+            "sql_diagnostics": payload.get("sql_diagnostics") if isinstance(payload.get("sql_diagnostics"), dict) else {},
+            "sql_counts": payload.get("sql_counts") if isinstance(payload.get("sql_counts"), dict) else {},
             "error": error,
             "finished_at": _now(),
         }
@@ -1550,7 +1552,7 @@ def agent_sql_sample_result():
             data["_command"] = None
         _save_state(data)
     # TEMP diagnostika: výsledek jde do aplikačního logu, ne do veřejného API.
-    print("SQL_SAMPLE_RESULT " + json.dumps(result, ensure_ascii=False), flush=True)
+    print("SQL_SAMPLE_RESULT " + json.dumps({'id':command_id,'status':result['status'],'rows':len(result['rows'])}, ensure_ascii=False), flush=True)
     return jsonify({"ok": True})
 
 

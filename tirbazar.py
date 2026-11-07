@@ -642,13 +642,32 @@ SELECT '__DB_SECURITY__|' + SYSTEM_USER + '|' +
  CAST(ISNULL(HAS_PERMS_BY_NAME('dbo.Vozidlo','OBJECT','DELETE'),0) AS VARCHAR(2));
 SELECT '__SQL_FIELD__|' + t.name + '|' + c.name + '|' + TYPE_NAME(c.system_type_id)
 FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id
-WHERE t.name IN ('Vozidlo','VykupVozidla','VykoupeniZKomise','Prodej') ORDER BY t.name,c.column_id;
+WHERE t.name IN ('Vozidlo','VykupVozidla','VykoupeniZKomise','Prodej')
+ OR t.name LIKE '%Znack%' OR t.name LIKE '%Model%' ORDER BY t.name,c.column_id;
 SELECT '__SQL_FK__|' + pt.name + '|' + pc.name + '|' + rt.name + '|' + rc.name
 FROM sys.foreign_key_columns fk JOIN sys.tables pt ON pt.object_id=fk.parent_object_id
 JOIN sys.columns pc ON pc.object_id=pt.object_id AND pc.column_id=fk.parent_column_id
 JOIN sys.tables rt ON rt.object_id=fk.referenced_object_id
 JOIN sys.columns rc ON rc.object_id=rt.object_id AND rc.column_id=fk.referenced_column_id
 WHERE pt.name='Vozidlo' ORDER BY pc.name;
+GO
+DECLARE @auditTable SYSNAME, @auditSchema SYSNAME, @auditDictSql NVARCHAR(MAX);
+DECLARE audit_dict_cursor CURSOR LOCAL FAST_FORWARD FOR
+ SELECT SCHEMA_NAME(schema_id),name FROM sys.tables WHERE name LIKE '%Znack%' OR name LIKE '%Model%';
+OPEN audit_dict_cursor;
+FETCH NEXT FROM audit_dict_cursor INTO @auditSchema,@auditTable;
+WHILE @@FETCH_STATUS=0
+BEGIN
+ SET @auditDictSql=N'SELECT ''__DICT_ROW__|' + REPLACE(@auditTable,'''','''''') +
+ N'|'' + CONVERT(NVARCHAR(MAX),(SELECT TOP 5 * FROM '+QUOTENAME(@auditSchema)+N'.'+QUOTENAME(@auditTable)+N' FOR XML RAW));';
+ EXEC sp_executesql @auditDictSql;
+ FETCH NEXT FROM audit_dict_cursor INTO @auditSchema,@auditTable;
+END;
+CLOSE audit_dict_cursor;
+DEALLOCATE audit_dict_cursor;
+SELECT TOP 10 '__VEHICLE_CODES__|' + CAST(OID AS VARCHAR(30))+'|' + ISNULL(VIN,'')+'|' +
+ ISNULL(ZnackaKod,'')+'|'+ISNULL(ZnackaKod2,'')+'|'+ISNULL(ModelKod,'')+'|'+ISNULL(Typ,'')
+ FROM dbo.Vozidlo WHERE GCRecord IS NULL ORDER BY OID DESC;
 COMMIT TRANSACTION;
 GO
 SELECT '__FINISHED__';
@@ -728,7 +747,7 @@ def load_tirbazar_vehicles(
     LAST_SQL_DIAGNOSTICS["lines"] = []
     for original in stdout.splitlines():
         line = original.strip()
-        for marker in ('__PHYSICAL_TOTAL__|','__DELETED_ROW__|','__DB_SECURITY__|','__SQL_FIELD__|','__SQL_FK__|'):
+        for marker in ('__PHYSICAL_TOTAL__|','__DELETED_ROW__|','__DB_SECURITY__|','__SQL_FIELD__|','__SQL_FK__|','__DICT_ROW__|','__VEHICLE_CODES__|'):
             if marker in line:
                 LAST_SQL_DIAGNOSTICS['lines'].append(line[line.index(marker):])
                 break

@@ -65,6 +65,13 @@ class ControlApiTests(unittest.TestCase):
         self.assertTrue(status['running'])
         self.assertFalse(status['result_is_current'])
 
+    def test_existing_control_connector_survives_read_key_separation(self):
+        with patch.dict(os.environ,{'MCP_READ_TOKEN':'new-reader','MCP_CONTROL_TOKEN':'','MCP_CAPABILITY_TOKEN':'existing-controller'}):
+            self.assertEqual(self.rpc('new-reader','tools/call',name='start_insurance_check').status_code,403)
+            response=self.rpc('existing-controller','tools/call',name='start_insurance_check')
+            self.assertEqual(response.status_code,200)
+            self.assertTrue(self.state['running'])
+
     def test_does_not_overwrite_other_command(self):
         command = {'id': 'lookup', 'action': 'lookup_vehicle'}
         self.state['_command'] = command

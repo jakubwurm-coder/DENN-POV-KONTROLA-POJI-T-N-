@@ -23,10 +23,14 @@ def install_mcp_api(
 ) -> None:
     def control_authorized(capability: str) -> bool:
         expected = os.getenv("MCP_CONTROL_TOKEN", "").strip()
+        # Existing connectors were provisioned to start checks. During migration
+        # keep their capability as control, while assigning a distinct read key.
+        if not expected and os.getenv('MCP_READ_TOKEN', '').strip():
+            expected = os.getenv('MCP_CAPABILITY_TOKEN', '').strip()
         return bool(expected) and hmac.compare_digest(capability, expected)
 
     def authorized(capability: str) -> bool:
-        expected = os.getenv("MCP_CAPABILITY_TOKEN", "").strip()
+        expected = os.getenv('MCP_READ_TOKEN', '').strip() or os.getenv("MCP_CAPABILITY_TOKEN", "").strip()
         return (bool(expected) and hmac.compare_digest(capability, expected)) or control_authorized(capability)
 
     def current_status() -> dict[str, Any]:

@@ -2,7 +2,7 @@ const {readFileSync}=require('node:fs');
 const vm=require('node:vm');
 const assert=require('node:assert/strict');
 const source=readFileSync(__dirname+'/static/js/app.js','utf8');
-const functions=source.slice(source.indexOf('function kostkaDate('),source.indexOf('function showDetail('));
+const functions=source.slice(source.indexOf('function fetchedDate('),source.indexOf('function workflowCredit('))+'\n'+source.slice(source.indexOf('function kostkaDate('),source.indexOf('function showDetail('));
 async function check(result){
   const nodes={kostkaSection:{},kostkaStatus:{},kostkaData:{},detailDialog:{open:true},vehicleDetailValue:{}};
   const context={$:id=>nodes[id],esc:value=>String(value).replace(/</g,'&lt;'),fetch:async()=>({ok:true,json:async()=>result}),Date,Number,encodeURIComponent,setTimeout};

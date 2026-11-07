@@ -19,7 +19,8 @@ function isRedInsuranceStatus(r){
 function isManualOk(r){return isUnusual(r)&&['RUČNĚ OK','V POŘÁDKU'].includes(String(r.workflow_status||'').toUpperCase());}
 function isFollowup(r){return isUnusual(r)&&['VYŘEŠENO','K DOŘEŠENÍ'].includes(String(r.workflow_status||'').toUpperCase());}
 function workflowLabel(r){return isManualOk(r)?'RUČNĚ OK':isFollowup(r)?'K DOŘEŠENÍ':needsAttention(r)?'Nové':'—';}
-function workflowTime(value){const date=new Date(value);return value&&!Number.isNaN(date.getTime())?date.toLocaleString('cs-CZ',{timeZone:'Europe/Prague'}):value;}
+function workflowTime(value){const text=String(value||'');if(/^\d{2}\.\d{2}\.\d{4}(?:\s|$)/.test(text))return text;const date=new Date(text);return text&&!Number.isNaN(date.getTime())?date.toLocaleString('cs-CZ',{timeZone:'Europe/Prague'}):text;}
+function fetchedDate(value){const text=String(value||'');if(/^\d{2}\.\d{2}\.\d{4}(?:\s|$)/.test(text))return text.slice(0,10);const date=new Date(text);return text&&!Number.isNaN(date.getTime())?date.toLocaleDateString('cs-CZ',{timeZone:'Europe/Prague'}):text;}
 function workflowCredit(r){return r.workflow_status?'Účet: '+(r.workflow_updated_by||'autor nezaznamenán')+' · '+(workflowTime(r.workflow_updated_at)||'čas potvrzení nezaznamenán'):'';}
 function badgeClass(r){
   const raw=String(r.status_raw||'').toUpperCase();
@@ -563,7 +564,7 @@ async function loadKostka(vin){
           .join(' ');
         const vehicleDetailValue=$('vehicleDetailValue');
         if(vehicleDetailValue&&vehicleName)vehicleDetailValue.textContent=vehicleName;
-        status.textContent='Zdroj: '+(result.source_label||'Datová kostka')+(result.oid!=null?' · OID '+result.oid:'')+(result.fetched_at?' · načteno '+(Number.isNaN(Date.parse(result.fetched_at))?result.fetched_at:new Date(result.fetched_at).toLocaleDateString('cs-CZ')):'');
+        status.textContent='Zdroj: '+(result.source_label||'Datová kostka')+(result.oid!=null?' · OID '+result.oid:'')+(result.fetched_at?' · načteno '+fetchedDate(result.fetched_at):'');
         $('kostkaData').innerHTML=rows?`<dl class="detail-grid kostka-grid">${rows}</dl>`:'';
         return;
       }

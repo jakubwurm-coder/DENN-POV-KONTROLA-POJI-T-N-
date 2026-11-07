@@ -70,3 +70,5 @@ assert.equal(run("activeFilter='UNKNOWN';state.results.filter(matches).length"),
 assert.equal(run('resultLabel(state.results[0])'),run('resultLabel(state.results[1])'));
 assert.equal(run('resultLabel(state.results[3])'),'Nepojištěno');
 assert.equal(run("insuranceState({status_raw:'UNRECOGNIZED'})"),'UNKNOWN');
+assert.equal(run("workflowTime('07.11.2026 15:35:22')"),'07.11.2026 15:35:22');
+assert.equal(run("fetchedDate('07.11.2026 22:18:52')"),'07.11.2026');

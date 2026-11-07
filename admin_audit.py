@@ -13,7 +13,7 @@ def install(app, cloud):
     def latest_source():
         with cloud._db_connect() as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT source_snapshot, snapshot_sha256, run_id FROM denni_pov_run_history WHERE source_snapshot IS NOT NULL ORDER BY id DESC LIMIT 1')
+                cur.execute("SELECT source_snapshot, snapshot_sha256, run_id FROM denni_pov_run_history WHERE source_snapshot IS NOT NULL AND error IS NULL ORDER BY to_timestamp(finished_at, 'DD.MM.YYYY HH24:MI:SS') DESC, id DESC LIMIT 1")
                 row = cur.fetchone()
         if not row:
             return None

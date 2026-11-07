@@ -139,6 +139,19 @@ class PublicationDatabaseTests(unittest.TestCase):
             self.assertEqual(c._load_state()['results'][0]['vin'],'PREVIOUS')
         finally:
             with self.connect() as con:con.execute('ALTER TABLE denni_pov_run_history DROP CONSTRAINT audit_fail')
+    def test_delayed_message_is_durable_without_replacing_newer_result(self):
+        newest=payload('e'*32)
+        self.assertEqual(self.post(newest).status_code,200)
+        current=c._load_state();current['_command']={'action':'run_check','id':'new-request'}
+        c._save_state(current)
+        late=payload('f'*32);late['check_id']='previous-request';late['finished_at']='07.11.2026 09:00:00'
+        response=self.post(late)
+        self.assertTrue(response.json['archived_only'])
+        self.assertEqual(c._load_state()['run_id'],newest['run_id'])
+        self.assertEqual(c._load_state()['_command']['id'],'new-request')
+        self.assertTrue(self.post(late).json['already_received'])
+        with self.connect() as con:
+            self.assertEqual(con.execute('SELECT count(*) FROM denni_pov_run_history WHERE run_id=%s',(late['run_id'],)).fetchone()[0],1)
     def test_unknown_and_absent_rows_do_not_clear_manual_handling(self):
         row=dict(oid=1,vin='UNCERTAIN',status_raw='CHYBÍ V UNIQA')
         c._annotation_save('UNCERTAIN','keep','K DOŘEŠENÍ',row,'alice')

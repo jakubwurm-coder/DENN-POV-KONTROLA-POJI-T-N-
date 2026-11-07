@@ -91,11 +91,13 @@ try {
 
         $reader = $cmd.ExecuteReader()
         try {
-            while ($reader.Read()) {
-                if (-not $reader.IsDBNull(0)) {
-                    [Console]::Out.WriteLine($reader.GetValue(0).ToString())
+            do {
+                while ($reader.Read()) {
+                    if ($reader.FieldCount -gt 0 -and -not $reader.IsDBNull(0)) {
+                        [Console]::Out.WriteLine($reader.GetValue(0).ToString())
+                    }
                 }
-            }
+            } while ($reader.NextResult())
         }
         finally {
             $reader.Close()

@@ -1734,6 +1734,15 @@ def api_sync():
     with _lock, _state_transaction():
         previous = _load_state()
         run_id = str(payload.get('run_id') or '')
+        payload_agent = payload.get('agent') if isinstance(payload.get('agent'), dict) else {}
+        if _normalize_agent_id(payload_agent.get('id')) != _expected_agent_id():
+            return jsonify(ok=False, message='Neplatná identita agenta.'), 403
+        if final_run and run_id:
+            with _db_connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute('SELECT 1 FROM denni_pov_run_history WHERE run_id=%s', (run_id,))
+                    if cur.fetchone():
+                        return jsonify(ok=True, already_received=True, run_id=run_id)
         if run_id and previous.get('run_id') == run_id:
             if not previous.get('running') and previous.get('last_successful_at') and not previous.get('error'):
                 return jsonify(ok=True, already_received=True, run_id=run_id)
@@ -1742,6 +1751,19 @@ def api_sync():
         pending = previous.get("_command") if isinstance(previous.get("_command"), dict) else {}
         pending_check_id = str(pending.get("id") or "") if pending.get("action") == "run_check" else ""
         received_check_id = str(payload.get("check_id") or "").strip()
+        # A delayed durable message is archived even after a newer run/request.
+        # It must never overwrite the currently published dataset or annotations.
+        if final_run and run_id:
+            try:
+                older = (datetime.strptime(str(payload.get('finished_at') or ''), '%d.%m.%Y %H:%M:%S') <
+                         datetime.strptime(str(previous.get('last_successful_at') or ''), '%d.%m.%Y %H:%M:%S'))
+            except ValueError:
+                older = False
+            superseded_request = bool(received_check_id and received_check_id != pending_check_id)
+            conflicts_with_pending = bool(pending_check_id and received_check_id != pending_check_id)
+            if older or superseded_request or conflicts_with_pending:
+                _run_history_save(dict(payload, _source_snapshot=dict(payload)))
+                return jsonify(ok=True, archived_only=True, run_id=run_id)
         # Only the matching agent run can update a pending manual check.
         if pending_check_id and received_check_id != pending_check_id:
             return jsonify({"ok": False, "message": "Výsledek nepatří k právě spuštěné kontrole."}), 409

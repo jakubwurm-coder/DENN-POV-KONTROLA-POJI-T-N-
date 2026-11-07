@@ -40,6 +40,8 @@ def current_workflow_status(row, annotation=None):
     annotation = row if annotation is None else annotation
     raw = str(row.get("status_raw") or row.get("status") or "").strip().upper()
     previous = str(annotation.get("automatic_problem_status") or "").strip().upper()
-    if raw not in ISSUE_STATUSES or (previous in ISSUE_STATUSES and previous != raw):
+    if raw == "NELZE OVĚŘIT":
+        return workflow_status(annotation)
+    if raw not in ISSUE_STATUSES or (previous in ISSUE_STATUSES and previous != raw and previous != "NELZE OVĚŘIT"):
         return ""
     return workflow_status(annotation)

@@ -1,5 +1,9 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+.agent-sync-token
+.agent-sync-token.tmp
+.agent-outbox/
+
 *.py[codz]
 *$py.class
 

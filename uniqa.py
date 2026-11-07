@@ -29,6 +29,7 @@ class UniqaLoadResult:
     raw_count: int = 0
     direct_verified_count: int = 0
     raw_vehicles: list[UniqaVehicle] = field(default_factory=list)
+    unverified_vins: set[str] = field(default_factory=set)
 
 
 def keychain_read(service: str) -> str:
@@ -361,7 +362,8 @@ def _lookup_active_vin(
         # U filtru bez výsledku může UNIQA vykreslit stránku bez datové tabulky.
         # Pokud se VIN v textu stránky vůbec nevyskytuje, bereme to jako 0 výsledků.
         page_text = normalize_vin(parse_html(response).get_text(" ", strip=True))
-        if vin not in page_text:
+        empty_markers = ("ŽÁDNÉZÁZNAMY", "ŽÁDNÝZÁZNAM", "NEBYLYNALEZENY", "ŽÁDNÉVÝSLEDKY", "NENALEZEN")
+        if vin not in page_text and any(normalize_vin(x) in page_text for x in empty_markers):
             return []
         raise
 
@@ -389,6 +391,7 @@ def load_uniqa_vehicles(
         missing_for_direct_check = sorted(requested - known_vins)
 
         direct_rows: list[UniqaVehicle] = []
+        unverified_vins: set[str] = set()
         if missing_for_direct_check:
             print()
             print(
@@ -401,7 +404,8 @@ def load_uniqa_vehicles(
             try:
                 found = _lookup_active_vin(session, vin)
             except Exception as exc:
-                print(f"UNIQA - přímé ověření {vin} selhalo: {exc}")
+                print(f"UNIQA - přímé ověření {vin} selhalo: {exc.__class__.__name__}")
+                unverified_vins.add(vin)
                 continue
 
             if found:
@@ -448,6 +452,7 @@ def load_uniqa_vehicles(
             duplicates=duplicates,
             raw_count=len(raw),
             raw_vehicles=list(raw),
+            unverified_vins=unverified_vins,
             direct_verified_count=len(direct_verified_vins),
         )
 

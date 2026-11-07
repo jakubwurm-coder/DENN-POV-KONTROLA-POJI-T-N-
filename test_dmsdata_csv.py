@@ -1,4 +1,5 @@
 import unittest
+import os
 from unittest.mock import patch
 
 import cloud_app
@@ -7,6 +8,7 @@ import cloud_app
 class DmsDataCsvTests(unittest.TestCase):
     def setUp(self):
         self.client = cloud_app.app.test_client()
+        env=patch.dict(os.environ,{"DENNI_POV_EXPORT_TOKEN":"test-export-only"});env.start();self.addCleanup(env.stop)
 
     def test_dmsdata_returns_latest_results_as_utf8_csv(self):
         state = cloud_app._default_state()
@@ -29,7 +31,7 @@ class DmsDataCsvTests(unittest.TestCase):
             patch.object(cloud_app, "_load_state", return_value=state),
             patch.object(cloud_app, "_annotations_load", return_value={}),
         ):
-            response = self.client.get("/dmsdata")
+            response = self.client.get("/dmsdata",headers={"Authorization":"Bearer test-export-only"})
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data.startswith(b"\xef\xbb\xbf"))
@@ -46,7 +48,7 @@ class DmsDataCsvTests(unittest.TestCase):
             patch.object(cloud_app, "_load_state", return_value=state),
             patch.object(cloud_app, "_annotations_load", return_value={}),
         ):
-            response = self.client.get("/dmsdata")
+            response = self.client.get("/dmsdata",headers={"Authorization":"Bearer test-export-only"})
 
         self.assertEqual(response.status_code, 404)
         self.assertFalse(response.json["ok"])

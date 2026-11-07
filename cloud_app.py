@@ -10,6 +10,10 @@ import re
 import threading
 import time
 import uuid
+import gzip
+import hashlib
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -110,6 +114,7 @@ def _kostka_update(vins: list[str]) -> None:
                             VALUES (%s, %s::jsonb, NOW())
                             ON CONFLICT (vin) DO UPDATE
                             SET data = EXCLUDED.data, fetched_at = EXCLUDED.fetched_at
+                            WHERE EXCLUDED.data <> '{}'::jsonb OR denni_pov_vehicle_technical.data = '{}'::jsonb
                         """, (vin, json.dumps(technical or {}, ensure_ascii=False)))
                         conn.commit()
             except KostkaLimitReached:
@@ -143,7 +148,37 @@ def _safe_db_error(exc: Exception) -> str:
     return message[:500]
 
 
+_transaction_connection = ContextVar('pov_transaction', default=None)
+
+class _BorrowedConnection:
+    def __init__(self, conn): self._conn = conn
+    def __enter__(self): return self
+    def __exit__(self, *args): return False
+    def cursor(self, *args, **kw): return self._conn.cursor(*args, **kw)
+    def commit(self): pass
+    def rollback(self): pass
+
+@contextmanager
+def _state_transaction():
+    if _transaction_connection.get() is not None or not _DATABASE_URL:
+        yield
+        return
+    with _db_connect() as conn:
+        _db_init(conn.cursor())
+        conn.commit()
+        with conn.transaction():
+            conn.execute("SELECT pg_advisory_xact_lock(719152636049)")
+            token = _transaction_connection.set(conn)
+            try:
+                yield
+            finally:
+                _transaction_connection.reset(token)
+
+
 def _db_connect():
+    active = _transaction_connection.get()
+    if active is not None:
+        return _BorrowedConnection(active)
     if not _DATABASE_URL:
         raise PersistenceUnavailable("DATABASE_URL není na Renderu nastavená.")
     try:
@@ -282,6 +317,10 @@ def _db_init_uncached(cur) -> None:
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS denni_pov_run_history_checked_idx ON denni_pov_run_history (checked_at DESC)")
+    cur.execute("ALTER TABLE denni_pov_run_history ADD COLUMN IF NOT EXISTS run_id TEXT")
+    cur.execute("ALTER TABLE denni_pov_run_history ADD COLUMN IF NOT EXISTS source_snapshot BYTEA")
+    cur.execute("ALTER TABLE denni_pov_run_history ADD COLUMN IF NOT EXISTS snapshot_sha256 TEXT")
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS denni_pov_run_history_run_id_uidx ON denni_pov_run_history(run_id) WHERE run_id IS NOT NULL")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS denni_pov_annotations (
             vehicle_key TEXT PRIMARY KEY,
@@ -318,14 +357,7 @@ def _db_init_uncached(cur) -> None:
             fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS denni_pov_push_subscriptions (
-            endpoint TEXT PRIMARY KEY,
-            subscription JSONB NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
+
 
 
 def _db_init(cur) -> None:
@@ -486,6 +518,8 @@ def _history_save_daily(data: dict[str, Any], alert_sent: bool) -> dict[str, Any
                 conn.commit()
     except Exception as exc:
         print(f"Daily history save failed: {exc}")
+        if _transaction_connection.get() is not None:
+            raise PersistenceUnavailable(_safe_db_error(exc)) from exc
     return daily_changes
 
 def _run_history_last_successful() -> dict[str, Any] | None:
@@ -516,6 +550,8 @@ def _run_history_last_successful() -> dict[str, Any] | None:
         }
     except Exception as exc:
         print(f"Run history load failed: {exc}")
+        if _transaction_connection.get() is not None:
+            raise PersistenceUnavailable(_safe_db_error(exc)) from exc
         return None
 
 
@@ -529,8 +565,9 @@ def _run_history_save(data: dict[str, Any]) -> None:
                 _db_init(cur)
                 cur.execute("""
                     INSERT INTO denni_pov_run_history
-                        (started_at, finished_at, summary, results, error, changes)
-                    VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb)
+                        (started_at, finished_at, summary, results, error, changes, run_id, source_snapshot, snapshot_sha256)
+                    VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s, %s, %s)
+                    ON CONFLICT (run_id) WHERE run_id IS NOT NULL DO NOTHING
                 """, (
                     data.get("started_at"),
                     data.get("finished_at"),
@@ -538,10 +575,15 @@ def _run_history_save(data: dict[str, Any]) -> None:
                     json.dumps(data.get("results") or [], ensure_ascii=False),
                     data.get("error"),
                     json.dumps(data.get("changes") or {}, ensure_ascii=False),
+                    data.get("run_id") or None,
+                    gzip.compress(json.dumps(data.get("_source_snapshot") or {}, ensure_ascii=False).encode()),
+                    hashlib.sha256(json.dumps(data.get("_source_snapshot") or {}, ensure_ascii=False).encode()).hexdigest(),
                 ))
                 conn.commit()
     except Exception as exc:
         print(f"Run history save failed: {exc}")
+        if _transaction_connection.get() is not None:
+            raise PersistenceUnavailable(_safe_db_error(exc)) from exc
 
 
 def _vehicle_run_history(vin: str, limit: int = 60) -> list[dict[str, Any]]:
@@ -554,11 +596,13 @@ def _vehicle_run_history(vin: str, limit: int = 60) -> list[dict[str, Any]]:
             with conn.cursor() as cur:
                 _db_init(cur)
                 cur.execute("""
-                    SELECT id, checked_at, finished_at, results
+                    SELECT id, checked_at, finished_at,
+                        COALESCE((SELECT jsonb_agg(item) FROM jsonb_array_elements(results) item
+                                  WHERE upper(item->>'vin') = %s), '[]'::jsonb)
                     FROM denni_pov_run_history
                     ORDER BY id DESC
                     LIMIT %s
-                """, (max(1, min(limit, 365)),))
+                """, (vin, max(1, min(limit, 365)),))
                 runs = cur.fetchall()
                 conn.commit()
         audit = []
@@ -601,7 +645,7 @@ def _history_load(limit: int = 100) -> list[dict[str, Any]]:
         return [
             {
                 "id": row[0],
-                "checked_at": row[1].astimezone().strftime("%d.%m.%Y %H:%M:%S") if row[1] else "",
+                "checked_at": row[1].astimezone(ZoneInfo("Europe/Prague")).strftime("%d.%m.%Y %H:%M:%S") if row[1] else "",
                 "started_at": row[2] or "",
                 "finished_at": row[3] or "",
                 "summary": row[4] if isinstance(row[4], dict) else {},
@@ -688,7 +732,9 @@ def _reconcile_current_workflow(rows: list[dict[str, Any]]) -> None:
                     saved = cur.fetchone()
                     if not saved or not saved[1]:
                         continue
-                    row = current.get(key, {})
+                    row = current.get(key)
+                    if not row or str(row.get("status_raw") or "").upper() == "NELZE OVĚŘIT":
+                        continue
                     meta = {"workflow_status": saved[1], "automatic_problem_status": saved[2]}
                     raw = str(row.get("status_raw") or row.get("status") or "").upper()
                     if current_workflow_status(row, meta):
@@ -851,27 +897,6 @@ def _annotation_history_load(limit: int = 300) -> list[dict[str, Any]]:
         print(f"Annotation history load failed: {exc}")
         return []
 
-def _file_load() -> dict[str, Any] | None:
-    try:
-        if _STATE_FILE.exists():
-            data = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                return data
-    except Exception as exc:
-        print(f"Cloud state file load failed: {exc}")
-    return None
-
-
-def _file_save(data: dict[str, Any]) -> None:
-    try:
-        _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _STATE_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(_STATE_FILE)
-    except Exception as exc:
-        print(f"Cloud state file save failed: {exc}")
-
-
 def _load_state() -> dict[str, Any]:
     # PostgreSQL is the sole authoritative state store. Never load stale disk data.
     if not _DATABASE_URL:
@@ -970,6 +995,8 @@ def _same_local_day(value: Any, day_iso: str) -> bool:
 def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dict[str, Any]:
     public = dict(data)
     public.pop("_command", None)
+    public.pop("_source_snapshot", None)
+    public.pop("_last_good", None)
     public.pop("annotations", None)
     public.pop("sql_technical", None)
     # Full OID audits belong only to the owner-bound export. Repeating megabytes
@@ -1021,6 +1048,8 @@ def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dic
             1 for row in rows
             if str(row.get("status_raw") or "").upper() in active_statuses
         )
+    if rows and all(isinstance(row.get("pov_active"), bool) for row in rows):
+        summary["active"] = sum(row["pov_active"] for row in rows)
     summary["ok_total"] = raw_counts.get("OK", 0)
     summary["absent_uninsured"] = raw_counts.get("NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ", 0)
     summary["deposit"] = raw_counts.get("NEPOJIŠTĚNO, ALE DEPOZIT", 0)
@@ -1097,10 +1126,17 @@ def _expected_agent_id() -> str:
 
 
 def _token_authorized() -> bool:
-    expected = os.getenv("SYNC_TOKEN", "")
+    expected = os.getenv("SYNC_TOKEN_NEXT", "") or os.getenv("SYNC_TOKEN", "")
     if not expected: return False
     supplied = request.headers.get("Authorization", "")
-    return hmac.compare_digest(supplied, f"Bearer {expected}")
+    if hmac.compare_digest(supplied, f"Bearer {expected}"):
+        return True
+    try:
+        previous = os.getenv('SYNC_TOKEN_PREVIOUS', '') or (os.getenv('SYNC_TOKEN', '') if os.getenv('SYNC_TOKEN_NEXT') else '')
+        return bool(previous and time.time() < float(os.getenv('SYNC_TOKEN_PREVIOUS_UNTIL', '0')) and
+                    hmac.compare_digest(supplied, f'Bearer {previous}'))
+    except ValueError:
+        return False
 
 
 def _authorized() -> bool:
@@ -1121,6 +1157,9 @@ def _authorized() -> bool:
 
 
 # Browser session is separate from the bearer-authenticated VCSERVER agent.
+_login_attempts = {}
+_login_attempt_lock = threading.Lock()
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     # Opening the login page always requires an explicit form submission.
@@ -1130,6 +1169,14 @@ def login():
     if request.method == "POST":
         user = str(request.form.get("username") or "")
         password = str(request.form.get("password") or "")
+        attempt_key = hashlib.sha256((str(request.remote_addr) + ':' + user.casefold()).encode()).hexdigest()
+        with _login_attempt_lock:
+            now = time.monotonic()
+            for key in list(_login_attempts):
+                _login_attempts[key] = [stamp for stamp in _login_attempts[key] if now - stamp < 300]
+                if not _login_attempts[key]: _login_attempts.pop(key)
+            if len(_login_attempts.get(attempt_key, [])) >= 10:
+                return jsonify(ok=False,message='Příliš mnoho neúspěšných přihlášení. Zkuste to později.'),429
         if personal:
             identity = authenticate(user, password) if app.secret_key else None
             valid = bool(identity)
@@ -1141,6 +1188,8 @@ def login():
                          hmac.compare_digest(user, expected_user) and
                          hmac.compare_digest(password, expected_password))
         if valid:
+            with _login_attempt_lock:
+                _login_attempts.pop(attempt_key, None)
             session.clear()
             session.permanent = False
             session["denni_pov_authenticated"] = True
@@ -1149,6 +1198,9 @@ def login():
                 session["denni_pov_account_fingerprint"] = session_fingerprint(user)
             session["denni_pov_login_entry"] = True
             return redirect(url_for("index"))
+        with _login_attempt_lock:
+            if len(_login_attempts) < 10000:
+                _login_attempts.setdefault(attempt_key, []).append(time.monotonic())
         error = "Nesprávné jméno nebo heslo."
     return Response(render_template("login.html", error=error, personal_accounts=personal), mimetype="text/html",
                     headers={"Cache-Control": "no-store"})
@@ -1163,8 +1215,12 @@ def logout():
 @app.before_request
 def _require_web_auth():
     path = request.path
-    if path in {"/health", "/login", "/dmsdata", "/dmsdata/"} or path.startswith("/static/"):
+    if path in {"/health", "/login"} or path.startswith("/static/"):
         return None
+    if path in {'/dmsdata', '/dmsdata/'}:
+        key = os.getenv('DENNI_POV_EXPORT_TOKEN', '')
+        if key and hmac.compare_digest(request.headers.get('Authorization', ''), 'Bearer ' + key):
+            return None
     if path.startswith("/api/agent/") or path == "/api/sync":
         return None  # Existing agent bearer + identity authorization.
     if path.startswith("/mcp/") or path in {"/api/assistant/run", "/api/assistant/status"}:
@@ -1174,16 +1230,10 @@ def _require_web_auth():
     if path == "/api/state" and request.method == "GET":
         if request.headers.get("Authorization", "").startswith("Bearer ") and _authorized():
             return None
-    # Only the immediate redirect after a successful login may open the dashboard.
-    # A reload/new navigation requires login again; API polling stays authenticated.
-    if path == "/" and request.method == "GET":
-        if not session.pop("denni_pov_login_entry", False):
-            session.clear()
-            return redirect(url_for("login"))
     if (personal_accounts_enabled() and not personal_session_valid(session)):
         session.clear()
     if not app.secret_key or not session.get("denni_pov_authenticated"):
-        if path.startswith(("/api/", "/download/")):
+        if path.startswith(("/api/", "/download/")) or path in {"/dmsdata", "/dmsdata/"}:
             return jsonify({"ok": False, "message": "Přihlášení je vyžadováno."}), 401
         return redirect(url_for("login"))
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
@@ -1203,6 +1253,8 @@ def _sensitive_no_cache(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        response.headers["Content-Security-Policy"] = "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
     return response
 
 @app.get("/")
@@ -1364,7 +1416,7 @@ def api_vehicle_lookup():
     is_vin = bool(re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", query))
     if not is_vin and not re.fullmatch(r"[A-Z0-9]{4,10}", query):
         return jsonify({"ok": False, "message": "Zadejte platný VIN nebo SPZ."}), 400
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
         # Ruční SQL vyhledávání je živý dotaz do celé databáze TIRBazar.
         # Nikdy nevracíme starý výsledek z cache pro stejné VIN/RZ.
@@ -1381,7 +1433,7 @@ def api_vehicle_lookup():
 @app.get("/api/vehicle-lookup/<query>")
 def api_vehicle_lookup_status(query: str):
     query = re.sub(r"\s+", "", str(query or "")).upper()
-    with _lock:
+    with _lock, _state_transaction():
         lookup = (_load_state().get("_vehicle_lookup") or {})
     if str(lookup.get("query") or "") != query:
         return jsonify({"ok": False, "status": "unknown", "message": "Požadavek nebyl nalezen."}), 404
@@ -1390,7 +1442,7 @@ def api_vehicle_lookup_status(query: str):
 
 @app.post("/api/run")
 def api_run():
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
         if data.get("running") and not _run_is_stale(data):
             return jsonify({"ok": False, "message": "Kontrola už probíhá."}), 409
@@ -1424,7 +1476,7 @@ def agent_command():
         return jsonify({"ok": False, "message": "Unauthorized"}), 401
     supplied_agent = _normalize_agent_id(request.headers.get("X-Denni-Pov-Agent", ""))
     expected_agent = _expected_agent_id()
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
         verified_agent = _normalize_agent_id((data.get("agent") or {}).get("id"))
         # Jednorázová kompatibilita dovolí staré verzi na VCSERVER stáhnout
@@ -1448,7 +1500,7 @@ def agent_lookup_result():
     command_id = str(payload.get("id") or "").strip()
     if not command_id:
         return jsonify({"ok": False, "message": "Chybí ID požadavku."}), 400
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
         pending = data.get("_vehicle_lookup") if isinstance(data.get("_vehicle_lookup"), dict) else {}
         if str(pending.get("id") or "") != command_id:
@@ -1477,7 +1529,7 @@ def agent_sql_sample_result():
         return jsonify({"ok": False, "message": "Unauthorized"}), 401
     payload = request.get_json(silent=True) or {}
     command_id = str(payload.get("id") or "").strip()
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
         pending = data.get("_sql_sample") if isinstance(data.get("_sql_sample"), dict) else {}
         startup_diag = command_id == "startup-sql-sample-20261002"
@@ -1519,7 +1571,7 @@ def agent_known_sold_result():
 @app.post("/api/service-diagnostics")
 def request_service_diagnostics():
     """Authenticated browser can request a fixed, read-only log snapshot."""
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
         if data.get("_command"):
             return jsonify({"ok": False, "message": "Agent má rozpracovaný požadavek."}), 409
@@ -1532,7 +1584,7 @@ def request_service_diagnostics():
 
 @app.get("/api/service-diagnostics")
 def get_service_diagnostics():
-    with _lock:
+    with _lock, _state_transaction():
         result = (_load_state().get("_service_diagnostics") or {})
     return jsonify({"ok": True, **result})
 
@@ -1544,7 +1596,7 @@ def receive_service_diagnostics():
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return jsonify({"ok": False, "message": "Neplatný formát."}), 400
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
         pending = data.get("_service_diagnostics") or {}
         command_id = str(payload.get("id") or "")
@@ -1556,6 +1608,8 @@ def receive_service_diagnostics():
         data["_service_diagnostics"] = {
             "id": command_id, "status": "ready", "agent": _expected_agent_id(),
             "commit": str(payload.get("commit") or "")[:64],
+            "credential_protected": bool(payload.get("credential_protected")),
+            "outbox_pending": int(payload.get("outbox_pending") or 0),
             "checked_at": str(payload.get("checked_at") or "")[:40],
             "message": str(payload.get("message") or "")[:300],
             "logs": [{"file": str(item.get("file") or "")[:100],
@@ -1571,8 +1625,19 @@ def receive_service_diagnostics():
 
 @app.post("/api/audit-export")
 def request_audit_export():
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
+        if data.get('_command') and (data.get('_command') or {}).get('action') != 'export_audit':
+            return jsonify(ok=False,message='Agent má čekající požadavek.'),409
+        archived = _latest_source_snapshot() if '_latest_source_snapshot' in globals() else None
+        if archived and archived.get('audit') and archived.get('finished_at'):
+            command_id = uuid.uuid4().hex
+            view = _public_state(dict(archived, annotations=data.get('annotations') or {}), strict_annotations=True)
+            view['audit'] = dict(archived['audit'], results=_public_state(dict(archived, results=archived['audit']['results']), strict_annotations=True)['results'])
+            data['_audit_export_snapshot'] = view
+            data['_audit_export'] = dict(id=command_id,status='ready',finished_at=archived['finished_at'],ready_epoch=time.time())
+            _save_state(data)
+            return jsonify(ok=True,id=command_id,status='ready',finished_at=archived['finished_at'])
         pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
         if pending.get("status") == "pending":
             return jsonify({"ok": True, "status": "pending", "id": pending.get("id")})
@@ -1586,7 +1651,7 @@ def request_audit_export():
 
 @app.get("/api/audit-export")
 def audit_export_status():
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
         pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
     return jsonify({"ok": True, "id": pending.get("id"), "status": pending.get("status") or "idle", "error": pending.get("error") or ""})
@@ -1607,7 +1672,7 @@ def agent_audit_result():
         validate_complete_audit(audit)
     except ValueError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 409
-    with _lock:
+    with _lock, _state_transaction():
         data = _load_state()
         pending = data.get("_audit_export") if isinstance(data.get("_audit_export"), dict) else {}
         if str(pending.get("id") or "") != command_id:
@@ -1657,10 +1722,23 @@ def api_sync():
             payload["error"] = "Kontrola neprovedena – aktuální a úplná data z TIRBazar SQL nebyla potvrzena."
             payload["summary"] = {}
             payload["results"] = []
+    if final_run and not payload.get('error'):
+        if int(payload.get('comparison_version') or 0) >= 3 or os.getenv('DENNI_POV_REQUIRE_MANIFEST') == '1':
+            from sync_contract import validate_snapshot
+            try:
+                validate_snapshot(payload)
+            except (ValueError, KeyError, TypeError) as exc:
+                return jsonify(ok=False, message=str(exc)), 409
     alert_sent = False
 
-    with _lock:
+    with _lock, _state_transaction():
         previous = _load_state()
+        run_id = str(payload.get('run_id') or '')
+        if run_id and previous.get('run_id') == run_id:
+            if not previous.get('running') and previous.get('last_successful_at') and not previous.get('error'):
+                return jsonify(ok=True, already_received=True, run_id=run_id)
+            if int(payload.get('message_seq') or 0) <= int(previous.get('message_seq') or 0):
+                return jsonify(ok=False, message='Starší průběžná zpráva.'), 409
         pending = previous.get("_command") if isinstance(previous.get("_command"), dict) else {}
         pending_check_id = str(pending.get("id") or "") if pending.get("action") == "run_check" else ""
         received_check_id = str(payload.get("check_id") or "").strip()
@@ -1673,7 +1751,8 @@ def api_sync():
         if _normalize_agent_id(payload_agent.get("id")) != _expected_agent_id():
             return jsonify({"ok": False, "message": "Neplatná identita agenta."}), 403
         comparison_base = _run_history_last_successful() if final_run and not payload.get("error") else None
-        if final_run and not payload.get("error"):
+        quality_complete = final_run and not payload.get("error") and all((payload.get("sources", {}).get(k) or {}).get("state") == "ok" for k in ("tirbazar", "uniqa", "allianz"))
+        if quality_complete:
             # Finish a legacy decision already resolved in the previous successful
             # snapshot before considering a possible recurrence of the same issue.
             last_successful_at = previous.get("last_successful_at") or previous.get("finished_at")
@@ -1681,19 +1760,21 @@ def api_sync():
                 _reconcile_current_workflow(comparison_base.get("results") or [])
             _reconcile_current_workflow(payload.get("results") or [])
         annotations = _annotations_load(previous.get("annotations"))
-        data = _default_state()
+        data = dict(previous)
         data["annotations"] = annotations
         data["last_successful_at"] = previous.get("last_successful_at") or (
             previous.get("finished_at") if not previous.get("error") else None
         )
-        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress", "agent", "sql_technical", "comparison_version"):
+        for key in ("running", "started_at", "finished_at", "error", "sources", "summary", "results", "progress", "agent", "sql_technical", "comparison_version", "run_id", "message_seq", "manifest"):
             if key in payload: data[key] = payload[key]
         agent = data.get("agent") if isinstance(data.get("agent"), dict) else {}
         if _normalize_agent_id(agent.get("id")) != _expected_agent_id():
             return jsonify({"ok": False, "message": "Neplatná identita agenta."}), 403
         data["running"] = bool(payload.get("running"))
-        if data["running"]:
-            data["finished_at"] = None
+        if data['running']:
+            # Progress is independent from the last valid published dataset.
+            for key in ('results', 'summary', 'sql_technical', 'finished_at'):
+                data[key] = previous.get(key)
         else:
             data["finished_at"] = (payload.get("finished_at") or _now()) if not data.get("error") else None
             if not data.get("error"):
@@ -1701,12 +1782,12 @@ def api_sync():
         data["synced_at"] = _now()
         data["check_id"] = received_check_id
         # Progress must not erase the pending run command.
-        data["_command"] = None if final_run else previous.get("_command")
+        data["_command"] = (None if final_run and pending.get("action") == "run_check" else previous.get("_command"))
         failed_final = final_run and bool(data.get("error"))
         # A failed/transport-interrupted run must not erase the last valid
         # vehicle list. Keep the error visible, but retain the prior results
         # until a complete successful run replaces them.
-        if failed_final and not data.get("results") and previous.get("results"):
+        if failed_final and previous.get("results"):
             data["results"] = previous.get("results") or []
             data["sql_technical"] = previous.get("sql_technical")
             data["summary"] = previous.get("summary") or {}
@@ -1738,9 +1819,12 @@ def api_sync():
         else:
             data["changes"] = previous.get("changes") or _default_state()["changes"]
 
+        data["quality_complete"] = bool(quality_complete)
         if final_run and not failed_final:
+            data["_source_snapshot"] = dict(payload)
             data["changes"] = _history_save_daily(data, alert_sent)
             _run_history_save(data)
+        data.pop("_source_snapshot", None)
         _save_state(data)
 
     if final_run and not data.get("error"):
@@ -1766,6 +1850,10 @@ from export_jobs import install_export_routes
 install_export_routes(app, lambda: _load_state(), _lock)
 
 
+def _csv_literal(value):
+    text = str(value or '')
+    return "'" + text if text.lstrip().startswith(('=', '+', '-', '@')) else text
+
 def _build_csv_report(data: dict[str, Any]) -> str:
     """Build the stable UTF-8 CSV representation of the latest POV check."""
     rows = list(data.get("results") or [])
@@ -1781,7 +1869,7 @@ def _build_csv_report(data: dict[str, Any]) -> str:
             row.get("vykup", ""),
             row.get("prodej", ""),
             row.get("detail", ""),
-            row.get("note", ""),
+            _csv_literal(row.get("note", "")),
         ])
     return "\ufeff" + stream.getvalue()
 
@@ -1816,21 +1904,16 @@ def dmsdata_csv():
 
 @app.get("/health")
 def health():
-    with _lock:
-        data = _load_state()
-
     db_ready, db_error = _db_probe()
-    return jsonify({
-        "ok": True,
-        "service": "DENNI POV - KONTROLA",
-        "mode": "online",
-        "storage": "postgres" if db_ready else "file-fallback",
-        "persistence": {
-            "ready": db_ready,
-            "configured": bool(_DATABASE_URL),
-            "annotations": "postgres" if db_ready else "unavailable",
-            "error": db_error,
-        },
-        "synced_at": data.get("synced_at"),
-        "waiting_for_agent": bool(data.get("_command")),
-    })
+    return jsonify({"ok": db_ready, "service": "DENNI POV - KONTROLA", "mode": "online",
+        "version": "2026-11-07.1", "commit": os.getenv('RENDER_GIT_COMMIT', ''),
+        "storage": "postgres", "persistence": {"ready": db_ready, "configured": bool(_DATABASE_URL),
+        "annotations": "postgres" if db_ready else "unavailable", "error": db_error}}), (200 if db_ready else 503)
+
+
+from credential_rollover import install as _install_rollover
+_install_rollover(app, _expected_agent_id)
+
+from admin_audit import install as _install_admin_audit
+import sys as _sys
+_install_admin_audit(app, _sys.modules[__name__])

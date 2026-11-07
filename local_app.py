@@ -62,12 +62,7 @@ def _now() -> str:
 
 
 def _insurance_company(result) -> str:
-    detail = (getattr(result, "detail", "") or "").upper()
-    if "ALLIANZ" in detail:
-        return "ALLIANZ"
-    if "UNIQA" in detail:
-        return "UNIQA"
-    return ""
+    return str(getattr(result, "insurer", "") or "")
 
 
 def _display_status(result) -> str:
@@ -102,6 +97,7 @@ def _serialize_result(result) -> dict[str, Any]:
     return {
         "oid": getattr(result, "oid", None),
         "status_raw": getattr(result, "status", "") or "",
+        "pov_active": bool(getattr(result, "pov_active", False)),
         "status": _display_status(result),
         "pojistovna": _insurance_company(result),
         "vin": getattr(result, "vin", "") or "",
@@ -243,7 +239,7 @@ def _audit_decision(vehicle) -> tuple[str, str]:
         return "VYŘAZENO", "Mimo pravidla země / registrační značky"
     if not _requires_pov_check(vehicle):
         return "VYŘAZENO", _audit_filter_reason(vehicle)
-    if _is_effectively_sold(vehicle):
+    if _is_effectively_sold(vehicle) and not _is_sold_to_vans_renting(vehicle):
         return "KONTROLA NAVÍC", "Prodané – ověřuje se zbylé pojištění v obou pojišťovnách"
     if _is_deposit_vehicle(vehicle):
         return "DEPOZIT", "Depozit – správný stav nepojištěno"
@@ -299,7 +295,7 @@ def _run_check_worker() -> None:
         sold_vehicles = [
             vehicle
             for vehicle in eligible_vehicles
-            if _is_effectively_sold(vehicle)
+            if _is_effectively_sold(vehicle) and not _is_sold_to_vans_renting(vehicle)
         ]
         sold_oids = {getattr(vehicle, "oid", None) for vehicle in sold_vehicles}
 
@@ -382,6 +378,7 @@ def _run_check_worker() -> None:
             allianz_error=allianz.error,
             known_tir_vins={v.vin for v in vehicles if v.vin},
             complete=True,
+            uncertain_uniqa_vins=getattr(uniqa, "unverified_vins", set()),
         )
 
         # Auditní data patří ke stejnému běhu jako výsledek. Díky tomu Excel
@@ -500,6 +497,16 @@ def _run_check_worker() -> None:
         # Export uchovává každý OID i neutrální výsledky. Web ukazuje aktuální kartu VIN.
         audit["results"] = [_serialize_result(r) for r in results]
         audit["schema_version"] = 2
+        from dataclasses import asdict
+        audit["inputs"] = {"tirbazar": [asdict(v) for v in compare_vehicles_input],
+            "uniqa": [asdict(v) for v in (getattr(uniqa, "raw_vehicles", None) or uniqa.vehicles)],
+            "allianz": [vars(v) for v in allianz.vehicles],
+            "as_of": _now(), "rules_version": "2026-11-07.1"}
+        audit["sql_diagnostics"] = dict(getattr(tirbazar, "LAST_SQL_DIAGNOSTICS", {}))
+        active_oids = {v.oid for v in control_vehicles}
+        for result in results:
+            result.pov_active = result.oid in active_oids
+        audit["results"] = [_serialize_result(r) for r in results]
         results = [r for r in results if
             (r.oid is None or (r.oid in chosen_oids and bool(r.vin)))
             and r.status not in {"MIMO POV", "PRODANÉ, NEPOJIŠTĚNÉ"}]

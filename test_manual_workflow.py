@@ -38,6 +38,8 @@ class ProjectionTests(unittest.TestCase):
 class DatabaseTests(unittest.TestCase):
     @classmethod
     def connect(cls):
+        if c._transaction_connection.get() is not None:
+            return c._BorrowedConnection(c._transaction_connection.get())
         return cls.pg.connect(cls.dsn,options=f'-c search_path={cls.schema}')
     @classmethod
     def setUpClass(cls):
@@ -160,6 +162,9 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(public['summary']['new_problems'],0)
         self.assertEqual(public['summary']['followup'],0)
         for old in old_rows:
+            if old['vin']=='EXTRA_REMOVED':
+                self.assertEqual(c._annotations_load_strict()[old['vin']]['workflow_status'],FOLLOWUP)
+                continue
             meta=c._annotations_load_strict()[old['vin']]
             self.assertEqual(meta['workflow_status'],'')
             self.assertEqual(meta['note'],'keep note')
@@ -171,8 +176,8 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(stored,old_rows)
         # The same problem appearing later is a new, unhandled case.
         reappeared=c._public_state({'results':[old_rows[2]]})
-        self.assertEqual(reappeared['summary']['new_problems'],1)
-        self.assertEqual(reappeared['results'][0]['workflow_status'],'')
+        self.assertEqual(reappeared['summary']['followup'],1)
+        self.assertEqual(reappeared['results'][0]['workflow_status'],FOLLOWUP)
 
     def test_legacy_approval_cannot_revive_after_previously_resolved_episode(self):
         row=self.row('LEGACY_EPISODE')
@@ -180,9 +185,9 @@ class DatabaseTests(unittest.TestCase):
         healthy=dict(row,status_raw='OK',status='OK')
         previous=c._default_state();previous.update(results=[healthy],summary={'active':1},finished_at='26.10.2026 22:00:00')
         c._run_history_save(previous)
-        payload=dict(results=[row],summary={'active':1},sources={'tirbazar':{'state':'ok'}},agent={'id':'VCSERVER'},running=False,finished_at='26.10.2026 22:30:00')
+        payload=dict(results=[row],summary={'active':1},sources={key:{'state':'ok'} for key in ('tirbazar','uniqa','allianz')},agent={'id':'VCSERVER'},running=False,finished_at='26.10.2026 22:30:00')
         captured={}
-        with patch.object(c,'_authorized',return_value=True),patch.object(c,'_load_state',return_value=previous),patch.object(c,'_save_state',side_effect=lambda value:captured.update(value)),patch.object(c,'_kostka_start'),patch.object(c,'_send_push_for_state',return_value={'sent':0}):
+        with patch.object(c,'_authorized',return_value=True),patch.object(c,'_load_state',return_value=previous),patch.object(c,'_save_state',side_effect=lambda value:captured.update(value)),patch.object(c,'_kostka_start'):
             response=c.app.test_client().post('/api/sync',json=payload)
         self.assertEqual(response.status_code,200,response.json)
         public=c._public_state(captured)
@@ -200,11 +205,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(response.status_code,200,response.json)
         self.assertEqual(c._annotations_load_strict()[row['vin']]['workflow_status'],FOLLOWUP)
 
-    def test_handled_problems_do_not_send_push(self):
-        rows=[dict(self.row('PUSH1'),workflow_status=FOLLOWUP),dict(self.row('PUSH2'),workflow_status=MANUAL_OK)]
-        with patch.object(c,'_public_state',return_value={'results':rows,'summary':{}}),patch.object(c,'_db_connect') as db:
-            self.assertEqual(c._send_push_for_state({})['sent'],0)
-            db.assert_not_called()
     def test_real_sync_keeps_durable_workflow(self):
         row=self.row('SYNC')
         meta=c._annotation_save('SYNC','retained',FOLLOWUP,row,'alice')
@@ -213,7 +213,7 @@ class DatabaseTests(unittest.TestCase):
         payload=dict(results=[dict(row)],summary={'active':1},
                      sources={'tirbazar':{'state':'ok'}},agent={'id':'VCSERVER'},running=False,
                      finished_at='25.10.2026 12:00:00',annotations={'SYNC':{'workflow_status':''}})
-        with patch.object(c,'_authorized',return_value=True),patch.object(c,'_load_state',side_effect=lambda:copy.deepcopy(state)),patch.object(c,'_save_state',side_effect=lambda value:state.update(value)),patch.object(c,'_kostka_start'),patch.object(c,'_send_push_for_state',return_value={'sent':0}):
+        with patch.object(c,'_authorized',return_value=True),patch.object(c,'_load_state',side_effect=lambda:copy.deepcopy(state)),patch.object(c,'_save_state',side_effect=lambda value:state.update(value)),patch.object(c,'_kostka_start'):
             response=c.app.test_client().post('/api/sync',json=payload)
         self.assertEqual(response.status_code,200,response.json)
         public=c._public_state(state)

@@ -30,6 +30,7 @@ class ControlApiTests(unittest.TestCase):
         namespace = {
             '_lock': self.lock, '_load_state': lambda: copy.deepcopy(self.state),
             '_save_state': self.save, '_run_is_stale': lambda s: s.get('stale', False),
+            '_state_transaction': __import__('contextlib').nullcontext,
             '_now': lambda: '03.10.2026 20:00:00', 'uuid': uuid, 'jsonify': jsonify,
         }
         exec(compile(ast.Module(body=[fn], type_ignores=[]), 'cloud_app.py', 'exec'), namespace)

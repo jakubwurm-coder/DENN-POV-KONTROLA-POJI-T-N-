@@ -41,3 +41,5 @@ class ComparisonResult:
     datum_prodeje: str = ""
     znacka: str = ""
     model: str = ""
+    insurer: str = ""
+    pov_active: bool = False

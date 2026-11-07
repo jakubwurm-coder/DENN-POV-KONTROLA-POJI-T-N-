@@ -20,6 +20,7 @@ KEYCHAIN_ACCOUNT = "TB"
 LAST_LOAD_STATS: dict[str, int] = {}
 # Každý fyzický nesmazaný SQL řádek podle OID, včetně prázdných a duplicitních VIN.
 LAST_RAW_ROWS: list[TirVehicle] = []
+LAST_SQL_DIAGNOSTICS: dict = {}
 
 FORBIDDEN_SQL = (
     "INSERT ",
@@ -278,6 +279,9 @@ USE TIRBazar;
 GO
 
 SET NOCOUNT ON;
+SET LOCK_TIMEOUT 10000;
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+BEGIN TRANSACTION;
 GO
 
 SELECT
@@ -623,6 +627,30 @@ GO
 GO
 
 """ + technical_sql() + r"""
+SELECT '__PHYSICAL_TOTAL__|' + CAST(COUNT_BIG(*) AS VARCHAR(30)) FROM dbo.Vozidlo;
+SELECT '__DELETED_ROW__|' + CAST(OID AS VARCHAR(30)) + '|' +
+ REPLACE(REPLACE(REPLACE(ISNULL(VIN,''), CHAR(13), ''), CHAR(10), ''), '|', '/') + '|' +
+ REPLACE(REPLACE(REPLACE(ISNULL(RegistracniZnacka,''), CHAR(13), ''), CHAR(10), ''), '|', '/') + '|' +
+ REPLACE(REPLACE(REPLACE(ISNULL(CONVERT(NVARCHAR(100),Stav),''), CHAR(13), ''), CHAR(10), ''), '|', '/') + '|' + CAST(GCRecord AS VARCHAR(30))
+FROM dbo.Vozidlo WHERE GCRecord IS NOT NULL ORDER BY OID;
+SELECT '__DB_SECURITY__|' + SYSTEM_USER + '|' +
+ CAST(ISNULL(IS_SRVROLEMEMBER('sysadmin'),0) AS VARCHAR(2)) + '|' +
+ CAST(ISNULL(IS_MEMBER('db_owner'),0) AS VARCHAR(2)) + '|' +
+ CAST(ISNULL(HAS_PERMS_BY_NAME('dbo.Vozidlo','OBJECT','SELECT'),0) AS VARCHAR(2)) + '|' +
+ CAST(ISNULL(HAS_PERMS_BY_NAME('dbo.Vozidlo','OBJECT','INSERT'),0) AS VARCHAR(2)) + '|' +
+ CAST(ISNULL(HAS_PERMS_BY_NAME('dbo.Vozidlo','OBJECT','UPDATE'),0) AS VARCHAR(2)) + '|' +
+ CAST(ISNULL(HAS_PERMS_BY_NAME('dbo.Vozidlo','OBJECT','DELETE'),0) AS VARCHAR(2));
+SELECT '__SQL_FIELD__|' + t.name + '|' + c.name + '|' + TYPE_NAME(c.system_type_id)
+FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id
+WHERE t.name IN ('Vozidlo','VykupVozidla','VykoupeniZKomise','Prodej') ORDER BY t.name,c.column_id;
+SELECT '__SQL_FK__|' + pt.name + '|' + pc.name + '|' + rt.name + '|' + rc.name
+FROM sys.foreign_key_columns fk JOIN sys.tables pt ON pt.object_id=fk.parent_object_id
+JOIN sys.columns pc ON pc.object_id=pt.object_id AND pc.column_id=fk.parent_column_id
+JOIN sys.tables rt ON rt.object_id=fk.referenced_object_id
+JOIN sys.columns rc ON rc.object_id=rt.object_id AND rc.column_id=fk.referenced_column_id
+WHERE pt.name='Vozidlo' ORDER BY pc.name;
+COMMIT TRANSACTION;
+GO
 SELECT '__FINISHED__';
 GO
 
@@ -696,8 +724,14 @@ def load_tirbazar_vehicles(
     sale_buyer_meta: dict[int, tuple[str, str]] = {}
     technical_meta: dict[int, dict[str, str]] = {}
 
+    LAST_SQL_DIAGNOSTICS.clear()
+    LAST_SQL_DIAGNOSTICS["lines"] = []
     for original in stdout.splitlines():
         line = original.strip()
+        for marker in ('__PHYSICAL_TOTAL__|','__DELETED_ROW__|','__DB_SECURITY__|','__SQL_FIELD__|','__SQL_FK__|'):
+            if marker in line:
+                LAST_SQL_DIAGNOSTICS['lines'].append(line[line.index(marker):])
+                break
 
         if "__TOTAL__|" in line:
             try:

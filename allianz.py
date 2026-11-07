@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from dataclasses import dataclass
 
 import requests
@@ -70,14 +71,17 @@ def load_allianz_vehicles() -> AllianzLoadResult:
                 if not raw:
                     continue
 
+                if not re.fullmatch(r"[A-Z0-9 -]{3,24}", raw):
+                    raise ValueError("Allianz CSV obsahuje neplatný identifikátor nebo chybný formát.")
                 normalized = normalize_vin(raw)
                 if not normalized:
                     continue
 
                 # Export retains every provider row; comparison indexes select by VIN.
 
-                vin = normalized
-                spz = normalize_spz(raw)
+                plate_only = bool(re.fullmatch(r"[0-9][A-Z][A-Z0-9][0-9]{4}", normalized))
+                vin = "" if plate_only else normalized
+                spz = normalize_spz(raw) if plate_only else ""
                 identifier = normalized
 
                 if not identifier:

@@ -268,9 +268,9 @@ def _ownership_for_pcv(vin: str, pcv: str) -> list[dict[str, Any]]:
         row_pcv = _field(row, "PČV", "PCV")
         if row_pcv != pcv:
             # Exporty RSV bývají seskupené podle PČV. Po nalezení cílového bloku už nemusíme číst zbytek.
+            # Provider ordering is not part of the input contract. Scan all rows.
             if found_target:
-                _set_progress(vin, "owner_found", rows, "2/2 · Záznam vlastníka/provozovatele nalezen", bytes_read, total_bytes)
-                break
+                pass
             continue
         found_target = True
         subject = _subject_public(row)
@@ -435,6 +435,8 @@ def get_ownership(vin: str, start: bool = True) -> dict[str, Any]:
                 "subjects": [],
             }
 
+        if start and os.getenv("RSV_BULK_LOOKUP_ENABLED", "0") != "1":
+            return {"state": "unavailable", "message": "Hromadný registr není zapnutý; použijte ověřené RSV API.", "pcv": "", "subjects": []}
         if start:
             _jobs[vin] = {"state": "loading", "started": time.time()}
             threading.Thread(target=_worker, args=(vin,), daemon=True, name=f"rsv-owner-{vin[-6:]}").start()

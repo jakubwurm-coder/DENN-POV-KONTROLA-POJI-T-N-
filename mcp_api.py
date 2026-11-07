@@ -84,7 +84,7 @@ def install_mcp_api(
                         "description": "Odešle stejný požadavek jako tlačítko Spustit kontrolu. Výsledek sledujte přes get_insurance_status. Při souběhu vrátí busy.",
                         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
                         "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
-                    }] if authorized(capability) and start_check else []) + [{
+                    }] if control_authorized(capability) and start_check else []) + [{
                         "name": "get_insurance_status",
                         "title": "Aktuální stav DENNÍ POV",
                         "description": (
@@ -135,7 +135,7 @@ def install_mcp_api(
             params = body.get("params") if isinstance(body.get("params"), dict) else {}
             tool_name = str(params.get("name") or "")
             if tool_name == "start_insurance_check":
-                if not authorized(capability) or start_check is None:
+                if not control_authorized(capability) or start_check is None:
                     return jsonify({"jsonrpc": "2.0", "id": rpc_id,
                                     "error": {"code": -32602, "message": "Spuštění kontroly není povoleno."}}), 403
                 arguments = params.get("arguments", {})
@@ -217,6 +217,8 @@ def install_mcp_api(
                     "error": {"code": -32602, "message": "Unknown tool"},
                 }), 400
 
+            if not control_authorized(capability):
+                return jsonify({"error": "Spuštění vyžaduje řídicí oprávnění."}), 403
             # Never block the web worker while the Windows agent performs a check.
             response = app.make_response(start_check()) if start_check else None
             started = response.get_json(silent=True) if response else {}

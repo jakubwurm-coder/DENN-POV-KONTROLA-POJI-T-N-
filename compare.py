@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any
+from collections import defaultdict
+from insurance_validity import policy_state, policy_sort_key
 
 from models import ComparisonResult, TirVehicle, UniqaVehicle
 from normalize import normalize_spz, normalize_vin
@@ -78,9 +80,29 @@ def compare_vehicles(
     allianz_error: str = "",
     known_tir_vins: set[str] | None = None,
     complete: bool = False,
+    uncertain_uniqa_vins: set[str] | None = None,
+    as_of=None,
 ) -> list[ComparisonResult]:
 
-    allianz = allianz or []
+    uncertain_uniqa_vins = set(uncertain_uniqa_vins or ())
+    uncertain_allianz_vins = set()
+    inactive = defaultdict(set)
+    active_uniqa = []
+    for policy in uniqa:
+        state = policy_state(policy, as_of)
+        vin = normalize_vin(policy.vin)
+        if state == 'active': active_uniqa.append(policy)
+        elif state == 'unknown': uncertain_uniqa_vins.add(vin)
+        else: inactive[vin].add('budoucí' if state == 'future' else 'ukončené')
+    uniqa = sorted(active_uniqa, key=policy_sort_key)
+    active_allianz = []
+    for policy in allianz or []:
+        state = policy_state(policy, as_of)
+        vin = normalize_vin(getattr(policy, 'vin', ''))
+        if state == 'active': active_allianz.append(policy)
+        elif state == 'unknown': uncertain_allianz_vins.add(vin)
+        else: inactive[vin].add('budoucí' if state == 'future' else 'ukončené')
+    allianz = sorted(active_allianz, key=policy_sort_key)
     known_tir_vins = {normalize_vin(x) for x in known_tir_vins} if known_tir_vins is not None else None
 
     results: list[ComparisonResult] = []
@@ -96,10 +118,13 @@ def compare_vehicles(
             tir_by_vin[vin] = vehicle
 
     uniqa_policies: dict[str, set[str]] = {}
+    uniqa_spz_values = defaultdict(set)
     for vehicle in uniqa:
 
         vin = normalize_vin(vehicle.vin)
         policy = str(getattr(vehicle, "cps", "") or "").strip()
+        if vin and normalize_spz(vehicle.spz):
+            uniqa_spz_values[vin].add(normalize_spz(vehicle.spz))
         if vin and policy:
             uniqa_policies.setdefault(vin, set()).add(policy)
 
@@ -109,6 +134,14 @@ def compare_vehicles(
     allianz_by_vin, allianz_by_spz = _build_allianz_indexes(
         allianz
     )
+
+    # Use the RZ fallback only for provider rows without any VIN.
+    by_plate = {key: value for key, value in allianz_by_spz.items() if not getattr(value, 'vin', '')}
+    for vehicle in tir:
+        vin = normalize_vin(vehicle.vin)
+        plate_match = by_plate.get(normalize_spz(vehicle.spz))
+        if vin and vin not in allianz_by_vin and plate_match is not None:
+            allianz_by_vin[vin] = plate_match
 
     for vehicle in tir:
 
@@ -122,6 +155,10 @@ def compare_vehicles(
             continue
 
         uniqa_vehicle = uniqa_by_vin.get(vin)
+        if ((vin in uncertain_uniqa_vins and not uniqa_vehicle) or vin in uncertain_allianz_vins) and not uniqa_vehicle and vin not in allianz_by_vin:
+            results.append(ComparisonResult(vehicle.oid, vin, tir_spz, '', 'NELZE OVĚŘIT',
+                'Přímé ověření VIN nebo období pojistky nebylo úspěšné; absence pojištění není potvrzena.', vehicle.datum_vykupu, vehicle.datum_prodeje))
+            continue
 
         # Prodej má vždy přednost před textem DEPOZIT. Kromě aktuálního stavu
         # PRODANÉ respektujeme i prodej novější než poslední výkup; tím
@@ -395,7 +432,7 @@ def compare_vehicles(
             if (
                 tir_spz
                 and uniqa_spz
-                and tir_spz != uniqa_spz
+                and (tir_spz != uniqa_spz or len(uniqa_spz_values.get(vin, set())) > 1)
             ):
 
                 results.append(
@@ -621,13 +658,27 @@ def compare_vehicles(
     if allianz_available:
         tir_vins = known_tir_vins if known_tir_vins is not None else set(tir_by_vin.keys())
         for vin, insured in allianz_by_vin.items():
-            if vin not in tir_vins and not (uniqa_available and vin in uniqa_by_vin):
+            if vin not in tir_vins and not (uniqa_available and vin in uniqa_by_vin) and getattr(insured, "vin", ""):
+
                 results.append(ComparisonResult(
                     oid=None, vin=vin, tir_spz="", uniqa_spz="",
                     status="NAVÍC V ALLIANZ",
                     detail="VIN je v ALLIANZ, ale není v kompletní evidenci TIRBazar.",
                     datum_vykupu="", datum_prodeje="",
                 ))
+
+    source_by_oid = {vehicle.oid: vehicle for vehicle in tir}
+    for result in results:
+        vin = normalize_vin(result.vin)
+        uq_match = bool(uniqa_available and vin in uniqa_by_vin)
+        al_match = bool(allianz_available and vin in allianz_by_vin)
+        result.insurer = 'UNIQA + ALLIANZ' if uq_match and al_match else 'UNIQA' if uq_match else 'ALLIANZ' if al_match else ''
+        vehicle = source_by_oid.get(result.oid)
+        result.pov_active = bool(vehicle and _requires_pov_check(vehicle) and
+            (not _is_effectively_sold(vehicle) or _is_sold_to_vans_renting(vehicle)) and
+            not _is_deposit_note(vehicle.poznamky))
+        if result.status == 'CHYBÍ V UNIQA' and inactive.get(vin):
+            result.detail += ' Nalezeno pouze ' + ', '.join(sorted(inactive[vin])) + ' pojištění.'
 
     order = {
         "DVOJÍ POJIŠTĚNÍ": 1,

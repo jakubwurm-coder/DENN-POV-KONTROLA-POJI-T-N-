@@ -68,7 +68,11 @@ def _write_stuck_log(snapshot: dict[str, Any]) -> None:
 
 
 CLOUD_URL = os.getenv("DENNI_POV_CLOUD_URL", "https://denni-pov-kontrola.onrender.com").rstrip("/")
-SYNC_TOKEN = os.getenv("DENNI_POV_SYNC_TOKEN", "OPYnDYQG4X5oVQPsKPE7qB25pw1YV9KUZWzFXcFrygfSvx1aKhkH_-MunoSx7Zof")
+from agent_credentials import load_token, bootstrap as bootstrap_credentials
+import agent_outbox
+import uuid
+_ACTIVE_RUN_ID = ''
+_MESSAGE_SEQ = 0
 AGENT_ID = platform.node().strip().upper()
 ALLOWED_AGENT_ID = os.getenv("DENNI_POV_ALLOWED_AGENT_ID", "VCSERVER").strip().upper()
 POLL_SECONDS = int(os.getenv("DENNI_POV_POLL_SECONDS", "15"))
@@ -129,7 +133,7 @@ def _load_local_app():
 
 def _headers() -> dict[str, str]:
     return {
-        "Authorization": f"Bearer {SYNC_TOKEN}",
+        "Authorization": f"Bearer {load_token()}",
         "Content-Type": "application/json",
         "User-Agent": f"DENNI-POV-Agent/{platform.system()}",
         "X-Denni-Pov-Agent": AGENT_ID,
@@ -186,15 +190,33 @@ def _decorate_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     snapshot["progress"] = _progress_for(snapshot)
     snapshot["agent"] = {"id": AGENT_ID, "computer": platform.node(), "system": platform.system()}
     snapshot["check_id"] = _ACTIVE_CHECK_ID
-    snapshot["comparison_version"] = 2
-    # Velký audit se při běžné synchronizaci na web neposílá.
-    snapshot.pop("audit", None)
+    global _MESSAGE_SEQ
+    _MESSAGE_SEQ += 1
+    snapshot['run_id'] = _ACTIVE_RUN_ID
+    snapshot['message_seq'] = _MESSAGE_SEQ
+    snapshot['comparison_version'] = 3
+    if snapshot.get('running') or snapshot.get('error'):
+        snapshot.pop('audit', None)
+    else:
+        from sync_contract import make_manifest
+        snapshot['manifest'] = make_manifest(snapshot)
     return snapshot
 
 
-def push_snapshot(snapshot: dict[str, Any]) -> None:
+def _send_snapshot(snapshot: dict[str, Any]) -> None:
     response = requests.post(f"{CLOUD_URL}/api/sync", headers=_headers(), json=snapshot, timeout=45)
     response.raise_for_status()
+
+
+def push_snapshot(snapshot: dict[str, Any]) -> None:
+    if snapshot.get('running'):
+        _send_snapshot(snapshot)
+    else:
+        agent_outbox.enqueue(snapshot)
+        try:
+            agent_outbox.flush(_send_snapshot)
+        except requests.RequestException as exc:
+            print('Výsledek je bezpečně uložen v odchozí frontě; přenos se zopakuje:', exc.__class__.__name__)
 
 
 def _send_result_email(snapshot: dict[str, Any]) -> bool:
@@ -787,11 +809,15 @@ def _error_snapshot(exc: Exception) -> dict[str, Any]:
         "summary": {"active": 0, "ok_total": 0, "ok_uniqa": 0, "ok_allianz": 0, "missing": 0, "deposit": 0, "sold_uniqa": 0, "extra_uniqa": 0},
         "results": [], "agent": {"id": AGENT_ID, "computer": platform.node(), "system": platform.system()},
         "check_id": _ACTIVE_CHECK_ID,
+        "run_id": _ACTIVE_RUN_ID,
+        "message_seq": _MESSAGE_SEQ + 1,
     }
 
 
 def run_and_sync(reason: str, command_id: str = "") -> None:
-    global _ACTIVE_CHECK_ID
+    global _ACTIVE_CHECK_ID, _ACTIVE_RUN_ID, _MESSAGE_SEQ
+    _ACTIVE_RUN_ID = uuid.uuid4().hex
+    _MESSAGE_SEQ = 0
     _ACTIVE_CHECK_ID = str(command_id or "").strip()
     _auto_update_from_github()
     print(); print("=============================================="); print(" DENNI POV - ONLINE SYNCHRONIZACE"); print("==============================================")
@@ -802,10 +828,6 @@ def run_and_sync(reason: str, command_id: str = "") -> None:
         print("Kontrola skončila chybou:", snapshot.get("error"))
     else:
         print("Kontrola dokončena. Ukládám výsledky na web...")
-        saving = dict(snapshot)
-        saving["running"] = True
-        saving["progress"] = {"percent": 98, "phase": "Ukládám výsledky na web", "eta_seconds": 3}
-        push_snapshot(saving)
     push_snapshot(snapshot)
     print("Online web byl aktualizován:", CLOUD_URL)
     if not snapshot.get("error"):
@@ -814,6 +836,9 @@ def run_and_sync(reason: str, command_id: str = "") -> None:
 
 def export_audit(command: dict[str, Any]) -> None:
     """Načte kompletní audit až na výslovný požadavek z webu."""
+    global _ACTIVE_RUN_ID, _MESSAGE_SEQ
+    _ACTIVE_RUN_ID = uuid.uuid4().hex
+    _MESSAGE_SEQ = 0
     command_id = str(command.get("id") or "")
     local_app = _load_local_app()
     _reset_for_run(local_app)
@@ -870,6 +895,8 @@ def send_service_diagnostics(command: dict[str, Any]) -> None:
         "id": command_id,
         "agent": AGENT_ID,
         "commit": commit.stdout.strip() if commit.returncode == 0 else "",
+        "credential_protected": __import__("agent_credentials").token_path().is_file(),
+        "outbox_pending": len(agent_outbox.pending()),
         "logs": found[:6],
         "checked_at": datetime.now().isoformat(),
         "message": "" if found else "Ve známých umístěních nebyl nalezen lokální log služby.",
@@ -892,11 +919,13 @@ def main() -> int:
     print("Online web:", CLOUD_URL)
     print("Automatická kontrola: denně v 10:00 a 17:00 (Europe/Prague).")
     print("Tento proces musí běžet na počítači, který vidí TIRBazar SQL a má přístup do Uniqa.")
-    # TEMP 2026-10-02: cílená read-only diagnostika dvou známých prodaných VIN.
     try:
-        diagnose_known_sold_vins()
+        if not bootstrap_credentials(CLOUD_URL, AGENT_ID):
+            print('Chybí bezpečné přihlašovací údaje agenta.')
+            return 78
     except Exception as exc:
-        print("Known sold VIN diagnostika selhala:", exc)
+        print('Bezpečné přihlášení agenta se nezdařilo:', exc.__class__.__name__)
+        return 78
     if args.once:
         run_and_sync("ruční jednorázová synchronizace"); return 0
     last_command_id = ""
@@ -905,6 +934,7 @@ def main() -> int:
     while True:
         try:
             try:
+                agent_outbox.flush(_send_snapshot)
                 command = get_command()
             except requests.RequestException as exc:
                 # A temporary Render timeout is not a check result. Never

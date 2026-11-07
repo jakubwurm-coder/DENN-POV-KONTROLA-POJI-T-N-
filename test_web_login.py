@@ -29,14 +29,14 @@ class WebLoginTests(unittest.TestCase):
         return self.client.post('/login', base_url=self.origin,
                                 data={'username': 'test-user', 'password': password})
 
-    def test_explicit_login_then_reload_requires_login(self):
+    def test_explicit_login_then_reload_keeps_authenticated_session(self):
         self.assertEqual(self.get('/').location, '/login')
         self.assertEqual(self.login().location, '/')
         self.assertEqual(self.get('/').status_code, 200)
-        self.assertEqual(self.get('/sw.js').status_code, 200)
-        self.assertEqual(self.get('/').location, '/login')
-        self.assertEqual(self.get('/sw.js').location, '/login')
-        self.assertEqual(self.get('/api/state').status_code, 401)
+        self.assertEqual(self.get('/sw.js').status_code, 404)
+        self.assertEqual(self.get('/').status_code, 200)
+        with patch.object(module, "_load_state", return_value={}), patch.object(module, "_annotations_load", return_value={}):
+            self.assertEqual(self.get('/api/state').status_code, 200)
 
     def test_login_page_clears_existing_session(self):
         self.login()
@@ -59,13 +59,12 @@ class WebLoginTests(unittest.TestCase):
                                        headers={'Authorization': 'Bearer test-agent'})
         self.assertEqual(response.status_code, 200)
 
-    def test_dmsdata_csv_does_not_require_browser_login(self):
+    def test_dmsdata_csv_requires_authentication(self):
         with patch.object(module, '_load_state', return_value={
             'results': [{'vin': 'TESTVIN1234567890', 'status': 'OK', 'status_raw': 'OK'}],
         }), patch.object(module, '_annotations_load', return_value={}):
             response = self.get('/dmsdata')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.mimetype, 'text/csv')
+        self.assertEqual(response.status_code, 401)
 
 
 if __name__ == '__main__':

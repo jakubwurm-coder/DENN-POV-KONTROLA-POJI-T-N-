@@ -164,6 +164,7 @@ function matches(r){
   if(activeFilter==='OPEN')return needsAttention(r);
   if(activeFilter==='RESOLVED')return isFollowup(r);
   if(activeFilter==='MANUAL_OK')return isManualOk(r);
+  if(activeFilter==='ACTIVE'&&typeof r.pov_active==='boolean')return r.pov_active;
   if(activeFilter==='ACTIVE')return ['OK','CHYBÍ V UNIQA','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','NEPŘÍTOMNÉ, ALE NEPOJIŠTĚNÉ','SPZ NESOUHLASÍ','NELZE OVĚŘIT'].includes(r.status_raw);
   if(activeFilter==='OK_TOTAL'){
     const raw=String(r.status_raw||'').toUpperCase();
@@ -184,7 +185,8 @@ function matches(r){
   if(activeFilter==='UNWANTED_INSURANCE'){
     return ['NAVÍC V UNIQA','NAVÍC V ALLIANZ','NEPŘÍTOMNÉ, ALE POJIŠTĚNÉ','PRODANÉ, ALE POJIŠTĚNÉ','DEPOZIT, ALE POJIŠTĚNÉ'].includes(r.status_raw);
   }
-  return true;
+  if(activeFilter==='DOUBLE_INSURED')return r.status_raw==='DVOJÍ POJIŠTĚNÍ';
+  return false;
 }
 
 function renderActiveFilter(){const box=$('activeFilter');if(['VŠE','ATTENTION'].includes(activeFilter)){box.hidden=true;return;}$('activeFilterLabel').textContent=filterNames[activeFilter]||activeFilter;box.hidden=false;}
@@ -215,7 +217,7 @@ function renderRows(){
 
   const q=$('search').value.trim().toUpperCase();
   const rows=state.results
-    .filter(r=>matches(r)&&(!q||Object.values(r).join(' ').toUpperCase().includes(q)))
+    .filter(r=>matches(r)&&(!q||Object.values(r).join(' ').toUpperCase().includes(q)||[r.vin,r.spz_tir,r.spz_uniqa].some(v=>String(v||'').replace(/[^A-Z0-9]/gi,'').toUpperCase().includes(q.replace(/[^A-Z0-9]/g,'')))))
     .sort((a,b)=>{
       const priority=rowPriority(a)-rowPriority(b);
       if(priority!==0)return priority;
@@ -497,7 +499,7 @@ async function refresh(){try{
     // Nově otevřená stránka začíná vždy čistě. Uložený poslední výsledek
     // zůstává na serveru kvůli historii, ale na dashboardu se neukáže,
     // dokud uživatel v této relaci nespustí novou kontrolu.
-    sessionCheckStarted=false;
+    sessionCheckStarted=Boolean(state.finished_at||state.last_successful_at||state.results?.length);
     if(!state.running)connectionVisualPercent=100;
     initialStateLoaded=true;
   }

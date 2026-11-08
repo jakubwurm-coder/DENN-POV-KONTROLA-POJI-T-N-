@@ -3492,3 +3492,5 @@ input,textarea{cursor:text}
 .header-account>strong{overflow-wrap:anywhere}
 .header-account form{margin:0}
 @media(max-width:760px){.header-account{align-items:flex-start}.top-actions-meta{flex-wrap:wrap}}
+.freshness-warning{padding:16px 20px;margin-bottom:18px;border:1px solid #d97706;border-radius:12px;background:#fff7ed;color:#9a3412;font-weight:600;line-height:1.55}
+.freshness-warning[hidden]{display:none}

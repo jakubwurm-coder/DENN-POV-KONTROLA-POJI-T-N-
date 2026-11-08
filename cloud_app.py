@@ -994,6 +994,8 @@ def _same_local_day(value: Any, day_iso: str) -> bool:
 
 def _public_state(data: dict[str, Any], strict_annotations: bool = False) -> dict[str, Any]:
     public = dict(data)
+    from data_freshness import snapshot_freshness
+    public['freshness'] = snapshot_freshness(data)
     public.pop("_command", None)
     public.pop("_source_snapshot", None)
     public.pop("_last_good", None)

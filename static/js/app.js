@@ -358,6 +358,8 @@ function shortDateTime(value){
 
 function render(){
   const s=state.summary||{};
+  const freshnessWarning=$('freshnessWarning');
+  if(freshnessWarning){freshnessWarning.hidden=!state.freshness?.stale;freshnessWarning.textContent=state.freshness?.message||'';}
   const issues=primaryIssueCounts();
   const attention=(state.results||[]).filter(needsAttention).length;
   const unusual=(state.results||[]).filter(isUnusual).length;

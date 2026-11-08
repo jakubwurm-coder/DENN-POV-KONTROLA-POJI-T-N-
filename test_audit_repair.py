@@ -34,6 +34,16 @@ def payload(run=None):
     return value
 
 class InsuranceRepairTests(unittest.TestCase):
+    def test_historical_lookup_uses_exact_card_instead_of_current_vin(self):
+        from lookup_projection import project_lookup_vehicle
+        source={'finished_at':'07.11.2026 22:35:04','audit':{
+            'results':[dict(oid=1,vin=VIN,status_raw='PRODANÉ, ALE POJIŠTĚNÉ'),dict(oid=2,vin=VIN,status_raw='OK')],
+            'sql':[dict(oid=1,zarazeni='DUPLICITNÍ SQL KARTA',duvod='Aktuální OID 2')],
+            'inputs':{'tirbazar':[dict(oid=1,znacka='Ford',model='Transit')]}}}
+        old=project_lookup_vehicle(dict(oid=1,vin=VIN,insurance={'status':'OK'}),source)
+        self.assertEqual(old['insurance']['status'],'PRODANÉ, ALE POJIŠTĚNÉ')
+        self.assertEqual(old['filter']['decision'],'DUPLICITNÍ SQL KARTA')
+        self.assertFalse(project_lookup_vehicle(dict(oid=3,vin=VIN),source)['insurance']['in_last_check'])
     def test_expired_and_future_policies_are_not_active(self):
         for start,end in [('2020-01-01','2020-01-02'),('2099-01-01','')]:
             result=compare([UniqaVehicle(VIN,'1AA1111','p',start,end)])[0]

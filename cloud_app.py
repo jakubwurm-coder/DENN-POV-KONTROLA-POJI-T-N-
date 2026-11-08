@@ -1507,6 +1507,9 @@ def agent_lookup_result():
         pending = data.get("_vehicle_lookup") if isinstance(data.get("_vehicle_lookup"), dict) else {}
         if str(pending.get("id") or "") != command_id:
             return jsonify({"ok": False, "message": "Požadavek už není aktuální."}), 409
+        if isinstance(payload.get('vehicle'), dict):
+            from lookup_projection import project_lookup_vehicle
+            payload['vehicle']=project_lookup_vehicle(payload['vehicle'], _latest_source_snapshot())
         data["_vehicle_lookup"] = {
             "id": command_id,
             "query": str(payload.get("query") or pending.get("query") or "").strip().upper(),
